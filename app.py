@@ -39,7 +39,8 @@ from data_harvester import (
 )
 from weather_forecast_engine import (
     fetch_phu_my_weather_forecast,
-    convert_nwp_to_15min_dispatch
+    convert_nwp_to_15min_dispatch,
+    generate_unified_hybrid_forecast
 )
 from exporter import (
     export_to_excel_bytes, 
@@ -821,8 +822,8 @@ with tab_multi:
     st.subheader("🔮 Hệ Thống Dự Báo Đa Khung Thời Gian & Khí Tượng Số (Phù Mỹ Nam)")
     st.caption("Tích hợp dự báo thời tiết vệ tinh số, lập lịch điều độ thị trường điện ngày tới D+1/D+2 (2 ngày), lập lịch tuần A0/A3 (7 ngày), dự báo 30 ngày và sản lượng tháng.")
     
-    subtab_weather, subtab_2d, subtab_7d, subtab_30d, subtab_eom, subtab_nextm = st.tabs([
-        "🌤️ 1. Khí Tượng & Thuyết Minh Vận Hành (Phù Mỹ)",
+    subtab_unified, subtab_2d, subtab_7d, subtab_30d, subtab_eom, subtab_nextm = st.tabs([
+        "🌟 1. Mô Hình Dự Báo Thống Nhất (Lai Ghép Khí Tượng & Lịch Sử SCADA)",
         "📅 2. Dự Báo 2 Ngày Tới (192 Chu Kỳ - D+1, D+2)",
         "🗓️ 3. Dự Báo 7 Ngày Tới (672 Chu Kỳ - Lịch Tuần)",
         "📊 4. Dự Báo 30 Ngày Tới (Month-Ahead)",
@@ -830,120 +831,286 @@ with tab_multi:
         "📈 6. Dự Báo Toàn Bộ Tháng 9/2026"
     ])
     
-    # 1. DỰ BÁO KHÍ TƯỢNG & THUYẾT MINH VẬN HÀNH (PHÙ MỸ, BÌNH ĐỊNH)
-    with subtab_weather:
-        st.markdown("#### 🌤️ Dự Báo Thời Tiết Số (NWP) & Thuyết Minh Vận Hành Xã Mỹ Hiệp / Phù Mỹ Nam")
-        st.caption("Tích hợp mô hình dự báo thời tiết khí tượng số phân giải cao cho tọa độ Phù Mỹ, Bình Định (14.165°N, 109.030°E).")
+    # 1. MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE)
+    with subtab_unified:
+        st.markdown("#### 🌟 Mô Hình Dự Báo Lai Ghép Thống Nhất (Unified Ensemble Solar Forecasting)")
+        st.caption("Thuật toán kết hợp đa trọng số giữa **Mô hình Khí tượng Số trị (NWP)** và **Mô hình Đo đếm Lịch sử SCADA Mỹ Hiệp** nhằm tối ưu độ chính xác và giảm thiểu sai số đối soát EVN / A0 / A3.")
         
-        with st.spinner("Đang tải dữ liệu khí tượng số mới nhất từ vệ tinh cho khu vực Phù Mỹ, Bình Định..."):
-            nwp_data = fetch_phu_my_weather_forecast(days=7)
-            
-        if nwp_data:
-            df_nwp_15, df_nwp_daily, narratives_list = convert_nwp_to_15min_dispatch(nwp_data, params=calc_params)
-            
-            # Chọn ngày xem thuyết minh
-            narrative_options = {n['day_name'] + ' (' + n['date_str'] + ')': n for n in narratives_list}
-            selected_n_label = st.selectbox(
-                "Chọn ngày xem thuyết minh chi tiết:",
-                list(narrative_options.keys()),
+        # Bảng điều khiển tham số lai ghép
+        col_ens1, col_ens2, col_ens3 = st.columns([1.8, 1.5, 1.2])
+        with col_ens1:
+            ensemble_strategy = st.selectbox(
+                "🎯 Chiến Lược Lai Ghép Thống Nhất:",
+                [
+                    "🌟 Tự Động Tối Ưu (Auto Dynamic Weighting)",
+                    "⚖️ Cân Bằng 50% Khí Tượng - 50% Lịch Sử",
+                    "⛅ Ưu Tiên Khí Tượng NWP (75% Khí Tượng - 25% Lịch Sử)",
+                    "📈 Ưu Tiên Lịch Sử SCADA (25% Khí Tượng - 75% Lịch Sử)",
+                    "🎛️ Tùy Chỉnh Trọng Số Thủ Công (Custom Weight)"
+                ],
                 index=0,
-                key="select_narrative_day"
+                key="select_ens_strat"
             )
-            cur_narrative = narrative_options[selected_n_label]
-            cur_kpis = cur_narrative['kpis']
-            
-            # 4 Thẻ chỉ số thời tiết & sản lượng
-            col_w1, col_w2, col_w3, col_w4 = st.columns(4)
-            with col_w1:
-                st.metric("⚡ Sản Lượng Dự Kiến", f"{cur_kpis['energy_mwh']:.2f} MWh", help="Sản lượng phát lưới tính theo thời tiết số.")
-            with col_w2:
-                st.metric("📈 P_Grid Đỉnh", f"{cur_kpis['peak_p_mw']:.2f} MW", delta=f"Bức xạ đỉnh: {cur_kpis['peak_irr']:.0f} W/m²")
-            with col_w3:
-                st.metric("🌡️ Nhiệt Độ Môi Trường", f"{cur_kpis['temp_max']:.1f}°C", delta=f"Đêm: {cur_kpis['temp_min']:.1f}°C")
-            with col_w4:
-                st.metric("☁️ Độ Phủ Mây / Mưa", f"{cur_kpis['cloud_avg']:.0f}%", delta=f"Xác suất mưa: {cur_kpis['rain_prob']:.0f}% ({cur_kpis['rain_sum']:.1f}mm)")
-                
-            # Khung thuyết minh chuyên nghiệp 4 thẻ sắc nét (Render bằng st.html trực tiếp)
+        with col_ens2:
+            forecast_horizon = st.selectbox(
+                "⏱️ Khung Thời Gian Dự Báo:",
+                [
+                    "1 Ngày (96 Chu kỳ 15 phút)",
+                    "2 Ngày Tới (192 Chu kỳ - D+1, D+2)",
+                    "7 Ngày Tới (672 Chu kỳ - Kế hoạch Tuần)"
+                ],
+                index=0,
+                key="select_ens_horizon"
+            )
+        with col_ens3:
+            start_ens_date = st.date_input(
+                "📅 Ngày Bắt Đầu:",
+                value=datetime(2026, 8, 28),
+                key="ens_start_date_pick"
+            )
+
+        # Mapping mode
+        if "Tự Động" in ensemble_strategy:
+            ens_mode_key = "AUTO"
+            w_custom = 0.50
+        elif "Cân Bằng" in ensemble_strategy:
+            ens_mode_key = "EQUAL"
+            w_custom = 0.50
+        elif "Ưu Tiên Khí Tượng" in ensemble_strategy:
+            ens_mode_key = "NWP_PRIORITY"
+            w_custom = 0.75
+        elif "Ưu Tiên Lịch Sử" in ensemble_strategy:
+            ens_mode_key = "HIST_PRIORITY"
+            w_custom = 0.25
+        else:
+            ens_mode_key = "CUSTOM"
+            w_slider = st.slider(
+                "🎚️ Trọng số Khí Tượng NWP (%) vs Lịch Sử SCADA (%):",
+                min_value=0, max_value=100, value=50, step=5,
+                help="100% = Hoàn toàn theo Khí tượng, 0% = Hoàn toàn theo Lịch sử SCADA."
+            )
+            w_custom = w_slider / 100.0
+
+        n_days_ens = 1 if "1 Ngày" in forecast_horizon else (2 if "2 Ngày" in forecast_horizon else 7)
+
+        with st.spinner("Đang tổng hợp mô hình khí tượng vệ tinh và dữ liệu lịch sử SCADA Mỹ Hiệp..."):
+            nwp_data = fetch_phu_my_weather_forecast(days=max(n_days_ens, 2))
+            df_uni_15, df_uni_daily, uni_narratives = generate_unified_hybrid_forecast(
+                start_date=start_ens_date,
+                num_days=n_days_ens,
+                nwp_data=nwp_data,
+                params=calc_params,
+                ensemble_mode=ens_mode_key,
+                custom_nwp_weight=w_custom
+            )
+
+        if len(df_uni_15) > 0 and len(df_uni_daily) > 0:
+            # Lựa chọn ngày xem chi tiết nếu dự báo nhiều ngày
+            if n_days_ens > 1:
+                day_options = {r['Day_Name'] + ' (' + r['Date_Str'] + ')': r['Date_Str'] for _, r in df_uni_daily.iterrows()}
+                selected_day_label = st.selectbox("📅 Chọn ngày hiển thị biểu đồ & thuyết minh chi tiết:", list(day_options.keys()), index=0)
+                selected_date_str = day_options[selected_day_label]
+                df_plot_15 = df_uni_15[df_uni_15['Date'] == selected_date_str].copy()
+                cur_day_summary = df_uni_daily[df_uni_daily['Date_Str'] == selected_date_str].iloc[0]
+                cur_nar = next((n for n in uni_narratives if n['date_str'] == selected_date_str), uni_narratives[0])
+            else:
+                df_plot_15 = df_uni_15.copy()
+                cur_day_summary = df_uni_daily.iloc[0]
+                cur_nar = uni_narratives[0]
+
+            # 4 Thẻ KPI Dự Báo Thống Nhất
+            k1, k2, k3, k4 = st.columns(4)
+            with k1:
+                st.metric(
+                    "⚡ Sản Lượng Thống Nhất",
+                    f"{cur_day_summary['Energy_Unified_MWh']:.2f} MWh",
+                    delta=f"NWP: {cur_day_summary['Energy_NWP_MWh']:.1f} | SCADA: {cur_day_summary['Energy_Hist_MWh']:.1f} MWh"
+                )
+            with k2:
+                st.metric(
+                    "📈 P_Grid Đỉnh Thống Nhất",
+                    f"{cur_day_summary['Peak_Grid_MW']:.2f} MW",
+                    delta=f"Bức xạ đỉnh: {cur_day_summary['Max_Irradiance_Wm2']:.0f} W/m²"
+                )
+            with k3:
+                st.metric(
+                    "⚖️ Tỷ Lệ Lai Ghép",
+                    f"{cur_day_summary['Weight_NWP_Pct']:.0f}% NWP / {cur_day_summary['Weight_Hist_Pct']:.0f}% SCADA",
+                    delta="Đã hiệu chuẩn trần 40.075 MW"
+                )
+            with k4:
+                st.metric(
+                    "🎯 Dải Tin Cậy P10 - P90",
+                    f"{df_plot_15['P10_Lower_MW'].max():.1f} - {df_plot_15['P90_Upper_MW'].max():.1f} MW",
+                    delta=f"Độ phủ mây TB: {cur_day_summary['Avg_Cloud_Pct']:.0f}%"
+                )
+
+            # BIỂU ĐỒ SO SÁNH 3 MÔ HÌNH TRÊN CÙNG TRỤC TỌA ĐỘ
+            st.markdown(f"##### 📈 So Sánh 3 Mô Hình Dự Báo Chu Kỳ 15 Phút Ngày {cur_nar['date_str']}")
+            fig_uni = go.Figure()
+
+            # Dải tin cậy P10 - P90 (Vùng bóng mờ)
+            fig_uni.add_trace(go.Scatter(
+                x=df_plot_15['Timestamp'].tolist() + df_plot_15['Timestamp'].tolist()[::-1],
+                y=df_plot_15['P90_Upper_MW'].tolist() + df_plot_15['P10_Lower_MW'].tolist()[::-1],
+                fill='toself',
+                fillcolor='rgba(16, 185, 129, 0.12)',
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo="skip",
+                showlegend=True,
+                name='Dải Tin Cậy Điều Độ (P10 - P90)'
+            ))
+
+            # 1. Mô hình Khí tượng NWP (Xanh dương nét đứt)
+            fig_uni.add_trace(go.Scatter(
+                x=df_plot_15['Timestamp'],
+                y=df_plot_15['P_Grid_NWP_MW'],
+                mode='lines',
+                name='Mô Hình Khí Tượng Số (NWP ECMWF/GFS)',
+                line=dict(color='#0284C7', width=2, dash='dash')
+            ))
+
+            # 2. Mô hình Lịch sử SCADA (Vàng cam nét chấm)
+            fig_uni.add_trace(go.Scatter(
+                x=df_plot_15['Timestamp'],
+                y=df_plot_15['P_Grid_Hist_MW'],
+                mode='lines',
+                name='Mô Hình Lịch Sử SCADA Mỹ Hiệp',
+                line=dict(color='#F59E0B', width=2, dash='dot')
+            ))
+
+            # 3. MÔ HÌNH THỐNG NHẤT LAI GHÉP (Xanh lá cây đậm nét 3.5px)
+            fig_uni.add_trace(go.Scatter(
+                x=df_plot_15['Timestamp'],
+                y=df_plot_15['P_Grid_Unified_MW'],
+                mode='lines+markers',
+                name='🌟 MÔ HÌNH DỰ BÁO THỐNG NHẤT (UNIFIED HYBRID)',
+                line=dict(color='#10B981', width=3.5),
+                marker=dict(size=4)
+            ))
+
+            # Đường trần Inverter 40.075 MW
+            fig_uni.add_hline(
+                y=ac_capacity,
+                line_dash="dash",
+                line_color="#EF4444",
+                line_width=2.5,
+                annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
+                annotation_position="top right"
+            )
+
+            fig_uni.update_layout(
+                title=dict(
+                    text=f"<b>Đối Soát Biểu Đồ Công Suất P_Grid (MW): Khí Tượng vs Lịch Sử SCADA vs Thống Nhất</b>",
+                    font=dict(size=15, color="#0F172A")
+                ),
+                xaxis_title="Thời gian (Chu kỳ 15 phút)",
+                yaxis_title="Công suất phát lưới P_Grid (MW)",
+                hovermode="x unified",
+                template="plotly_white",
+                height=460,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_uni, width='stretch')
+
+            # BẢN THUYẾT MINH KHÍ TƯỢNG & VẬN HÀNH THỐNG NHẤT
             import textwrap
-            narrative_html = textwrap.dedent(f"""
+            ens_narrative_html = textwrap.dedent(f"""
             <div class="narrative-box">
                 <div class="narrative-top-bar">
-                    <div class="narrative-top-title">📑 BẢN THUYẾT MINH KHÍ TƯỢNG & DỰ BÁO SẢN LƯỢNG ĐIỆN PHÁT LƯỚI</div>
+                    <div class="narrative-top-title">📑 BẢN THUYẾT MINH DỰ BÁO THỐNG NHẤT (LAI GHÉP KHÍ TƯỢNG & LỊCH SỬ SCADA)</div>
                     <div class="narrative-top-meta">
                         <span>🏢 <b>Nhà máy:</b> NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp / 40.075MW)</span>
                         <span style="margin: 0 10px; color: #CBD5E1;">|</span>
-                        <span>📍 <b>Vị trí:</b> Thôn Vạn Phước, Xã Phù Mỹ Nam, Tỉnh Gia Lai (SĐT: 0256 3856 667) (14.165°N, 109.030°E)</span>
+                        <span>📍 <b>Tọa độ:</b> Thôn Vạn Phước, Xã Phù Mỹ Nam, Tỉnh Gia Lai (SĐT: 0256 3856 667)</span>
                     </div>
                     <div class="narrative-badge-wrap">
-                        <span class="nbadge nbadge-day">📅 {cur_narrative['day_name']} ({cur_narrative['date_str']})</span>
-                        <span class="nbadge nbadge-weather">⛅ {cur_narrative['weather_type']}</span>
-                        <span class="nbadge nbadge-energy">⚡ Sản lượng: <b>{cur_kpis['energy_mwh']:.2f} MWh</b></span>
-                        <span class="nbadge nbadge-peak">📈 Đỉnh: <b>{cur_kpis['peak_p_mw']:.2f} MW</b></span>
+                        <span class="nbadge nbadge-day">📅 {cur_nar['day_name']} ({cur_nar['date_str']})</span>
+                        <span class="nbadge nbadge-weather">⛅ {cur_nar['weather_type']}</span>
+                        <span class="nbadge nbadge-energy">⚡ Sản lượng Thống Nhất: <b>{cur_day_summary['Energy_Unified_MWh']:.2f} MWh</b></span>
+                        <span class="nbadge nbadge-peak">📈 Đỉnh: <b>{cur_day_summary['Peak_Grid_MW']:.2f} MW</b></span>
                     </div>
                 </div>
                 
                 <div class="narrative-cards-grid">
                     <div class="ncard ncard-weather">
                         <div class="ncard-head">⛅ 1. TÌNH HÌNH KHÍ TƯỢNG & HÌNH THẾ THỜI TIẾT TẠI PHÙ MỸ</div>
-                        <div class="ncard-body">{cur_narrative['weather_desc']}</div>
+                        <div class="ncard-body">{cur_nar['weather_desc']}</div>
                     </div>
                     
                     <div class="ncard ncard-power">
-                        <div class="ncard-head">⚡ 2. ĐÁNH GIÁ TÁC ĐỘNG ĐẾN SẢN LƯỢNG & CÔNG SUẤT PHÁT LƯỚI</div>
-                        <div class="ncard-body">{cur_narrative['impact_desc']}</div>
+                        <div class="ncard-head">⚡ 2. ĐÁNH GIÁ TỔNG HỢP MÔ HÌNH THỐNG NHẤT & SẢN LƯỢNG</div>
+                        <div class="ncard-body">
+                            {cur_nar['impact_desc']}<br>
+                            <span style="color: #0284C7; font-weight: 600;">• {cur_nar.get('ensemble_info', '')}</span>
+                        </div>
                     </div>
                     
                     <div class="ncard ncard-temp">
                         <div class="ncard-head">🌡️ 3. PHÂN TÍCH NHIỆT ĐỘ CELL TẤM PIN SHARP NU-440 (-0.347%/°C)</div>
-                        <div class="ncard-body">{cur_narrative['thermal_analysis']}</div>
+                        <div class="ncard-body">{cur_nar['thermal_analysis']}</div>
                     </div>
                     
                     <div class="ncard ncard-dispatch">
-                        <div class="ncard-head">📋 4. KHUYẾN NGHỊ ĐIỀU ĐỘ VẬN HÀNH & ĐĂNG KÝ A0 / A3</div>
+                        <div class="ncard-head">📋 4. KHUYẾN NGHỊ ĐIỀU ĐỘ VẬN HÀNH & ĐĂNG KÝ EVN / A0 / A3</div>
                         <div class="ncard-body">
-                            <div class="dispatch-item">• {cur_narrative['recommendations'][0]}</div>
-                            <div class="dispatch-item">• {cur_narrative['recommendations'][1]}</div>
-                            <div class="dispatch-item">• {cur_narrative['recommendations'][2]}</div>
+                            <div class="dispatch-item">• {cur_nar['recommendations'][0]}</div>
+                            <div class="dispatch-item">• {cur_nar['recommendations'][1]}</div>
+                            <div class="dispatch-item">• {cur_nar['recommendations'][2]}</div>
                         </div>
                     </div>
                 </div>
             </div>
             """)
-            st.html(narrative_html)
-            
-            # Biểu đồ thời tiết & công suất phát 15 phút
-            df_day_15 = df_nwp_15[df_nwp_15['Date'] == cur_narrative['date_str']]
-            if len(df_day_15) > 0:
-                fig_nw = go.Figure()
-                fig_nw.add_trace(go.Scatter(
-                    x=df_day_15['Timestamp'],
-                    y=df_day_15['Irradiance_Avg_Wm2'],
-                    mode='lines',
-                    name='Bức xạ GHI (W/m²)',
-                    line=dict(color='#F59E0B', width=2),
-                    yaxis='y2'
-                ))
-                fig_nw.add_trace(go.Scatter(
-                    x=df_day_15['Timestamp'],
-                    y=df_day_15['P_Grid_Avg_MW'],
-                    mode='lines+markers',
-                    name='Công suất Phát Lưới P_Grid (MW)',
-                    line=dict(color='#10B981', width=3),
-                    fill='tozeroy',
-                    fillcolor='rgba(16, 185, 129, 0.18)'
-                ))
-                fig_nw.update_layout(
-                    title=f"<b>Biểu Đồ Công Suất & Bức Xạ 96 Chu Kỳ Ngày {cur_narrative['date_str']} (NWP Phù Mỹ)</b>",
-                    xaxis_title="Thời gian (Chu kỳ 15 phút)",
-                    yaxis_title="Công suất (MW)",
-                    yaxis2=dict(title="Bức xạ (W/m²)", overlaying='y', side='right', showgrid=False),
-                    hovermode="x unified",
-                    template="plotly_white",
-                    height=420
+            st.html(ens_narrative_html)
+
+            # TẢI BÁO CÁO & XEM BẢNG DỮ LIỆU
+            c_dl_u1, c_dl_u2, _ = st.columns([2, 1.8, 3.2])
+            with c_dl_u1:
+                st.download_button(
+                    "📥 Tải Báo Cáo Thống Nhất Excel (.xlsx)",
+                    data=export_to_excel_bytes(df_plot_15, {
+                        'plant_name': 'NHÀ MÁY ĐMT MỸ HIỆP',
+                        'start_time': datetime.strptime(cur_nar['date_str'], '%d/%m/%Y'),
+                        'dc_capacity_mwp': 50.0,
+                        'ac_capacity_mw': 40.075,
+                        'total_energy_mwh': cur_day_summary['Energy_Unified_MWh'],
+                        'peak_grid_mw': cur_day_summary['Peak_Grid_MW'],
+                        'total_clipping_loss_mwh': cur_day_summary['Clipping_Loss_MWh'],
+                        'total_15min_intervals': len(df_plot_15),
+                        'performance_ratio_pct': 82.5,
+                        'max_irradiance_wm2': cur_day_summary['Max_Irradiance_Wm2']
+                    }),
+                    file_name=f"Du_Bao_Thong_Nhat_MyHiep_{cur_nar['date_str'].replace('/', '')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    use_container_width=True
                 )
-                st.plotly_chart(fig_nw, width='stretch')
+            with c_dl_u2:
+                st.download_button(
+                    "📄 Tải File CSV 96 Chu Kỳ (.csv)",
+                    data=export_to_csv_bytes(df_plot_15),
+                    file_name=f"Du_Bao_Thong_Nhat_MyHiep_{cur_nar['date_str'].replace('/', '')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            # Bảng số liệu chi tiết
+            exp_uni_table = df_plot_15[[
+                'Interval_Index', 'Start_Time', 'End_Time',
+                'P_Grid_Unified_MW', 'P_Grid_NWP_MW', 'P_Grid_Hist_MW',
+                'Irradiance_Unified_Wm2', 'Amb_Temp_Avg_C', 'Cell_Temp_Avg_C',
+                'Energy_Unified_MWh', 'P10_Lower_MW', 'P90_Upper_MW'
+            ]].copy()
+            exp_uni_table.columns = [
+                'Chu kỳ', 'Bắt đầu', 'Kết thúc',
+                'P_Thống Nhất (MW)', 'P_Khí Tượng (MW)', 'P_Lịch Sử (MW)',
+                'Bức Xạ W (W/m²)', 'T_Môi Trường (°C)', 'T_Cell (°C)',
+                'Sản Lượng (MWh)', 'P10 (MW)', 'P90 (MW)'
+            ]
+            st.dataframe(exp_uni_table, width='stretch', height=320, hide_index=True)
         else:
-            st.warning("⚠️ Không thể kết nối trực tiếp đến máy chủ thời tiết. Vui lòng kiểm tra kết nối mạng Internet.")
+            st.warning("⚠️ Không có dữ liệu dự báo. Vui lòng kiểm tra kết nối mạng và thử lại.")
 
     # 2. DỰ BÁO 2 NGÀY (D+1, D+2)
     with subtab_2d:

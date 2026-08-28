@@ -261,3 +261,231 @@ def generate_daily_operational_narrative(day_data: Dict[str, Any]) -> Dict[str, 
         "recommendations": recommendations,
         "kpis": day_data
     }
+
+
+def generate_unified_hybrid_forecast(
+    start_date: Union[str, datetime],
+    num_days: int = 7,
+    nwp_data: Optional[Dict[str, Any]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    ensemble_mode: str = "AUTO",
+    custom_nwp_weight: float = 0.50
+) -> Tuple[pd.DataFrame, pd.DataFrame, List[Dict[str, Any]]]:
+    """
+    MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE FORECAST MODEL)
+    Kết hợp 2 mô hình cốt lõi:
+    1. Mô hình Khí Tượng Số Trị (NWP - ECMWF/GFS) dự báo mây, bức xạ, mưa, nhiệt độ
+    2. Mô hình Đo Đếm Lịch Sử SCADA ĐMT Mỹ Hiệp (Bức xạ thực tế, hệ số PR, giới hạn trần Inverter 40.075MW)
+    """
+    if params is None:
+        params = {}
+
+    if isinstance(start_date, str):
+        base_dt = datetime.strptime(start_date, "%Y-%m-%d") if '-' in start_date else datetime.strptime(start_date, "%d/%m/%Y")
+    else:
+        base_dt = start_date
+
+    # 1. Lấy dữ liệu Mô hình Khí tượng NWP
+    if nwp_data is None:
+        nwp_data = fetch_phu_my_weather_forecast(days=max(num_days, 2))
+
+    df_nwp_15m, df_nwp_daily, nwp_narratives = convert_nwp_to_15min_dispatch(nwp_data, params=params) if nwp_data else (pd.DataFrame(), pd.DataFrame(), [])
+
+    # 2. Tạo dữ liệu Mô hình Lịch sử SCADA (Historical Telemetry Model)
+    from data_harvester import generate_multi_day_15min_forecast
+    df_hist_15m, df_hist_daily, _ = generate_multi_day_15min_forecast(base_dt, num_days=num_days, params=params)
+
+    # 3. Kết hợp lai ghép (Ensemble Fusion) cho từng chu kỳ 15 phút
+    unified_rows = []
+    daily_summaries = []
+    narratives = []
+
+    ac_cap = params.get('ac_capacity_mw', MyHiepSolarPlantConfig.AC_CAPACITY_MW)
+    dc_cap = params.get('dc_capacity_mwp', MyHiepSolarPlantConfig.DC_CAPACITY_MWP)
+    temp_coeff = params.get('temp_coeff', -0.00347)
+
+    for day_idx in range(num_days):
+        cur_date = base_dt + timedelta(days=day_idx)
+        d_str = cur_date.strftime('%d/%m/%Y')
+        day_vn_name = f"Ngày {cur_date.strftime('%d/%m')} ({'T' + str(cur_date.weekday() + 2) if cur_date.weekday() < 6 else 'CN'})"
+
+        # Xác định trọng số lai ghép (Ensemble Weight alpha cho NWP)
+        if ensemble_mode == "AUTO":
+            # Ngày 1 (ngắn hạn): Cân bằng 50% NWP + 50% SCADA Lịch sử
+            # Ngày 2-5: Ưu tiên 65% NWP Khí tượng + 35% Lịch sử
+            # Ngày 6-7: 80% NWP Khí tượng + 20% Lịch sử
+            if day_idx == 0:
+                w_nwp = 0.50
+            elif day_idx <= 4:
+                w_nwp = 0.65
+            else:
+                w_nwp = 0.80
+        elif ensemble_mode == "EQUAL":
+            w_nwp = 0.50
+        elif ensemble_mode == "NWP_PRIORITY":
+            w_nwp = 0.75
+        elif ensemble_mode == "HIST_PRIORITY":
+            w_nwp = 0.25
+        else: # CUSTOM
+            w_nwp = max(0.0, min(1.0, float(custom_nwp_weight)))
+
+        w_hist = 1.0 - w_nwp
+
+        # Lọc dữ liệu ngày hiện tại từ 2 mô hình
+        sub_nwp = df_nwp_15m[df_nwp_15m['Date'] == d_str] if len(df_nwp_15m) > 0 else pd.DataFrame()
+        sub_hist = df_hist_15m[df_hist_15m['Date'] == d_str] if len(df_hist_15m) > 0 else pd.DataFrame()
+
+        daily_e_unified = 0.0
+        daily_e_nwp = 0.0
+        daily_e_hist = 0.0
+        daily_p_max = 0.0
+        daily_irr_max = 0.0
+        daily_clip_mwh = 0.0
+        daily_temp_max = 0.0
+        daily_cloud_avg = 0.0
+        daily_rain_prob_max = 0.0
+        daily_rain_sum = 0.0
+
+        for interval_idx in range(1, 97):
+            start_m = (interval_idx - 1) * 15
+            end_m = interval_idx * 15
+            start_t = cur_date + timedelta(minutes=start_m)
+            end_t = cur_date + timedelta(minutes=end_m)
+
+            # Giá trị từ Mô hình Khí tượng NWP
+            if len(sub_nwp) >= interval_idx:
+                r_nwp = sub_nwp.iloc[interval_idx - 1]
+                irr_nwp = float(r_nwp['Irradiance_Avg_Wm2'])
+                p_nwp = float(r_nwp['P_Grid_Avg_MW'])
+                t_nwp = float(r_nwp['Amb_Temp_Avg_C'])
+                cloud = float(r_nwp.get('Cloud_Cover_Pct', 30.0))
+                rain_prob = float(r_nwp.get('Rain_Probability_Pct', 10.0))
+            else:
+                irr_nwp = 0.0
+                p_nwp = 0.0
+                t_nwp = 28.0
+                cloud = 30.0
+                rain_prob = 10.0
+
+            # Giá trị từ Mô hình Lịch sử SCADA
+            if len(sub_hist) >= interval_idx:
+                r_hist = sub_hist.iloc[interval_idx - 1]
+                irr_hist = float(r_hist['Irradiance_Avg_Wm2'])
+                p_hist = float(r_hist['P_Grid_Avg_MW'])
+                t_hist = float(r_hist['Amb_Temp_Avg_C'])
+            else:
+                irr_hist = irr_nwp
+                p_hist = p_nwp
+                t_hist = t_nwp
+
+            # LAI GHÉP THỐNG NHẤT: Bức xạ & Nhiệt độ
+            irr_unified = max(0.0, w_nwp * irr_nwp + w_hist * irr_hist)
+            t_amb_unified = w_nwp * t_nwp + w_hist * t_hist
+
+            # Tính toán nhiệt độ cell tấm pin Sharp NU-440
+            if irr_unified > 10.0:
+                cell_temp_unified = t_amb_unified + ((45.0 - 20.0) / 800.0) * irr_unified * 0.92
+            else:
+                cell_temp_unified = t_amb_unified
+
+            # Tính toán công suất phát điện Thống Nhất qua mô hình vật lý
+            f_temp = max(0.68, 1.0 + temp_coeff * (cell_temp_unified - 25.0))
+            p_dc_unified = (irr_unified / 1000.0) * dc_cap * f_temp * 0.95
+            p_grid_raw_unified = (irr_unified / 1000.0) * 40.0 * f_temp
+            p_grid_unified = min(ac_cap, p_grid_raw_unified)
+            clipping_mw = max(0.0, p_grid_raw_unified - ac_cap)
+
+            e_unified = p_grid_unified * 0.25
+            e_nwp = p_nwp * 0.25
+            e_hist = p_hist * 0.25
+            clip_mwh = clipping_mw * 0.25
+
+            daily_e_unified += e_unified
+            daily_e_nwp += e_nwp
+            daily_e_hist += e_hist
+            daily_clip_mwh += clip_mwh
+            daily_p_max = max(daily_p_max, p_grid_unified)
+            daily_irr_max = max(daily_irr_max, irr_unified)
+            daily_temp_max = max(daily_temp_max, t_amb_unified)
+            daily_cloud_avg += cloud / 96.0
+            daily_rain_prob_max = max(daily_rain_prob_max, rain_prob)
+
+            # Dải tin cậy dự báo P10 - P50 - P90
+            p90 = min(ac_cap, p_grid_unified * 1.08) # Kịch bản nắng cao
+            p10 = max(0.0, p_grid_unified * 0.86)   # Kịch bản mây suy giảm
+
+            unified_rows.append({
+                'Date': d_str,
+                'Interval_Index': interval_idx,
+                'Start_Time': start_t.strftime('%H:%M'),
+                'End_Time': end_t.strftime('%H:%M'),
+                'Timestamp': start_t,
+                'End_Timestamp': end_t,
+                # Mô hình Thống Nhất (Unified Ensemble)
+                'Irradiance_Unified_Wm2': round(irr_unified, 1),
+                'P_Grid_Unified_MW': round(p_grid_unified, 3),
+                'P_DC_Unified_MW': round(p_dc_unified, 3),
+                'Energy_Unified_MWh': round(e_unified, 4),
+                'P10_Lower_MW': round(p10, 3),
+                'P90_Upper_MW': round(p90, 3),
+                # So sánh với 2 mô hình thành phần
+                'P_Grid_NWP_MW': round(p_nwp, 3),
+                'P_Grid_Hist_MW': round(p_hist, 3),
+                'Irradiance_NWP_Wm2': round(irr_nwp, 1),
+                'Irradiance_Hist_Wm2': round(irr_hist, 1),
+                'Amb_Temp_Avg_C': round(t_amb_unified, 1),
+                'Cell_Temp_Avg_C': round(cell_temp_unified, 1),
+                'Cloud_Cover_Pct': round(cloud, 1),
+                'Rain_Probability_Pct': round(rain_prob, 1),
+                'Clipping_Loss_MWh': round(clip_mwh, 4),
+                # Chuẩn hóa tên cột để tương thích toàn hệ thống
+                'Irradiance_Avg_Wm2': round(irr_unified, 1),
+                'P_Grid_Avg_MW': round(p_grid_unified, 3),
+                'P_DC_Avg_MW': round(p_dc_unified, 3),
+                'P_AC_Inv_Avg_MW': round(p_grid_unified, 3),
+                'Energy_Grid_MWh': round(e_unified, 4)
+            })
+
+        # Tổng kết ngày
+        daily_summaries.append({
+            'Date': cur_date,
+            'Date_Str': d_str,
+            'Day_Name': day_vn_name,
+            'Energy_Unified_MWh': round(daily_e_unified, 3),
+            'Energy_NWP_MWh': round(daily_e_nwp, 3),
+            'Energy_Hist_MWh': round(daily_e_hist, 3),
+            'Peak_Grid_MW': round(daily_p_max, 3),
+            'Max_Irradiance_Wm2': round(daily_irr_max, 1),
+            'Max_Temp_C': round(daily_temp_max, 1),
+            'Avg_Cloud_Pct': round(daily_cloud_avg, 1),
+            'Max_Rain_Prob_Pct': round(daily_rain_prob_max, 1),
+            'Clipping_Loss_MWh': round(daily_clip_mwh, 3),
+            'Specific_Yield_kWh_kWp': round(daily_e_unified * 1000.0 / dc_cap, 2),
+            'Weight_NWP_Pct': round(w_nwp * 100, 1),
+            'Weight_Hist_Pct': round(w_hist * 100, 1),
+            # Chuẩn hóa
+            'Energy_MWh': round(daily_e_unified, 3)
+        })
+
+        # Thuyết minh khí tượng & vận hành lai ghép
+        narrative_item = generate_daily_operational_narrative({
+            'date_str': d_str,
+            'day_name': day_vn_name,
+            'energy_mwh': daily_e_unified,
+            'peak_p_mw': daily_p_max,
+            'peak_irr': daily_irr_max,
+            'temp_max': daily_temp_max,
+            'temp_min': 24.0,
+            'cloud_avg': daily_cloud_avg,
+            'rain_prob': daily_rain_prob_max,
+            'rain_sum': daily_rain_sum,
+            'clipping_mwh': daily_clip_mwh
+        })
+        narrative_item['ensemble_info'] = f"Mô hình Thống Nhất lai ghép: {w_nwp*100:.0f}% Khí tượng NWP + {w_hist*100:.0f}% SCADA Lịch sử (Chênh lệch NWP: {daily_e_unified - daily_e_nwp:+.2f} MWh, SCADA: {daily_e_unified - daily_e_hist:+.2f} MWh)"
+        narratives.append(narrative_item)
+
+    df_unified_15m = pd.DataFrame(unified_rows)
+    df_unified_daily = pd.DataFrame(daily_summaries)
+
+    return df_unified_15m, df_unified_daily, narratives
+
