@@ -40,7 +40,8 @@ from data_harvester import (
 from weather_forecast_engine import (
     fetch_phu_my_weather_forecast,
     convert_nwp_to_15min_dispatch,
-    generate_unified_hybrid_forecast
+    generate_unified_hybrid_forecast,
+    forecast_18_rolling_realtime_ai
 )
 from exporter import (
     export_to_excel_bytes, 
@@ -742,41 +743,258 @@ with tab_1day:
 
 
 # -------------------------------------------------------------------------
-# TAB 2: DỰ BÁO 18 CHU KỲ CUỐN CHIẾU
+# TAB 2: DỰ BÁO 18 CHU KỲ CUỐN CHIẾU THEO THỜI GIAN THỰC (TÍCH HỢP AI & UPDATE W/P)
 # -------------------------------------------------------------------------
 with tab_18c:
-    st.subheader("⚡ Dự Báo Sản Lượng 18 Chu Kỳ Cuốn Chiếu (4.5 Giờ Tới)")
-    st.caption("Dự báo cuốn chiếu thời gian thực phục vụ điều độ tức thời với A0 / A3.")
+    st.subheader("⚡ Dự Báo 18 Chu Kỳ Tiếp Theo Thời Gian Thực (Ultra-Short-Term Rolling Forecast)")
+    st.caption("Dự báo cuốn chiếu 18 chu kỳ 15 phút (4.5 giờ tới) tích hợp AI tự động học sai số từ dữ liệu đo đếm W (Bức xạ) & P (Công suất) thực tế phục vụ đăng ký biểu đồ điều độ tức thời A0 / A3.")
     
-    col_fc1, col_fc2, col_fc3 = st.columns(3)
+    # 1. Cấu hình thời gian và chế độ AI
+    col_fc1, col_fc2, col_fc3 = st.columns([1.6, 1.2, 2.0])
     with col_fc1:
-        fc_start_time = st.time_input("Mốc thời gian bắt đầu:", value=datetime.strptime("14:15", "%H:%M").time(), key="fc_time_tab2")
+        c_date_pick, c_time_pick = st.columns(2)
+        with c_date_pick:
+            fc_date_in = st.date_input("📅 Ngày dự báo:", value=datetime(2026, 8, 27), key="fc_date_tab2")
+        with c_time_pick:
+            fc_start_time = st.time_input("⏱️ Giờ bắt đầu:", value=datetime.strptime("14:15", "%H:%M").time(), key="fc_time_tab2")
+            
     with col_fc2:
-        fc_weather = st.selectbox("Tình trạng thời tiết:", ["Nắng đẹp (Clear Sky)", "Có mây thay đổi (Partly Cloudy)", "Nhiều mây / Mưa"], key="fc_w_tab2")
-    with col_fc3:
-        fc_intervals = st.number_input("Số chu kỳ dự báo:", min_value=4, max_value=48, value=18, step=1, key="fc_int_tab2")
+        fc_intervals = st.number_input("🔢 Số chu kỳ dự báo (15p):", min_value=4, max_value=36, value=18, step=1, key="fc_int_tab2", help="Mặc định 18 chu kỳ tương đương 4.5 giờ tới.")
         
-    start_dt_fc = datetime(2026, 8, 27, fc_start_time.hour, fc_start_time.minute)
-    df_18_res, kpis_18 = forecast_rolling_intervals(start_time=start_dt_fc, n_intervals=int(fc_intervals), params=calc_params, weather_condition=fc_weather)
+    with col_fc3:
+        c_ai_tog, c_ai_w = st.columns([1.3, 1.2])
+        with c_ai_tog:
+            fc_enable_ai = st.toggle("🧠 Bật AI Học Sai Số", value=True, key="fc_enable_ai_tab2", help="AI tự động phân tích độ lệch giữa thực tế và dự báo ở các chu kỳ trước để nắn chỉnh 18 chu kỳ tới.")
+        with c_ai_w:
+            fc_ai_weight = st.slider("Trọng số AI bám thực tế:", min_value=0.0, max_value=1.0, value=0.85, step=0.05, key="fc_ai_w_tab2", disabled=not fc_enable_ai)
+
+    start_dt_fc = datetime.combine(fc_date_in, fc_start_time)
     
+    # 2. KHU VỰC CẬP NHẬT DỮ LIỆU THỜI TIẾT W VÀ CÔNG SUẤT P CÁC CHU KỲ ĐÃ QUA
+    with st.expander("📝 **CẬP NHẬT DỮ LIỆU THỜI TIẾT (W) & SẢN LƯỢNG (P) CÁC CHU KỲ TRƯỚC ĐỂ AI TỰ ĐỘNG HIỆU CHỈNH**", expanded=True):
+        st.caption("Nhập hoặc cập nhật nhanh số liệu đo đếm Bức xạ $W (W/m^2)$ và Công suất phát lưới $P (MW)$ thực tế của các chu kỳ đã qua trong ngày. AI sẽ sử dụng độ lệch này làm căn cứ nắn chỉnh chính xác 18 chu kỳ tiếp theo.")
+        
+        # Khởi tạo dữ liệu mẫu các chu kỳ trước mốc bắt đầu
+        cur_interval_idx = (fc_start_time.hour * 60 + fc_start_time.minute) // 15 + 1
+        
+        # Tạo danh sách các chu kỳ trước
+        past_rows = []
+        # Lấy từ current_day_data nếu có
+        actual_df_ref = current_day_data.get('actual_15min')
+        forecast_df_ref = current_day_data.get('forecast_15min')
+        
+        for p_idx in range(max(1, cur_interval_idx - 8), cur_interval_idx):
+            p_start_m = (p_idx - 1) * 15
+            p_end_m = p_idx * 15
+            t_s = f"{p_start_m // 60:02d}:{p_start_m % 60:02d}"
+            t_e = f"{p_end_m // 60:02d}:{p_end_m % 60:02d}"
+            
+            # Giá trị mặc định
+            w_val = 0.0
+            p_val = 0.0
+            
+            # Lấy từ dữ liệu SCADA thực tế nếu có
+            if actual_df_ref is not None and len(actual_df_ref) >= p_idx:
+                r_act = actual_df_ref.iloc[p_idx - 1]
+                p_val = float(r_act.get('P_Grid_Actual_Avg_MW', r_act.get('P_Grid_Avg_MW', 0.0)))
+            
+            if forecast_df_ref is not None and len(forecast_df_ref) >= p_idx:
+                r_fc = forecast_df_ref.iloc[p_idx - 1]
+                w_val = float(r_fc.get('Irradiance_Avg_Wm2', 0.0))
+                if p_val <= 0:
+                    p_val = float(r_fc.get('P_Grid_Avg_MW', 0.0))
+                    
+            if w_val == 0 and p_val == 0:
+                # Ước lượng mẫu thực tế giờ chiều
+                mid_h = (p_start_m + 7.5) / 60.0
+                if 6.0 <= mid_h <= 18.0:
+                    w_val = round(max(0.0, 950.0 * np.sin(np.pi * (mid_h - 6.0) / 12.0)), 1)
+                    p_val = round(min(40.075, (w_val / 1000.0) * 39.2), 2)
+                    
+            past_rows.append({
+                'Interval_Index': p_idx,
+                'Khung_Gio': f"{t_s} - {t_e}",
+                'Buc_Xa_Thuc_Te_Wm2': w_val,
+                'Cong_Suat_Thuc_Te_MW': p_val
+            })
+            
+        df_past_init = pd.DataFrame(past_rows)
+        
+        c_ed_tab, c_ed_act = st.columns([3, 1])
+        with c_ed_tab:
+            edited_past_df = st.data_editor(
+                df_past_init,
+                num_rows="dynamic",
+                key="editor_past_scada_tab2",
+                use_container_width=True,
+                column_config={
+                    "Interval_Index": st.column_config.NumberColumn("Chu Kỳ", disabled=True),
+                    "Khung_Gio": st.column_config.TextColumn("Khung Giờ (15p)", disabled=True),
+                    "Buc_Xa_Thuc_Te_Wm2": st.column_config.NumberColumn("Bức Xạ Thực Tế W (W/m²)", min_value=0.0, max_value=1400.0, step=10.0, format="%.1f"),
+                    "Cong_Suat_Thuc_Te_MW": st.column_config.NumberColumn("Công Suất Phát Lưới P (MW)", min_value=0.0, max_value=45.0, step=0.1, format="%.2f")
+                }
+            )
+        with c_ed_act:
+            st.markdown("##### ⚙️ Tùy chọn nạp:")
+            if st.button("🔄 Nạp Dữ Liệu SCADA Hôm Nay", use_container_width=True):
+                st.rerun()
+            st.info("💡 **Gợi ý**: Bạn có thể click trực tiếp vào ô số liệu ở bảng bên trái để chỉnh sửa Bức xạ W và Công suất P thực tế vừa đo được. AI sẽ tự động học sai số và tính toán lại ngay!")
+
+    # 3. THỰC HIỆN DỰ BÁO 18 CHU KỲ TÍCH HỢP AI
+    # Chuẩn hóa bảng quá khứ đưa vào AI
+    df_obs_feed = edited_past_df.copy()
+    df_obs_feed.rename(columns={
+        'Buc_Xa_Thuc_Te_Wm2': 'Irradiance_Actual_Wm2',
+        'Cong_Suat_Thuc_Te_MW': 'P_Grid_Actual_MW'
+    }, inplace=True)
+    
+    with st.spinner("Đang chạy mô hình AI phân tích chu kỳ quá khứ và dự báo 18 chu kỳ tới..."):
+        df_18_ai, kpis_18_ai, df_18_timeline = forecast_18_rolling_realtime_ai(
+            start_dt=start_dt_fc,
+            historical_observed_df=df_obs_feed,
+            nwp_data=None,
+            params=calc_params,
+            n_intervals=int(fc_intervals),
+            enable_ai=fc_enable_ai,
+            ai_bias_weight=fc_ai_weight
+        )
+
+    # 4. 4 THẺ KPI 18 CHU KỲ
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("⚡ Tổng Sản Lượng", f"{kpis_18['total_energy_mwh']:.2f} MWh")
+        st.metric(
+            "⚡ Tổng Sản Lượng 18 Chu Kỳ",
+            f"{kpis_18_ai['total_energy_mwh']:.2f} MWh",
+            delta=f"TB: {kpis_18_ai['total_energy_mwh']/int(fc_intervals):.2f} MWh/CK"
+        )
     with k2:
-        st.metric("📈 P_Grid Đỉnh", f"{kpis_18['peak_grid_mw']:.2f} MW")
+        st.metric(
+            "📈 P_Grid Đỉnh Dự Báo",
+            f"{kpis_18_ai['peak_grid_mw']:.2f} MW",
+            delta=f"Bức xạ đỉnh: {df_18_ai['Irradiance_Avg_Wm2'].max():.0f} W/m²"
+        )
     with k3:
-        st.metric("✂️ Cắt Inverter", f"{kpis_18['total_clipping_loss_mwh']:.2f} MWh")
+        bias_val = kpis_18_ai['recent_bias_mw']
+        bias_label = f"{bias_val:+.2f} MW" if bias_val != 0 else "0.00 MW"
+        st.metric(
+            "🧠 Độ Lệch AI Hiệu Chỉnh",
+            bias_label,
+            delta="AI đang bù trừ theo SCADA" if bias_val != 0 else "Chuẩn mô hình lý thuyết",
+            delta_color="normal" if bias_val >= 0 else "inverse"
+        )
     with k4:
-        st.metric("⏱️ Khung Giờ", f"{kpis_18['start_time'].strftime('%H:%M')} - {kpis_18['end_time'].strftime('%H:%M')}")
-        
-    fig_18 = go.Figure()
-    fig_18.add_trace(go.Scatter(x=df_18_res['Start_Time'] + ' - ' + df_18_res['End_Time'], y=df_18_res['P_DC_Avg_MW'], mode='lines+markers', name='P_DC Tấm pin (MW)', line=dict(color='#F59E0B', width=2, dash='dot')))
-    fig_18.add_trace(go.Scatter(x=df_18_res['Start_Time'] + ' - ' + df_18_res['End_Time'], y=df_18_res['P_Grid_Avg_MW'], mode='lines+markers', name='P_Grid Phát Lưới (MW)', line=dict(color='#10B981', width=3), fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.18)'))
-    fig_18.add_hline(y=ac_capacity, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"Trần Inverter {ac_capacity:.3f} MW")
-    fig_18.update_layout(title=f"<b>Biểu Đồ Công Suất {fc_intervals} Chu Kỳ ({kpis_18['start_time'].strftime('%H:%M')} - {kpis_18['end_time'].strftime('%H:%M')})</b>", xaxis_title="Khung giờ 15 phút", yaxis_title="Công suất (MW)", hovermode="x unified", template="plotly_white", height=400)
-    st.plotly_chart(fig_18, width='stretch')
+        st.metric(
+            "⏱️ Khung Thời Gian",
+            f"{kpis_18_ai['start_time'].strftime('%H:%M')} - {kpis_18_ai['end_time'].strftime('%H:%M')}",
+            delta=f"{fc_intervals} Chu kỳ (4.5 Giờ)"
+        )
+
+    # 5. BIỂU ĐỒ 18 CHU KỲ NỐI LIỀN THỜI GIAN THỰC (PLOTLY DUAL-AXIS)
+    from plotly.subplots import make_subplots
+    fig_18 = make_subplots(specs=[[{"secondary_y": True}]])
     
-    st.dataframe(prepare_export_dataframe(df_18_res), width='stretch', height=300, hide_index=True)
+    # Trace 1: Dải tin cậy P10 - P90 cho 18 chu kỳ tới
+    x_fc_times = df_18_ai['Time_Range'].tolist()
+    y_p90 = df_18_ai['P90_Upper_MW'].tolist()
+    y_p10 = df_18_ai['P10_Lower_MW'].tolist()
+    
+    fig_18.add_trace(go.Scatter(
+        x=x_fc_times + x_fc_times[::-1],
+        y=y_p90 + y_p10[::-1],
+        fill='toself',
+        fillcolor='rgba(16, 185, 129, 0.12)',
+        line=dict(color='rgba(255,255,255,0)'),
+        hoverinfo="skip",
+        showlegend=True,
+        name='Dải Tin Cậy AI (P10 - P90)'
+    ), secondary_y=False)
+
+    # Trace 2: Công suất P_Grid Dự Báo AI (Area Chart)
+    fig_18.add_trace(go.Scatter(
+        x=x_fc_times,
+        y=df_18_ai['P_Grid_Avg_MW'],
+        mode='lines+markers',
+        name='P_Grid Dự Báo AI (MW)',
+        line=dict(color='#10B981', width=3),
+        marker=dict(size=6, color='#10B981'),
+        fill='tozeroy',
+        fillcolor='rgba(16, 185, 129, 0.18)'
+    ), secondary_y=False)
+
+    # Trace 3: Công suất DC Dàn Pin
+    fig_18.add_trace(go.Scatter(
+        x=x_fc_times,
+        y=df_18_ai['P_DC_Avg_MW'],
+        mode='lines',
+        name='P_DC Tấm Pin (MW)',
+        line=dict(color='#F59E0B', width=2, dash='dot')
+    ), secondary_y=False)
+
+    # Trace 4: Baseline nếu không có AI (để so sánh)
+    if fc_enable_ai and abs(bias_val) > 0.05:
+        fig_18.add_trace(go.Scatter(
+            x=x_fc_times,
+            y=df_18_ai['P_Grid_Baseline_MW'],
+            mode='lines',
+            name='P_Grid Gốc (Chưa AI)',
+            line=dict(color='#94A3B8', width=1.8, dash='dash')
+        ), secondary_y=False)
+
+    # Trace 5: Bức xạ Mặt Trời Dự Báo AI (Trục Y phụ bên phải)
+    fig_18.add_trace(go.Scatter(
+        x=x_fc_times,
+        y=df_18_ai['Irradiance_Avg_Wm2'],
+        mode='lines+markers',
+        name='Bức Xạ Hiệu Chỉnh AI (W/m²)',
+        line=dict(color='#0EA5E9', width=2, dash='dashdot'),
+        marker=dict(size=5, color='#0EA5E9')
+    ), secondary_y=True)
+
+    # Đường giới hạn Inverter
+    fig_18.add_hline(y=ac_capacity, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"Trần Inverter {ac_capacity:.3f} MW", secondary_y=False)
+
+    fig_18.update_layout(
+        title=f"<b>Biểu Đồ Công Suất & Bức Xạ {fc_intervals} Chu Kỳ Cuốn Chiếu ({kpis_18_ai['start_time'].strftime('%H:%M')} - {kpis_18_ai['end_time'].strftime('%H:%M')}) - Tích Hợp AI</b>",
+        xaxis_title="Khung Giờ 15 Phút (Chu Kỳ Dự Báo)",
+        yaxis_title="Công Suất Phát Điện (MW)",
+        hovermode="x unified",
+        template="plotly_white",
+        height=450,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    fig_18.update_yaxes(title_text="Công Suất (MW)", secondary_y=False, range=[0, 45])
+    fig_18.update_yaxes(title_text="Bức Xạ (W/m²)", secondary_y=True, showgrid=False, range=[0, 1200])
+    
+    st.plotly_chart(fig_18, use_container_width=True)
+
+    # 6. BẢNG DỮ LIỆU 18 CHU KỲ VÀ NÚT XUẤT BÁO CÁO
+    st.markdown("##### 📋 Bảng Chi Tiết 18 Chu Kỳ Dự Báo & Độ Lệch Hiệu Chỉnh AI:")
+    
+    col_dl1, col_dl2, _ = st.columns([1.8, 1.8, 3.5])
+    with col_dl1:
+        st.download_button(
+            "📥 Tải File Excel 18 Chu Kỳ (.xlsx)",
+            data=export_to_excel_bytes(df_18_ai, kpis_18_ai),
+            file_name=f"Du_Bao_18_Chu_Ky_MyHiep_{kpis_18_ai['start_time'].strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True
+        )
+    with col_dl2:
+        st.download_button(
+            "📄 Tải File CSV (.csv)",
+            data=export_to_csv_bytes(df_18_ai),
+            file_name=f"Du_Bao_18_Chu_Ky_MyHiep_{kpis_18_ai['start_time'].strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+    st.dataframe(
+        prepare_export_dataframe(df_18_ai),
+        use_container_width=True,
+        height=320,
+        hide_index=True
+    )
 
 
 # -------------------------------------------------------------------------

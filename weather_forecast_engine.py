@@ -518,3 +518,263 @@ def generate_unified_hybrid_forecast(
 
     return df_unified_15m, df_unified_daily, narratives
 
+
+def forecast_18_rolling_realtime_ai(
+    start_dt: Union[str, datetime],
+    historical_observed_df: Optional[pd.DataFrame] = None,
+    nwp_data: Optional[Dict[str, Any]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    n_intervals: int = 18,
+    enable_ai: bool = True,
+    ai_bias_weight: float = 0.85
+) -> Tuple[pd.DataFrame, Dict[str, Any], pd.DataFrame]:
+    """
+    DỰ BÁO CUỐN CHIẾU 18 CHU KỲ (4.5 GIỜ TỚI) THEO THỜI GIAN THỰC TÍCH HỢP AI & DỮ LIỆU ĐO ĐẾM
+    - Kết hợp 3 nguồn:
+      1. Khí tượng số trị thời gian thực (NWP / Open-Meteo) cho 18 chu kỳ tới.
+      2. Mô hình vật lý quang điện & đặc tính tấm pin Sharp NU-440 (50MWp / 40.075MW).
+      3. Bộ hiệu chỉnh sai số AI thời gian thực (AI Real-time Autoregressive & Residual Feedback):
+         Học từ dữ liệu thời tiết W và công suất P thực tế của các chu kỳ đã qua trong ngày để
+         hiệu chỉnh độ lệch (bias), bù suy hao mây thực tế và bám sát diễn biến vận hành.
+    """
+    if params is None:
+        params = {}
+
+    if isinstance(start_dt, str):
+        if '-' in start_dt:
+            base_dt = datetime.strptime(start_dt, "%Y-%m-%d %H:%M") if ' ' in start_dt else datetime.strptime(start_dt, "%Y-%m-%d")
+        else:
+            base_dt = datetime.strptime(start_dt, "%d/%m/%Y %H:%M") if ' ' in start_dt else datetime.strptime(start_dt, "%d/%m/%Y")
+    elif isinstance(start_dt, datetime):
+        base_dt = start_dt
+    else:
+        # datetime.date
+        base_dt = datetime.combine(start_dt, datetime.min.time())
+
+    # Làm tròn về mốc 15 phút gần nhất
+    minute_rounded = (base_dt.minute // 15) * 15
+    base_dt = base_dt.replace(minute=minute_rounded, second=0, microsecond=0)
+
+    ac_cap = params.get('ac_capacity_mw', MyHiepSolarPlantConfig.AC_CAPACITY_MW)
+    dc_cap = params.get('dc_capacity_mwp', MyHiepSolarPlantConfig.DC_CAPACITY_MWP)
+    temp_coeff = params.get('temp_coeff', -0.00347)
+
+    # 1. Lấy dữ liệu NWP cho ngày này
+    if nwp_data is None:
+        nwp_data = fetch_phu_my_weather_forecast(days=2)
+
+    df_nwp_15m, _, _ = convert_nwp_to_15min_dispatch(nwp_data, params=params) if nwp_data else (pd.DataFrame(), pd.DataFrame(), [])
+
+    # 2. Phân tích Dữ liệu Đo đếm Thực tế các chu kỳ trước (Feedback Error Learning)
+    recent_bias_mw = 0.0
+    recent_irr_ratio = 1.0
+    has_history = False
+    valid_hist_rows = []
+
+    if historical_observed_df is not None and len(historical_observed_df) > 0:
+        # Chuẩn hóa cột
+        df_obs = historical_observed_df.copy()
+        
+        # Tìm cột công suất thực tế và bức xạ thực tế
+        p_act_col = next((c for c in ['P_Grid_Actual_MW', 'P_Grid_Avg_MW', 'P_Actual_MW', 'Power_MW', 'P_110kV_MW'] if c in df_obs.columns), None)
+        w_act_col = next((c for c in ['Irradiance_Actual_Wm2', 'Irradiance_Avg_Wm2', 'W_Actual_Wm2', 'G_Wm2', 'Buc_Xa_Wm2'] if c in df_obs.columns), None)
+
+        if p_act_col:
+            # Lọc các chu kỳ có số liệu thực tế (> 0 hoặc có giá trị)
+            df_valid = df_obs[df_obs[p_act_col].notna()].copy()
+            if len(df_valid) > 0:
+                has_history = True
+                valid_hist_rows = df_valid.to_dict('records')
+                # Lấy 1-4 chu kỳ gần nhất
+                recent_samples = df_valid.tail(4)
+                
+                # So sánh với mô hình lý thuyết của các chu kỳ đó để tính sai số Bias
+                biases = []
+                irr_ratios = []
+                for _, r_obs in recent_samples.iterrows():
+                    p_act = float(r_obs.get(p_act_col, 0.0))
+                    w_act = float(r_obs.get(w_act_col, 0.0)) if w_act_col else 0.0
+                    
+                    # Bức xạ chuẩn tương ứng
+                    if w_act > 20.0:
+                        # 1000 W/m2 -> ~40 MW
+                        p_expected = (w_act / 1000.0) * 40.0
+                        bias = p_act - p_expected
+                        biases.append(bias)
+                        irr_ratios.append(w_act / max(1.0, w_act))
+                    elif p_act > 0.5:
+                        biases.append(p_act * 0.05)
+                
+                if biases:
+                    recent_bias_mw = float(np.mean(biases))
+                    # Giới hạn bias tối đa +/- 8 MW để tránh over-fitting
+                    recent_bias_mw = max(-8.0, min(8.0, recent_bias_mw))
+
+    # 3. Tạo chuỗi 18 chu kỳ dự báo
+    fc_rows = []
+    total_energy_mwh = 0.0
+    peak_grid_mw = 0.0
+    total_clipping_mwh = 0.0
+
+    for step_idx in range(n_intervals):
+        cur_t = base_dt + timedelta(minutes=15 * step_idx)
+        end_t = cur_t + timedelta(minutes=15)
+        d_str = cur_t.strftime('%d/%m/%Y')
+        cur_h = (cur_t.hour * 60 + cur_t.minute + 7.5) / 60.0
+        interval_idx = (cur_t.hour * 60 + cur_t.minute) // 15 + 1
+
+        # Lấy NWP cho chu kỳ này nếu có
+        irr_nwp = 0.0
+        temp_nwp = 28.0
+        cloud_nwp = 20.0
+        rain_nwp = 0.0
+
+        if len(df_nwp_15m) > 0:
+            # Tìm dòng khớp timestamp hoặc (Date, Interval_Index)
+            sub_match = df_nwp_15m[(df_nwp_15m['Date'] == d_str) & (df_nwp_15m['Interval_Index'] == interval_idx)]
+            if len(sub_match) > 0:
+                r_nwp = sub_match.iloc[0]
+                irr_nwp = float(r_nwp.get('Irradiance_Avg_Wm2', 0.0))
+                temp_nwp = float(r_nwp.get('Amb_Temp_Avg_C', 28.0))
+                cloud_nwp = float(r_nwp.get('Cloud_Cover_Pct', 20.0))
+                rain_nwp = float(r_nwp.get('Rain_Probability_Pct', 0.0))
+
+        # Nếu không có NWP hoặc ngoài giờ chiếu sáng
+        sunrise = 5.75
+        sunset = 18.25
+        if sunrise <= cur_h <= sunset:
+            zenith = np.sin(np.pi * (cur_h - sunrise) / (sunset - sunrise))
+            irr_clear_sky = 1050.0 * (zenith ** 1.18)
+            if irr_nwp <= 0:
+                irr_baseline = irr_clear_sky * max(0.2, 1.0 - 0.7 * (cloud_nwp / 100.0))
+            else:
+                irr_baseline = irr_nwp * 0.70 + irr_clear_sky * 0.30
+        else:
+            irr_clear_sky = 0.0
+            irr_baseline = 0.0
+
+        # AI Dynamic Autoregressive & Bias Feedback Correction:
+        # Chu kỳ 0, 1, 2 chịu ảnh hưởng mạnh nhất từ số liệu đo đếm thực tế gần nhất
+        # Trọng số suy giảm theo hàm mũ: lambda = exp(-0.18 * step_idx) * ai_bias_weight
+        decay_factor = float(np.exp(-0.20 * step_idx)) * (ai_bias_weight if enable_ai else 0.0)
+        
+        # Bức xạ hiệu chỉnh AI
+        if enable_ai and irr_baseline > 10.0:
+            # Hiệu chỉnh bức xạ theo xu hướng sai số
+            ai_irr_corr = recent_bias_mw * (1000.0 / 40.0) * decay_factor * 0.5
+            irr_final = max(0.0, irr_baseline + ai_irr_corr)
+        else:
+            irr_final = irr_baseline
+
+        # Tính nhiệt độ cell
+        if irr_final > 10.0:
+            cell_temp = temp_nwp + ((45.0 - 20.0) / 800.0) * irr_final * 0.92
+        else:
+            cell_temp = temp_nwp
+
+        # Hệ số nhiệt độ tấm pin Sharp NU-440
+        f_temp = max(0.68, 1.0 + temp_coeff * (cell_temp - 25.0))
+
+        # Công suất DC và AC
+        p_dc = (irr_final / 1000.0) * dc_cap * f_temp * 0.95
+        p_phys_raw = (irr_final / 1000.0) * 40.0 * f_temp
+
+        # AI Feedback Correction trực tiếp vào công suất
+        if enable_ai and irr_final > 10.0:
+            p_ai_raw = p_phys_raw + (recent_bias_mw * decay_factor)
+            # Giới hạn trong khoảng hợp lý
+            p_grid_raw = max(0.0, min(ac_cap * 1.05, p_ai_raw))
+        else:
+            p_grid_raw = p_phys_raw
+
+        p_grid = min(ac_cap, max(0.0, p_grid_raw))
+        clipping_mw = max(0.0, p_grid_raw - ac_cap)
+
+        e_mwh = p_grid * 0.25
+        clip_mwh = clipping_mw * 0.25
+
+        total_energy_mwh += e_mwh
+        total_clipping_mwh += clip_mwh
+        peak_grid_mw = max(peak_grid_mw, p_grid)
+
+        # Dải tin cậy P10-P90 mở rộng dần theo thời gian (chu kỳ 1 hẹp, chu kỳ 18 rộng)
+        uncertainty_range = 0.05 + 0.015 * step_idx
+        p90 = min(ac_cap, p_grid * (1.0 + uncertainty_range))
+        p10 = max(0.0, p_grid * (1.0 - uncertainty_range))
+
+        fc_rows.append({
+            'Step_Index': step_idx + 1,
+            'Interval_Index': interval_idx,
+            'Date': d_str,
+            'Start_Time': cur_t.strftime('%H:%M'),
+            'End_Time': end_t.strftime('%H:%M'),
+            'Time_Range': f"{cur_t.strftime('%H:%M')} - {end_t.strftime('%H:%M')}",
+            'Timestamp': cur_t,
+            'End_Timestamp': end_t,
+            'Irradiance_Avg_Wm2': round(irr_final, 1),
+            'Irradiance_Baseline_Wm2': round(irr_baseline, 1),
+            'Amb_Temp_Avg_C': round(temp_nwp, 1),
+            'Cell_Temp_Avg_C': round(cell_temp, 1),
+            'Cloud_Cover_Pct': round(cloud_nwp, 1),
+            'P_DC_Avg_MW': round(p_dc, 3),
+            'P_AC_Raw_Avg_MW': round(p_grid_raw, 3),
+            'P_Grid_Avg_MW': round(p_grid, 3),
+            'P_Grid_Baseline_MW': round(min(ac_cap, p_phys_raw), 3),
+            'AI_Adjustment_MW': round(p_grid - min(ac_cap, p_phys_raw), 3),
+            'Energy_Grid_MWh': round(e_mwh, 4),
+            'P10_Lower_MW': round(p10, 3),
+            'P90_Upper_MW': round(p90, 3),
+            'Clipping_Loss_Avg_MW': round(clipping_mw, 3),
+            'Clipping_Loss_MWh': round(clip_mwh, 4)
+        })
+
+    df_fc_18 = pd.DataFrame(fc_rows)
+
+    kpis = {
+        'total_energy_mwh': round(total_energy_mwh, 3),
+        'peak_grid_mw': round(peak_grid_mw, 3),
+        'total_clipping_loss_mwh': round(total_clipping_mwh, 3),
+        'start_time': base_dt,
+        'end_time': base_dt + timedelta(minutes=15 * n_intervals),
+        'n_intervals': n_intervals,
+        'recent_bias_mw': round(recent_bias_mw, 3),
+        'has_feedback_history': has_history,
+        'ai_enabled': enable_ai
+    }
+
+    # Tạo bảng timeline nối liền chu kỳ đo đếm thực tế (nếu có) + 18 chu kỳ dự báo
+    timeline_rows = []
+    if has_history and len(valid_hist_rows) > 0:
+        for r in valid_hist_rows:
+            t_val = r.get('Timestamp')
+            if isinstance(t_val, str):
+                t_val = pd.to_datetime(t_val)
+            p_val = float(r.get(p_act_col, 0.0))
+            w_val = float(r.get(w_act_col, 0.0)) if w_act_col else 0.0
+            timeline_rows.append({
+                'Timestamp': t_val,
+                'Time_Label': r.get('Start_Time', str(t_val)),
+                'P_Actual_MW': p_val,
+                'P_Forecast_MW': None,
+                'P10_MW': None,
+                'P90_MW': None,
+                'Irradiance_Wm2': w_val,
+                'Data_Type': 'Thực Tế Đo Đếm'
+            })
+
+    for _, r in df_fc_18.iterrows():
+        timeline_rows.append({
+            'Timestamp': r['Timestamp'],
+            'Time_Label': r['Time_Range'],
+            'P_Actual_MW': None,
+            'P_Forecast_MW': r['P_Grid_Avg_MW'],
+            'P10_MW': r['P10_Lower_MW'],
+            'P90_MW': r['P90_Upper_MW'],
+            'Irradiance_Wm2': r['Irradiance_Avg_Wm2'],
+            'Data_Type': 'Dự Báo AI 18 Chu Kỳ'
+        })
+
+    df_timeline = pd.DataFrame(timeline_rows)
+
+    return df_fc_18, kpis, df_timeline
+
