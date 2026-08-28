@@ -283,7 +283,11 @@ def generate_multi_day_15min_forecast(
     if isinstance(start_date, str):
         base_dt = datetime.strptime(start_date, "%Y-%m-%d") if '-' in start_date else datetime.strptime(start_date, "%d/%m/%Y")
     else:
-        base_dt = start_date
+        # Đảm bảo base_dt là datetime (có giờ phút giây) chứ không phải date, nếu không timedelta(minutes) sẽ bị bỏ qua
+        if isinstance(start_date, datetime):
+            base_dt = start_date
+        else:
+            base_dt = datetime.combine(start_date, datetime.min.time())
 
     ac_capacity_mw = 40.075
 
