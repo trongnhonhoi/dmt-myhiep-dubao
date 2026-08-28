@@ -284,7 +284,10 @@ def generate_unified_hybrid_forecast(
     if isinstance(start_date, str):
         base_dt = datetime.strptime(start_date, "%Y-%m-%d") if '-' in start_date else datetime.strptime(start_date, "%d/%m/%Y")
     else:
-        base_dt = start_date
+        if isinstance(start_date, datetime):
+            base_dt = start_date
+        else:
+            base_dt = datetime.combine(start_date, datetime.min.time())
 
     # 1. Lấy dữ liệu Mô hình Khí tượng NWP
     if nwp_data is None:
