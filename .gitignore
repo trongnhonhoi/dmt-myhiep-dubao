@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.spec
+*.lnk
+*.log
+.system_generated/
+.idea/
+.vscode/
