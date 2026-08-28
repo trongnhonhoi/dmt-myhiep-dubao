@@ -891,6 +891,8 @@ with tab_multi:
             )
             w_custom = w_slider / 100.0
 
+        enable_ai_flag = st.toggle("🧠 Tích Hợp AI (Machine Learning Error Correction)", value=True, help="Bật để AI tự động điều chỉnh bù suy hao do mây, quá nhiệt Inverter và hiệu ứng góc chiếu buổi sáng/chiều.")
+
         n_days_ens = 1 if "1 Ngày" in forecast_horizon else (2 if "2 Ngày" in forecast_horizon else 7)
 
         with st.spinner("Đang tổng hợp mô hình khí tượng vệ tinh và dữ liệu lịch sử SCADA Mỹ Hiệp..."):
@@ -901,7 +903,8 @@ with tab_multi:
                 nwp_data=nwp_data,
                 params=calc_params,
                 ensemble_mode=ens_mode_key,
-                custom_nwp_weight=w_custom
+                custom_nwp_weight=w_custom,
+                enable_ai=enable_ai_flag
             )
 
         if len(df_uni_15) > 0 and len(df_uni_daily) > 0:
