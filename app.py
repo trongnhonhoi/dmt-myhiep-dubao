@@ -947,11 +947,25 @@ with tab_multi:
 
             # BIỂU ĐỒ SO SÁNH 3 MÔ HÌNH TRÊN CÙNG TRỤC TỌA ĐỘ
             st.markdown(f"##### 📈 So Sánh 3 Mô Hình Dự Báo Chu Kỳ 15 Phút Ngày {cur_nar['date_str']}")
-            fig_uni = go.Figure()
+            
+            from plotly.subplots import make_subplots
+            fig_uni = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            # Sử dụng pd.to_datetime để đảm bảo trục X là thời gian (datetime)
+            x_vals = pd.to_datetime(df_plot_15['Timestamp'])
+
+            # 3. MÔ HÌNH THỐNG NHẤT LAI GHÉP (Dạng Cột) - Vẽ ĐẦU TIÊN để không che khuất các đường
+            fig_uni.add_trace(go.Bar(
+                x=x_vals,
+                y=df_plot_15['P_Grid_Unified_MW'],
+                name='🌟 MÔ HÌNH DỰ BÁO THỐNG NHẤT (UNIFIED HYBRID)',
+                marker_color='#10B981',
+                opacity=0.85
+            ), secondary_y=False)
 
             # Dải tin cậy P10 - P90 (Vùng bóng mờ)
             fig_uni.add_trace(go.Scatter(
-                x=df_plot_15['Timestamp'].tolist() + df_plot_15['Timestamp'].tolist()[::-1],
+                x=x_vals.tolist() + x_vals.tolist()[::-1],
                 y=df_plot_15['P90_Upper_MW'].tolist() + df_plot_15['P10_Lower_MW'].tolist()[::-1],
                 fill='toself',
                 fillcolor='rgba(16, 185, 129, 0.12)',
@@ -959,35 +973,34 @@ with tab_multi:
                 hoverinfo="skip",
                 showlegend=True,
                 name='Dải Tin Cậy Điều Độ (P10 - P90)'
-            ))
+            ), secondary_y=False)
 
             # 1. Mô hình Khí tượng NWP (Xanh dương nét đứt)
             fig_uni.add_trace(go.Scatter(
-                x=df_plot_15['Timestamp'],
+                x=x_vals,
                 y=df_plot_15['P_Grid_NWP_MW'],
                 mode='lines',
                 name='Mô Hình Khí Tượng Số (NWP ECMWF/GFS)',
                 line=dict(color='#0284C7', width=2, dash='dash')
-            ))
+            ), secondary_y=False)
 
             # 2. Mô hình Lịch sử SCADA (Vàng cam nét chấm)
             fig_uni.add_trace(go.Scatter(
-                x=df_plot_15['Timestamp'],
+                x=x_vals,
                 y=df_plot_15['P_Grid_Hist_MW'],
                 mode='lines',
                 name='Mô Hình Lịch Sử SCADA Mỹ Hiệp',
                 line=dict(color='#F59E0B', width=2, dash='dot')
-            ))
+            ), secondary_y=False)
 
-            # 3. MÔ HÌNH THỐNG NHẤT LAI GHÉP (Xanh lá cây đậm nét 3.5px)
+            # 4. Bức xạ (Irradiance) trên trục Y phụ (Dạng Đường)
             fig_uni.add_trace(go.Scatter(
-                x=df_plot_15['Timestamp'],
-                y=df_plot_15['P_Grid_Unified_MW'],
-                mode='lines+markers',
-                name='🌟 MÔ HÌNH DỰ BÁO THỐNG NHẤT (UNIFIED HYBRID)',
-                line=dict(color='#10B981', width=3.5),
-                marker=dict(size=4)
-            ))
+                x=x_vals,
+                y=df_plot_15['Irradiance_Unified_Wm2'],
+                mode='lines',
+                name='☀️ Bức xạ (W/m²)',
+                line=dict(color='#F59E0B', width=2)
+            ), secondary_y=True)
 
             # Đường trần Inverter 40.075 MW
             fig_uni.add_hline(
@@ -996,21 +1009,25 @@ with tab_multi:
                 line_color="#EF4444",
                 line_width=2.5,
                 annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
-                annotation_position="top right"
+                annotation_position="top left",
+                secondary_y=False
             )
 
             fig_uni.update_layout(
                 title=dict(
-                    text=f"<b>Đối Soát Biểu Đồ Công Suất P_Grid (MW): Khí Tượng vs Lịch Sử SCADA vs Thống Nhất</b>",
+                    text=f"<b>Đối Soát Biểu Đồ Công Suất P_Grid (Cột) & Bức Xạ (Đường)</b>",
                     font=dict(size=15, color="#0F172A")
                 ),
                 xaxis_title="Thời gian (Chu kỳ 15 phút)",
-                yaxis_title="Công suất phát lưới P_Grid (MW)",
                 hovermode="x unified",
                 template="plotly_white",
-                height=460,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                height=480,
+                legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
             )
+            
+            fig_uni.update_yaxes(title_text="Công suất P_Grid (MW)", secondary_y=False, range=[0, 50])
+            fig_uni.update_yaxes(title_text="Bức xạ (W/m²)", secondary_y=True, range=[0, 1200], showgrid=False)
+
             st.plotly_chart(fig_uni, width='stretch')
 
             # BẢN THUYẾT MINH KHÍ TƯỢNG & VẬN HÀNH THỐNG NHẤT
@@ -1169,32 +1186,48 @@ with tab_multi:
         with k4:
             st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", k4_val)
             
-        fig_2d = go.Figure()
-        fig_2d.add_trace(go.Scatter(
-            x=df_display_15['Timestamp'], 
-            y=df_display_15['P_DC_Avg_MW'], 
-            mode='lines', 
-            name='Công suất DC Tấm pin (50MWp)', 
-            line=dict(color='#F59E0B', width=2, dash='dot')
-        ))
-        fig_2d.add_trace(go.Scatter(
-            x=df_display_15['Timestamp'], 
+        from plotly.subplots import make_subplots
+        fig_2d = make_subplots(specs=[[{"secondary_y": True}]])
+        x_vals_2d = pd.to_datetime(df_display_15['Timestamp'])
+        
+        fig_2d.add_trace(go.Bar(
+            x=x_vals_2d, 
             y=df_display_15['P_Grid_Avg_MW'], 
-            mode='lines+markers', 
             name='P_Grid Phát Lưới TB (15 Phút)', 
-            line=dict(color='#10B981', width=3), 
-            fill='tozeroy', 
-            fillcolor='rgba(16, 185, 129, 0.18)'
-        ))
-        fig_2d.add_hline(y=ac_capacity, line_dash="dash", line_color="#EF4444", annotation_text=f"Trần Inverter {ac_capacity:.3f} MW")
+            marker_color='#10B981',
+            opacity=0.85
+        ), secondary_y=False)
+
+        fig_2d.add_trace(go.Scatter(
+            x=x_vals_2d, 
+            y=df_display_15['Irradiance_Avg_Wm2'], 
+            mode='lines', 
+            name='☀️ Bức xạ (W/m²)', 
+            line=dict(color='#F59E0B', width=2)
+        ), secondary_y=True)
+
+        fig_2d.add_hline(
+            y=ac_capacity,
+            line_dash="dash",
+            line_color="#EF4444",
+            line_width=2.5,
+            annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
+            annotation_position="top left",
+            secondary_y=False
+        )
+        
         fig_2d.update_layout(
-            title=f"<b>Biểu Đồ Công Suất {target_title} (Quy Chuẩn EVN / A0 / A3)</b>", 
+            title=f"<b>Biểu Đồ Công Suất (Cột) & Bức Xạ (Đường) {target_title}</b>", 
             xaxis_title="Thời gian", 
-            yaxis_title="Công suất (MW)", 
             hovermode="x unified", 
             template="plotly_white", 
-            height=430
+            height=460,
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
+        
+        fig_2d.update_yaxes(title_text="Công suất (MW)", secondary_y=False, range=[0, 50])
+        fig_2d.update_yaxes(title_text="Bức xạ (W/m²)", secondary_y=True, range=[0, 1200], showgrid=False)
+
         st.plotly_chart(fig_2d, width='stretch')
         
         exp_display_df = prepare_export_dataframe(df_display_15)
