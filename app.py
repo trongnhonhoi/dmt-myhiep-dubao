@@ -13,6 +13,17 @@ import os
 import io
 
 import base64
+import importlib
+
+import solar_engine
+import data_harvester
+import weather_forecast_engine
+import exporter
+
+importlib.reload(solar_engine)
+importlib.reload(data_harvester)
+importlib.reload(weather_forecast_engine)
+importlib.reload(exporter)
 
 from solar_engine import (
     MyHiepSolarPlantConfig,
