@@ -408,6 +408,8 @@ def generate_multi_day_15min_forecast(
                 'Clipping_Loss_MWh': round(clip_mwh, 4)
             })
 
+        daily_insolation_kwh_m2 = daily_energy / 40.0
+
         daily_summaries.append({
             'Date': cur_date,
             'Date_Str': cur_date.strftime('%d/%m/%Y'),
@@ -416,6 +418,7 @@ def generate_multi_day_15min_forecast(
             'Peak_Grid_MW': round(daily_p_grid_max, 3),
             'Clipping_Loss_MWh': round(daily_clip, 3),
             'Max_Irradiance_Wm2': round(daily_irr_max, 1),
+            'Daily_Insolation_kWh_m2': round(daily_insolation_kwh_m2, 2),
             'Specific_Yield_kWh_kWp': round(daily_energy * 1000.0 / (50.0 * 1000.0), 2)
         })
 
@@ -434,6 +437,7 @@ def generate_multi_day_15min_forecast(
         "total_energy_mwh": round(float(total_energy), 3),
         "total_energy_gwh": round(float(total_energy) / 1000.0, 4),
         "avg_daily_mwh": round(float(total_energy / num_days), 3),
+        "avg_daily_insolation_kwh_m2": round(float(total_energy / num_days / 40.0), 2),
         "total_clipping_loss_mwh": round(float(total_clip), 3),
         "peak_grid_mw": round(float(peak_grid), 3),
         "start_date": df_15min['Timestamp'].iloc[0],
@@ -473,9 +477,11 @@ def forecast_end_of_month(
     # Tính toán đặc tính bức xạ và sản lượng các ngày gần nhất (Recent Telemetry Window: 3-5 ngày gần nhất)
     recent_avg_irr = 950.0
     recent_avg_mwh = 210.0
+    recent_avg_insolation = 5.25
     if len(actual_month_data['df_daily']) > 0:
         tail_df = actual_month_data['df_daily'].tail(min(5, len(actual_month_data['df_daily'])))
         recent_avg_mwh = float(tail_df['Energy_MWh'].mean())
+        recent_avg_insolation = round(recent_avg_mwh / 40.0, 2)
         if 'Max_Irradiance_Wm2' in tail_df.columns:
             recent_avg_irr = float(tail_df['Max_Irradiance_Wm2'].mean())
             if recent_avg_irr <= 0:
@@ -505,6 +511,7 @@ def forecast_end_of_month(
             irr_val = float(r.get('Max_Irradiance_Wm2', (e_val / 40.0) * 200.0))
             if irr_val <= 0:
                 irr_val = round((e_val / 40.0) * 195.0, 1)
+            inso_val = round(e_val / 40.0, 2)
 
             combined_daily_rows.append({
                 'Date_Str': r['Date_Str'],
@@ -514,6 +521,7 @@ def forecast_end_of_month(
                 'Sản lượng Dự báo (MWh)': np.nan,
                 'Sản lượng (MWh)': e_val,
                 'Công suất đỉnh (MW)': float(r['Peak_Power_MW']),
+                'Tổng bức xạ ngày (kWh/m²)': inso_val,
                 'Bức xạ đỉnh (W/m²)': round(irr_val, 1),
                 'Giờ nắng PSH (h)': round(e_val / 50.0, 2)
             })
@@ -522,6 +530,7 @@ def forecast_end_of_month(
         for _, r in df_rem_daily.iterrows():
             e_val = float(r['Energy_MWh'])
             irr_val = float(r.get('Max_Irradiance_Wm2', 920.0))
+            inso_val = round(e_val / 40.0, 2)
             combined_daily_rows.append({
                 'Date_Str': r['Date_Str'],
                 'Day': r['Date'].day,
@@ -530,6 +539,7 @@ def forecast_end_of_month(
                 'Sản lượng Dự báo (MWh)': e_val,
                 'Sản lượng (MWh)': e_val,
                 'Công suất đỉnh (MW)': float(r['Peak_Grid_MW']),
+                'Tổng bức xạ ngày (kWh/m²)': inso_val,
                 'Bức xạ đỉnh (W/m²)': round(irr_val, 1),
                 'Giờ nắng PSH (h)': round(e_val / 50.0, 2)
             })

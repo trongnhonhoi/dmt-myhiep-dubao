@@ -1694,21 +1694,21 @@ with tab_multi:
         ), secondary_y=False)
         fig_7d.add_trace(go.Scatter(
             x=df_7d_daily['Day_Name'],
-            y=df_7d_daily['Max_Irradiance_Wm2'],
-            name='Bức xạ đỉnh dự báo (W/m²)',
+            y=df_7d_daily['Daily_Insolation_kWh_m2'],
+            name='☀️ Tổng Bức Xạ Ngày (kWh/m²)',
             mode='lines+markers',
-            line=dict(color='#E11D48', width=2.25),
+            line=dict(color='#E11D48', width=2.5),
             marker=dict(size=6, color='#E11D48')
         ), secondary_y=True)
         fig_7d.update_layout(
-            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 7 NGÀY TỚI (TÍCH HỢP AI + KHÍ TƯỢNG + LỊCH SỬ 171)</b>", 
+            title="<b>DỰ BÁO SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY 7 NGÀY TỚI (TÍCH HỢP AI + KHÍ TƯỢNG + LỊCH SỬ 171)</b>", 
             xaxis_title="Ngày trong tuần", 
             template="plotly_white", 
             height=400,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
         fig_7d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
-        fig_7d.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
+        fig_7d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_7d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo Tuần (.xlsx - 672 Chu Kỳ)", data=export_multi_day_to_excel_bytes(df_7d_15, df_7d_daily, kpi_7d, "7_NGAY"), file_name=f"Du_Bao_Tuan_{date_7d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1730,7 +1730,7 @@ with tab_multi:
         with k1:
             st.metric("⚡ Tổng Sản Lượng 30 Ngày", f"{kpi_30d['total_energy_mwh']:,.2f} MWh", delta=f"{kpi_30d['total_energy_gwh']:.3f} GWh")
         with k2:
-            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_30d['avg_daily_mwh']:.2f} MWh/ngày", delta="Hiệu chuẩn ĐMT Mỹ Hiệp")
+            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_30d['avg_daily_mwh']:.2f} MWh/ngày", delta=f"Bức xạ TB: {kpi_30d.get('avg_daily_insolation_kwh_m2', 4.5):.2f} kWh/m²")
         with k3:
             st.metric("📈 P_Grid Đỉnh", f"{kpi_30d['peak_grid_mw']:.2f} MW", delta="Trần Inverter 40.075 MW")
             
@@ -1743,14 +1743,14 @@ with tab_multi:
         ), secondary_y=False)
         fig_30d.add_trace(go.Scatter(
             x=df_30d_daily['Date_Str'],
-            y=df_30d_daily['Max_Irradiance_Wm2'],
-            name='Bức xạ đỉnh dự báo (W/m²)',
+            y=df_30d_daily['Daily_Insolation_kWh_m2'],
+            name='☀️ Tổng Bức Xạ Ngày (kWh/m²)',
             mode='lines+markers',
             line=dict(color='#0284C7', width=2),
             marker=dict(size=4, color='#0284C7')
         ), secondary_y=True)
         fig_30d.update_layout(
-            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 30 NGÀY TIẾP THEO (MWh - TÍCH HỢP AI)</b>", 
+            title="<b>DỰ BÁO SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY 30 NGÀY TIẾP THEO (MWh - TÍCH HỢP AI)</b>", 
             xaxis_title="Ngày", 
             template="plotly_white", 
             height=420, 
@@ -1758,10 +1758,11 @@ with tab_multi:
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
         fig_30d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
-        fig_30d.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
+        fig_30d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_30d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+
 
 
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
@@ -1809,18 +1810,18 @@ with tab_multi:
             textposition='auto'
         ), secondary_y=False)
 
-        # Đường Bức xạ Đỉnh trên trục Y2
+        # Đường Tổng Bức Xạ Ngày trên trục Y2
         fig_eom.add_trace(go.Scatter(
             x=df_fm['Date_Str'],
-            y=df_fm['Bức xạ đỉnh (W/m²)'],
-            name='☀️ Bức Xạ Đỉnh (W/m²)',
+            y=df_fm['Tổng bức xạ ngày (kWh/m²)'],
+            name='☀️ Tổng Bức Xạ Ngày (kWh/m²)',
             mode='lines+markers',
-            line=dict(color='#E11D48', width=2.25),
-            marker=dict(size=5, color='#E11D48')
+            line=dict(color='#E11D48', width=2.5),
+            marker=dict(size=6, color='#E11D48')
         ), secondary_y=True)
 
         fig_eom.update_layout(
-            title="<b>BIỂU ĐỒ SẢN LƯỢNG THÁNG 8/2026 (Xanh: Thực tế Công tơ 171C | Cam: Dự báo AI dựa trên Bức xạ gần nhất)</b>",
+            title="<b>BIỂU ĐỒ SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY THÁNG 8/2026 (Xanh: Thực tế Công tơ 171C | Cam: Dự báo AI)</b>",
             xaxis_title="Ngày Trong Tháng",
             template="plotly_white",
             height=430,
@@ -1829,7 +1830,7 @@ with tab_multi:
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
         fig_eom.update_yaxes(title_text="Sản lượng phát lưới (MWh)", secondary_y=False)
-        fig_eom.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
+        fig_eom.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
 
         st.plotly_chart(fig_eom, width='stretch')
         
@@ -1849,7 +1850,7 @@ with tab_multi:
         with k1:
             st.metric("🏆 Tổng Sản Lượng Tháng 9", f"{next_m_res['total_energy_mwh']:,.2f} MWh", delta=f"{next_m_res['total_energy_gwh']:.3f} GWh")
         with k2:
-            st.metric("📊 Sản Lượng TB Ngày", f"{next_m_res['avg_daily_mwh']:.2f} MWh/ngày", delta="Dự kiến AI")
+            st.metric("📊 Sản Lượng TB Ngày", f"{next_m_res['avg_daily_mwh']:.2f} MWh/ngày", delta=f"Bức xạ TB: {next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²")
         with k3:
             st.metric("📈 P_Grid Đỉnh Dự Kiến", f"{next_m_res['peak_grid_mw']:.2f} MW", delta="Trần 40.075 MW")
         with k4:
@@ -1865,14 +1866,14 @@ with tab_multi:
         ), secondary_y=False)
         fig_nextm.add_trace(go.Scatter(
             x=next_m_res['df_daily']['Date_Str'],
-            y=next_m_res['df_daily']['Max_Irradiance_Wm2'],
-            name='Bức xạ đỉnh dự báo (W/m²)',
+            y=next_m_res['df_daily']['Daily_Insolation_kWh_m2'],
+            name='☀️ Tổng Bức Xạ Ngày (kWh/m²)',
             mode='lines+markers',
             line=dict(color='#F59E0B', width=2.25),
             marker=dict(size=4, color='#F59E0B')
         ), secondary_y=True)
         fig_nextm.update_layout(
-            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 30 NGÀY THÁNG 9/2026 (MWh - TÍCH HỢP AI)</b>", 
+            title="<b>DỰ BÁO SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY 30 NGÀY THÁNG 9/2026 (MWh - TÍCH HỢP AI)</b>", 
             xaxis_title="Ngày", 
             template="plotly_white", 
             height=420, 
@@ -1880,7 +1881,7 @@ with tab_multi:
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
         fig_nextm.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
-        fig_nextm.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
+        fig_nextm.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_nextm, width='stretch')
         
         # KHU VỰC XUẤT BÁO CÁO EXCEL ĐẦY ĐỦ BIỂU ĐỒ & THUYẾT MINH
