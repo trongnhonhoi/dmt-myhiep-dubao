@@ -87,137 +87,226 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS giao diện Đậm Chất Ngành Năng Lượng Mặt Trời (Solar Power Station Theme)
+# Custom CSS giao diện Đậm Chất Ngành Năng Lượng Mặt Trời (Modern Clean Solar Station UI/UX)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     
     html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    
-    /* Hero Banner Header */
+
+    /* Giảm khoảng trắng thừa trên cùng của trang */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 2.5rem !important;
+        max-width: 98% !important;
+    }
+
+    /* Hero Banner Header Hiện Đại */
     .hero-solar-banner {
-        background: linear-gradient(135deg, #0B132B 0%, #1C2541 45%, #002855 80%, #00509D 100%);
-        border-radius: 14px;
-        padding: 24px 30px;
+        background: linear-gradient(135deg, #0A192F 0%, #112240 50%, #002855 85%, #00509D 100%);
+        border-radius: 16px;
+        padding: 20px 26px;
         color: white;
-        margin-bottom: 22px;
-        box-shadow: 0 12px 30px -8px rgba(0, 80, 157, 0.45);
-        border: 1px solid rgba(255, 214, 10, 0.2);
+        margin-bottom: 18px;
+        box-shadow: 0 10px 28px -6px rgba(0, 40, 85, 0.35);
+        border: 1px solid rgba(255, 214, 10, 0.25);
         position: relative;
         overflow: hidden;
     }
     .hero-solar-banner::after {
-        content: "☀️";
+        content: "⚡";
         position: absolute;
-        right: 25px;
-        top: 15px;
-        font-size: 5.5rem;
-        opacity: 0.15;
+        right: 20px;
+        top: 10px;
+        font-size: 5.0rem;
+        opacity: 0.10;
         pointer-events: none;
     }
     .plant-main-title {
-        font-size: 2.35rem;
+        font-size: 2.1rem;
         font-weight: 800;
-        letter-spacing: 0.8px;
+        letter-spacing: 0.6px;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #FFD60A 0%, #FFC300 40%, #00B4D8 85%, #90E0EF 100%);
+        background: linear-gradient(90deg, #FFD60A 0%, #FFC300 35%, #38BDF8 80%, #7DD3FC 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
         line-height: 1.2;
     }
     .plant-sub-title {
-        font-size: 1.05rem;
-        color: #E2E8F0;
+        font-size: 0.95rem;
+        color: #CBD5E1;
         font-weight: 500;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
+        letter-spacing: 0.2px;
     }
     
     /* Solar Badges */
     .solar-badge {
         display: inline-flex;
         align-items: center;
-        padding: 4px 12px;
+        padding: 4px 11px;
         border-radius: 20px;
-        font-size: 0.84rem;
+        font-size: 0.80rem;
         font-weight: 600;
-        margin-right: 8px;
-        margin-bottom: 6px;
+        margin-right: 6px;
+        margin-bottom: 4px;
+        transition: all 0.2s ease;
+    }
+    .solar-badge:hover {
+        transform: translateY(-1px);
     }
     .badge-dc {
-        background: rgba(255, 195, 0, 0.18);
-        color: #FFD60A;
-        border: 1px solid rgba(255, 214, 10, 0.4);
+        background: rgba(255, 195, 0, 0.15);
+        color: #FDE047;
+        border: 1px solid rgba(253, 224, 71, 0.35);
     }
     .badge-ac {
-        background: rgba(0, 180, 216, 0.18);
-        color: #90E0EF;
-        border: 1px solid rgba(0, 180, 216, 0.4);
+        background: rgba(56, 189, 248, 0.15);
+        color: #7DD3FC;
+        border: 1px solid rgba(56, 189, 248, 0.35);
     }
     .badge-module {
-        background: rgba(16, 185, 129, 0.18);
+        background: rgba(16, 185, 129, 0.15);
         color: #6EE7B7;
-        border: 1px solid rgba(16, 185, 129, 0.4);
+        border: 1px solid rgba(16, 185, 129, 0.35);
     }
     .badge-grid {
-        background: rgba(168, 85, 247, 0.18);
+        background: rgba(168, 85, 247, 0.15);
         color: #D8B4FE;
-        border: 1px solid rgba(168, 85, 247, 0.4);
+        border: 1px solid rgba(168, 85, 247, 0.35);
     }
-    
-    /* SCADA Server Bar */
-    .server-status-card {
-        background: linear-gradient(90deg, #F0FDF4 0%, #ECFDF5 100%);
-        border: 1px solid #6EE7B7;
-        border-left: 5px solid #10B981;
-        padding: 12px 18px;
-        border-radius: 8px;
-        margin-bottom: 18px;
-        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.08);
+
+    /* Tabs Styling - Gọn gàng, phân tầng chuyên nghiệp */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background-color: #F1F5F9;
+        padding: 6px 8px;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        margin-bottom: 14px;
     }
-    
-    /* BẢN THUYẾT MINH KHÍ TƯỢNG & SẢN LƯỢNG - GIAO DIỆN SẮC NÉT HIỆN ĐẠI */
-    .narrative-box {
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 600 !important;
+        font-size: 0.90rem !important;
+        color: #475569 !important;
+        background: transparent !important;
+        border: none !important;
+        transition: all 0.2s ease !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #FFFFFF !important;
+        color: #0284C7 !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+        font-weight: 750 !important;
+    }
+
+    /* Metric Cards - Siêu Đẹp & Gọn */
+    [data-testid="stMetric"] {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
         border-radius: 12px;
-        padding: 22px;
-        margin-top: 15px;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-        font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+        padding: 14px 18px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        transition: all 0.25s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        border-color: #CBD5E1;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.82rem !important;
+        font-weight: 650 !important;
+        color: #64748B !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.3px !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.65rem !important;
+        font-weight: 800 !important;
+        color: #0F172A !important;
+        margin-top: 2px !important;
+        margin-bottom: 2px !important;
+    }
+    [data-testid="stMetricDelta"] {
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* Buttons Styling - Hiện đại & Chuẩn UI */
+    .stButton > button {
+        border-radius: 8px !important;
+        font-weight: 650 !important;
+        font-size: 0.88rem !important;
+        padding: 8px 18px !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+    .stDownloadButton > button {
+        border-radius: 8px !important;
+        font-weight: 650 !important;
+        font-size: 0.88rem !important;
+        padding: 8px 16px !important;
+        transition: all 0.2s ease !important;
+    }
+    .stDownloadButton > button:hover {
+        transform: translateY(-1px);
+    }
+
+    /* Tinh chỉnh Dataframe & Table */
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #E2E8F0;
+    }
+
+    /* Khung Thuyết Minh Vận Hành Hiện Đại */
+    .narrative-box {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 20px;
+        margin-top: 14px;
+        margin-bottom: 18px;
+        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
     }
     .narrative-top-bar {
         border-bottom: 2px solid #F1F5F9;
-        padding-bottom: 16px;
-        margin-bottom: 18px;
+        padding-bottom: 14px;
+        margin-bottom: 16px;
     }
     .narrative-top-title {
-        font-size: 1.35rem;
+        font-size: 1.25rem;
         font-weight: 800;
         color: #0F172A;
-        letter-spacing: 0.3px;
-        margin-bottom: 6px;
+        letter-spacing: 0.2px;
+        margin-bottom: 4px;
     }
     .narrative-top-meta {
-        font-size: 0.92rem;
-        color: #475569;
-        margin-bottom: 12px;
+        font-size: 0.88rem;
+        color: #64748B;
+        margin-bottom: 10px;
     }
     .narrative-badge-wrap {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
     }
     .nbadge {
         display: inline-flex;
         align-items: center;
-        padding: 5px 14px;
-        border-radius: 20px;
-        font-size: 0.88rem;
-        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 0.82rem;
+        font-weight: 650;
     }
     .nbadge-day {
         background: #EFF6FF;
@@ -243,7 +332,7 @@ st.markdown("""
     .narrative-cards-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 16px;
+        gap: 14px;
     }
     @media (max-width: 900px) {
         .narrative-cards-grid {
@@ -255,7 +344,7 @@ st.markdown("""
         background: #F8FAFC;
         border: 1px solid #E2E8F0;
         border-radius: 10px;
-        padding: 16px 18px;
+        padding: 14px 16px;
         transition: all 0.2s ease;
     }
     .ncard:hover {
@@ -263,35 +352,46 @@ st.markdown("""
         box-shadow: 0 6px 16px rgba(0,0,0,0.05);
     }
     .ncard-weather {
-        border-left: 5px solid #0284C7;
+        border-left: 4px solid #0284C7;
     }
     .ncard-power {
-        border-left: 5px solid #10B981;
+        border-left: 4px solid #10B981;
     }
     .ncard-temp {
-        border-left: 5px solid #F59E0B;
+        border-left: 4px solid #F59E0B;
     }
     .ncard-dispatch {
-        border-left: 5px solid #8B5CF6;
+        border-left: 4px solid #8B5CF6;
     }
     
     .ncard-head {
-        font-size: 1.0rem;
+        font-size: 0.94rem;
         font-weight: 750;
         color: #0F172A;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         display: flex;
         align-items: center;
         gap: 6px;
     }
     .ncard-body {
-        font-size: 0.94rem;
+        font-size: 0.88rem;
         color: #334155;
-        line-height: 1.65;
+        line-height: 1.6;
     }
     .dispatch-item {
-        margin-bottom: 6px;
-        line-height: 1.55;
+        margin-bottom: 4px;
+        line-height: 1.5;
+    }
+
+    /* SCADA Server Bar */
+    .server-status-card {
+        background: linear-gradient(90deg, #F0FDF4 0%, #ECFDF5 100%);
+        border: 1px solid #A7F3D0;
+        border-left: 4px solid #10B981;
+        padding: 10px 16px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        font-size: 0.88rem;
     }
 </style>
 """, unsafe_allow_html=True)
