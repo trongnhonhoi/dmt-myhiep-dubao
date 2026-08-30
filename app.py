@@ -1820,7 +1820,7 @@ with tab_multi:
             with tab_proof_view:
                 st.markdown(f"""
                 ##### 🔍 Dữ Liệu Chứng Minh & Ma Trận Kiểm Chứng Mô Hình:
-                * **Tương quan Bức xạ $\\rightarrow$ Công suất phát lưới:** Hệ số tương quan $R^2 = 99.98\\%$ với trần Inverter $40.075\\text{ MW}$.
+                * **Tương quan Bức xạ -> Công suất phát lưới:** Hệ số tương quan R² = 99.98% với trần Inverter **40.075 MW**.
                 * **Thống kê sản lượng SCADA lịch sử Tháng 9 các năm trước tại Mỹ Hiệp:**
                   * Tháng 09/2021: **4,850.25 MWh** (TB: 161.68 MWh/ngày)
                   * Tháng 09/2022: **4,920.40 MWh** (TB: 164.01 MWh/ngày)
@@ -1829,6 +1829,7 @@ with tab_multi:
                   * Tháng 09/2025: **5,025.10 MWh** (TB: 167.50 MWh/ngày)
                   * **Dự báo Tháng 09/2026 (AI):** **{next_m_res['total_energy_mwh']:,.2f} MWh** (TB: **{next_m_res['avg_daily_mwh']:.2f} MWh/ngày**)
                 """)
+
 
 
 # -------------------------------------------------------------------------
@@ -2034,7 +2035,7 @@ with tab_history:
                 """, unsafe_allow_html=True)
             
             with c_info2:
-                st.markdown(f"""
+                st.markdown("""
                 <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 16px;">
                     <div style="font-weight: 700; color: #15803D; margin-bottom: 8px;">✅ Đánh Giá Độ Tin Cậy & Tương Quan SCADA:</div>
                     • Hệ số tương quan $R^2$ giữa DP1 và Chính: <b>0.9999</b> (Tuyệt đối tin cậy).<br>
