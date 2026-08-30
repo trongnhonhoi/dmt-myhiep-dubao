@@ -1171,7 +1171,52 @@ with tab_comp:
 # -------------------------------------------------------------------------
 with tab_multi:
     st.subheader("🔮 Hệ Thống Dự Báo Đa Khung Thời Gian & Khí Tượng Số (Phù Mỹ Nam)")
-    st.caption("Tích hợp dự báo thời tiết vệ tinh số, lập lịch điều độ thị trường điện ngày tới D+1/D+2 (2 ngày), lập lịch tuần A0/A3 (7 ngày), dự báo 30 ngày và sản lượng tháng.")
+    st.caption("Mô hình AI kết hợp 3 yếu tố cốt lõi: Lịch sử sản lượng công tơ 171C (2.069 ngày) + Dự báo Thời tiết khu vực nhà máy (Phù Mỹ Nam) + Thuật toán AI Physics-Informed ML.")
+
+    st.markdown("""
+    <div style="background: #FFFFFF; border: 1.5px solid #0284C7; border-radius: 12px; padding: 16px 20px; margin-bottom: 18px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px;">
+            <div style="font-size: 1.05rem; font-weight: 800; color: #0F172A; letter-spacing: 0.2px;">
+                🤖 NGUYÊN LÝ DỰ BÁO AI KẾT HỢP 3 TRỤ CỘT CỐT LÕI (TRIANGULATION ENGINE)
+            </div>
+            <span style="background: #E0F2FE; color: #0369A1; font-weight: 700; font-size: 0.80rem; padding: 3px 10px; border-radius: 12px; border: 1px solid #BAE6FD;">
+                AI Hybrid Model v3.2
+            </span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+            <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-weight: 750; color: #1D4ED8; font-size: 0.92rem; margin-bottom: 4px;">
+                    📜 1. LỊCH SỬ CÔNG TƠ 171C
+                </div>
+                <div style="font-size: 0.82rem; color: #1E3A8A; line-height: 1.45;">
+                    • <b>2.069 ngày</b> đo đếm thực tế (2020-2026).<br>
+                    • Phân vị mùa vụ P10 / P50 / P90.<br>
+                    • Chuẩn thực nghiệm: <b>1000 W/m² -> 40.0 MW</b>.
+                </div>
+            </div>
+            <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-weight: 750; color: #15803D; font-size: 0.92rem; margin-bottom: 4px;">
+                    ⛅ 2. THỜI TIẾT KHU VỰC PHÙ MỸ NAM
+                </div>
+                <div style="font-size: 0.82rem; color: #14532D; line-height: 1.45;">
+                    • Tọa độ: <b>14.165°N, 109.030°E</b>.<br>
+                    • Khí tượng số NWP (GHI, mây phủ %, T_môi trường).<br>
+                    • Đồng hóa số liệu trạm quan trắc SCADA (W.txt).
+                </div>
+            </div>
+            <div style="background: #FAF5FF; border: 1px solid #E9D5FF; border-radius: 10px; padding: 12px 14px;">
+                <div style="font-weight: 750; color: #7E22CE; font-size: 0.92rem; margin-bottom: 4px;">
+                    🧠 3. AI PHÂN TÍCH & HỢP NHẤT
+                </div>
+                <div style="font-size: 0.82rem; color: #581C87; line-height: 1.45;">
+                    • Physics-Informed ML bù nhiệt Sharp NU-440 (-0.347%/°C).<br>
+                    • Khử sai số phi tuyến mây dông (Bias Correction).<br>
+                    • Cắt ngọn Inverter <b>40.075 MW</b> & sinh 96 chu kỳ 15p.
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     subtab_unified, subtab_2d, subtab_7d, subtab_30d, subtab_eom, subtab_nextm = st.tabs([
         "🌟 1. Mô Hình Dự Báo Thống Nhất (Lai Ghép Khí Tượng & Lịch Sử SCADA)",
@@ -1181,6 +1226,7 @@ with tab_multi:
         "🏁 5. Dự Báo Cuối Tháng 8/2026 (MTD + Còn lại)",
         "📈 6. Dự Báo Toàn Bộ Tháng 9/2026"
     ])
+
     
     # 1. MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE)
     with subtab_unified:
