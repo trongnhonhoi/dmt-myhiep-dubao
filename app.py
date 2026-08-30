@@ -1638,28 +1638,6 @@ with tab_multi:
         fig_2d.update_yaxes(title_text="Bức xạ W (W/m²)", secondary_y=True, range=[0, 1200], showgrid=False)
 
         st.plotly_chart(fig_2d, width='stretch')
-        
-        exp_display_df = prepare_export_dataframe(df_display_15)
-        c_d2_1, c_d2_2, _ = st.columns([2, 2, 3])
-        with c_d2_1:
-            st.download_button(
-                f"📥 Tải Biểu Mẫu Điều Độ Excel (.xlsx)", 
-                data=export_to_excel_bytes(df_display_15, {'plant_name': 'NHÀ MÁY ĐMT MỸ HIỆP', 'dc_capacity_mwp': 50.0, 'ac_capacity_mw': 40.075, 'total_energy_mwh': k1_val, 'peak_grid_mw': k2_val, 'total_clipping_loss_mwh': k3_val, 'total_15min_intervals': len(df_display_15)}), 
-                file_name=f"Du_Bao_{file_suffix}.xlsx", 
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                type="primary",
-                width='stretch'
-            )
-        with c_d2_2:
-            st.download_button(
-                f"📄 Tải File CSV Chu Kỳ 15 Phút (.csv)", 
-                data=export_to_csv_bytes(df_display_15), 
-                file_name=f"Du_Bao_{file_suffix}.csv", 
-                mime="text/csv",
-                width='stretch'
-            )
-            
-        st.dataframe(exp_display_df, width='stretch', height=380, hide_index=True)
 
     # 3. DỰ BÁO 7 NGÀY (672 CHU KỲ)
     with subtab_7d:
@@ -1707,8 +1685,8 @@ with tab_multi:
             height=400,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
-        fig_7d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
-        fig_7d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
+        fig_7d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False, rangemode='tozero')
+        fig_7d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
         st.plotly_chart(fig_7d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo Tuần (.xlsx - 672 Chu Kỳ)", data=export_multi_day_to_excel_bytes(df_7d_15, df_7d_daily, kpi_7d, "7_NGAY"), file_name=f"Du_Bao_Tuan_{date_7d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1757,12 +1735,11 @@ with tab_multi:
             xaxis=dict(tickangle=-45),
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
-        fig_30d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
-        fig_30d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
+        fig_30d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False, rangemode='tozero')
+        fig_30d.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
         st.plotly_chart(fig_30d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
-
 
 
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
@@ -1829,8 +1806,8 @@ with tab_multi:
             xaxis=dict(tickangle=-45),
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
         )
-        fig_eom.update_yaxes(title_text="Sản lượng phát lưới (MWh)", secondary_y=False)
-        fig_eom.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False)
+        fig_eom.update_yaxes(title_text="Sản lượng phát lưới (MWh)", secondary_y=False, rangemode='tozero')
+        fig_eom.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
 
         st.plotly_chart(fig_eom, width='stretch')
         
