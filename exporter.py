@@ -7,7 +7,9 @@ Hỗ trợ: Báo Cáo Dự Báo Ngày (96 chu kỳ), Dự Báo 2 Ngày (192 chu 
 import io
 from datetime import datetime
 import pandas as pd
+import numpy as np
 from typing import Dict, Any, Optional, List, Tuple
+
 
 
 def prepare_export_dataframe(df_15min: pd.DataFrame) -> pd.DataFrame:
