@@ -27,22 +27,23 @@ from solar_engine import (
 
 DEFAULT_SERVER_PATH = r"D:\DATA SERVER PV 01"
 
-# Bức xạ thực tế & sản lượng trung bình hiệu chuẩn theo số liệu SCADA thực tế ĐMT Mỹ Hiệp (MWh/ngày)
-# Chuẩn chuyển đổi: 1000 W/m2 trong 1 giờ -> 40.0 MWh
+# Bức xạ thực tế & sản lượng trung bình hiệu chuẩn theo 2.069 ngày đo đếm 4 công tơ thực tế ĐMT Mỹ Hiệp (2020 - 2026)
+# Chuẩn chuyển đổi: 1000 W/m2 trong 1 giờ -> 40.0 MWh (Inverter trần 40.075 MW)
 CALIBRATED_MONTHLY_BENCHMARK = {
-    1: {"avg_daily_mwh": 165.0, "peak_p_mw": 33.5, "peak_irr": 850.0, "name": "Tháng 1"},
-    2: {"avg_daily_mwh": 195.0, "peak_p_mw": 37.0, "peak_irr": 930.0, "name": "Tháng 2"},
-    3: {"avg_daily_mwh": 215.0, "peak_p_mw": 39.5, "peak_irr": 980.0, "name": "Tháng 3"},
-    4: {"avg_daily_mwh": 220.0, "peak_p_mw": 40.0, "peak_irr": 1000.0, "name": "Tháng 4"},
-    5: {"avg_daily_mwh": 200.0, "peak_p_mw": 38.5, "peak_irr": 960.0, "name": "Tháng 5"},
-    6: {"avg_daily_mwh": 190.0, "peak_p_mw": 37.5, "peak_irr": 940.0, "name": "Tháng 6"},
-    7: {"avg_daily_mwh": 195.0, "peak_p_mw": 38.0, "peak_irr": 950.0, "name": "Tháng 7"},
-    8: {"avg_daily_mwh": 168.58, "peak_p_mw": 35.0, "peak_irr": 880.0, "name": "Tháng 8 (Thực tế SCADA 26 ngày)"},
-    9: {"avg_daily_mwh": 162.5, "peak_p_mw": 34.0, "peak_irr": 850.0, "name": "Tháng 9 (Bắt đầu mùa mưa)"},
-    10: {"avg_daily_mwh": 125.0, "peak_p_mw": 28.0, "peak_irr": 700.0, "name": "Tháng 10 (Mùa mưa bão)"},
-    11: {"avg_daily_mwh": 110.0, "peak_p_mw": 25.0, "peak_irr": 630.0, "name": "Tháng 11 (Mùa mưa bão)"},
-    12: {"avg_daily_mwh": 120.0, "peak_p_mw": 26.5, "peak_irr": 660.0, "name": "Tháng 12 (Cuối mùa mưa)"},
+    1: {"avg_daily_mwh": 131.82, "peak_p_mw": 32.5, "peak_irr": 815.0, "name": "Tháng 1 (Mùa khô bắt đầu)"},
+    2: {"avg_daily_mwh": 158.48, "peak_p_mw": 35.5, "peak_irr": 890.0, "name": "Tháng 2 (Bức xạ tăng mạnh)"},
+    3: {"avg_daily_mwh": 200.76, "peak_p_mw": 39.2, "peak_irr": 980.0, "name": "Tháng 3 (Mùa khô cao điểm)"},
+    4: {"avg_daily_mwh": 216.83, "peak_p_mw": 40.0, "peak_irr": 1000.0, "name": "Tháng 4 (Mùa khô đỉnh cao)"},
+    5: {"avg_daily_mwh": 214.27, "peak_p_mw": 39.8, "peak_irr": 995.0, "name": "Tháng 5 (Nắng nóng cao điểm)"},
+    6: {"avg_daily_mwh": 220.06, "peak_p_mw": 40.0, "peak_irr": 1000.0, "name": "Tháng 6 (Bức xạ cực đại mùa hè)"},
+    7: {"avg_daily_mwh": 201.27, "peak_p_mw": 39.0, "peak_irr": 975.0, "name": "Tháng 7 (Nắng hè ổn định)"},
+    8: {"avg_daily_mwh": 222.35, "peak_p_mw": 40.0, "peak_irr": 1000.0, "name": "Tháng 8 (Bức xạ cao cuối hè)"},
+    9: {"avg_daily_mwh": 186.33, "peak_p_mw": 36.5, "peak_irr": 915.0, "name": "Tháng 9 (Chuyển mùa mưa)"},
+    10: {"avg_daily_mwh": 129.36, "peak_p_mw": 29.0, "peak_irr": 725.0, "name": "Tháng 10 (Mùa mưa bão)"},
+    11: {"avg_daily_mwh": 104.08, "peak_p_mw": 25.0, "peak_irr": 625.0, "name": "Tháng 11 (Mưa bão đỉnh điểm)"},
+    12: {"avg_daily_mwh": 99.02, "peak_p_mw": 24.5, "peak_irr": 615.0, "name": "Tháng 12 (Cuối mùa mưa)"},
 }
+
 
 
 class DataHarvester:
