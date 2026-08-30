@@ -1262,7 +1262,7 @@ with tab_multi:
         with col_ens3:
             start_ens_date = st.date_input(
                 "📅 Ngày Bắt Đầu:",
-                value=datetime(2026, 8, 28),
+                value=datetime.now().date() + timedelta(days=1),
                 key="ens_start_date_pick"
             )
 
@@ -1510,23 +1510,30 @@ with tab_multi:
     with subtab_2d:
         st.markdown("#### ⚡ Dự Báo Thị Trường Điện Ngày Tới (D+1, D+2 Theo Chu Kỳ 15 Phút)")
         
-        col_2d1, col_2d2, col_2d3 = st.columns([1.8, 1.2, 1.5])
+        col_2d1, col_2d2, col_2d3 = st.columns([1.2, 1.8, 1.2])
         with col_2d1:
-            view_mode_2d = st.radio(
-                "Chọn chế độ xem:",
-                ["⚡ Ngày D+2 (29/08/2026 - 96 Chu kỳ)", "☀️ Ngày D+1 (28/08/2026 - 96 Chu kỳ)", "📑 Cả 2 Ngày (D+1 & D+2 - 192 Chu kỳ)"],
-                horizontal=True,
-                key="radio_d2_mode"
-            )
-        with col_2d2:
-            date_base = st.date_input("Ngày mốc D (Hôm nay):", value=datetime(2026, 8, 27), key="d_base_date")
-        with col_2d3:
-            enable_ai_2d = st.toggle("🧠 Tích Hợp AI (Machine Learning)", value=True, key="tog_ai_2d", help="AI tự động bù trừ suy hao mây phi tuyến, quá nhiệt Inverter và hiệu ứng góc chiếu sớm/muộn.")
+            date_base = st.date_input("Ngày mốc D (Hôm nay):", value=datetime.now().date(), key="d_base_date")
             
         dt_d1 = date_base + timedelta(days=1)
         dt_d2 = date_base + timedelta(days=2)
 
+        with col_2d2:
+            view_mode_2d = st.radio(
+                "Chọn chế độ xem:",
+                [
+                    f"⚡ Ngày D+2 ({dt_d2.strftime('%d/%m/%Y')} - 96 Chu kỳ)",
+                    f"☀️ Ngày D+1 ({dt_d1.strftime('%d/%m/%Y')} - 96 Chu kỳ)",
+                    f"📑 Cả 2 Ngày (D+1 & D+2 - 192 Chu kỳ)"
+                ],
+                index=1,
+                horizontal=True,
+                key="radio_d2_mode"
+            )
+        with col_2d3:
+            enable_ai_2d = st.toggle("🧠 Tích Hợp AI (Machine Learning)", value=True, key="tog_ai_2d", help="AI tự động bù trừ suy hao mây phi tuyến, quá nhiệt Inverter và hiệu ứng góc chiếu sớm/muộn.")
+
         df_2d_15_all, df_2d_daily_all, kpi_2d_all = generate_multi_day_15min_forecast(start_date=dt_d1, num_days=2, params=calc_params, enable_ai=enable_ai_2d)
+
         
         if "D+2" in view_mode_2d:
             df_display_15 = df_2d_15_all[df_2d_15_all['Date'] == dt_d2.strftime('%d/%m/%Y')].copy()
@@ -1644,7 +1651,7 @@ with tab_multi:
         st.markdown("#### 🗓️ Dự Báo Lập Kế Hoạch Vận Hành Tuần (7 Ngày: 672 Chu Kỳ 15 Phút)")
         c_7d1, c_7d2 = st.columns([2.5, 1.5])
         with c_7d1:
-            date_7d_start = st.date_input("Ngày bắt đầu tuần dự báo:", value=datetime(2026, 8, 28), key="d7_start")
+            date_7d_start = st.date_input("Ngày bắt đầu tuần dự báo:", value=datetime.now().date() + timedelta(days=1), key="d7_start")
         with c_7d2:
             enable_ai_7d = st.toggle("🧠 Tích Hợp AI Lập Lịch Tuần", value=True, key="tog_ai_7d", help="AI tự động tối ưu hóa sản lượng 7 ngày theo phân phối thời tiết lịch sử.")
 
@@ -1698,7 +1705,7 @@ with tab_multi:
         st.caption("Mô hình AI dự báo chuỗi thời gian 30 ngày kết hợp xu hướng bức xạ các ngày gần nhất, chu kỳ mùa vụ 6 năm và dự báo khí tượng Phù Mỹ.")
         c_30d1, c_30d2 = st.columns([2.5, 1.5])
         with c_30d1:
-            date_30d_start = st.date_input("Ngày bắt đầu 30 ngày:", value=datetime(2026, 8, 28), key="d30_start")
+            date_30d_start = st.date_input("Ngày bắt đầu 30 ngày:", value=datetime.now().date() + timedelta(days=1), key="d30_start")
         with c_30d2:
             enable_ai_30d = st.toggle("🧠 Tích Hợp AI Month-Ahead", value=True, key="tog_ai_30d", help="Mô hình AI dự báo chuỗi thời gian 30 ngày.")
 
