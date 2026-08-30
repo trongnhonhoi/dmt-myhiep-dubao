@@ -860,14 +860,24 @@ with tab_18c:
     st.subheader("⚡ Dự Báo 18 Chu Kỳ Tiếp Theo Thời Gian Thực (Ultra-Short-Term Rolling Forecast)")
     st.caption("Dự báo cuốn chiếu 18 chu kỳ 15 phút (4.5 giờ tới) tích hợp AI tự động học sai số từ dữ liệu đo đếm W (Bức xạ) & P (Công suất) thực tế phục vụ đăng ký biểu đồ điều độ tức thời A0 / A3.")
     
-    # 1. Cấu hình thời gian và chế độ AI
+    # 1. Cấu hình thời gian và chế độ AI theo giờ hệ thống thực tế (Làm tròn 15 phút)
+    now_sys = datetime.now()
+    round_m_val = (now_sys.minute // 15) * 15
+    rounded_sys_dt = now_sys.replace(minute=round_m_val, second=0, microsecond=0)
+
     col_fc1, col_fc2, col_fc3 = st.columns([1.6, 1.2, 2.0])
     with col_fc1:
         c_date_pick, c_time_pick = st.columns(2)
         with c_date_pick:
-            fc_date_in = st.date_input("📅 Ngày dự báo:", value=datetime(2026, 8, 27), key="fc_date_tab2")
+            fc_date_in = st.date_input("📅 Ngày dự báo:", value=rounded_sys_dt.date(), key="fc_date_tab2")
         with c_time_pick:
-            fc_start_time = st.time_input("⏱️ Giờ bắt đầu:", value=datetime.strptime("14:15", "%H:%M").time(), key="fc_time_tab2")
+            fc_start_time = st.time_input(
+                "⏱️ Giờ bắt đầu:", 
+                value=rounded_sys_dt.time(), 
+                step=timedelta(minutes=15),
+                key="fc_time_tab2",
+                help=f"Tự động lấy theo giờ hệ thống thực tế ({now_sys.strftime('%H:%M:%S')}) làm tròn về mốc chu kỳ 15 phút ({rounded_sys_dt.strftime('%H:%M')})."
+            )
             
     with col_fc2:
         fc_intervals = st.number_input("🔢 Số chu kỳ dự báo (15p):", min_value=4, max_value=36, value=18, step=1, key="fc_int_tab2", help="Mặc định 18 chu kỳ tương đương 4.5 giờ tới.")
