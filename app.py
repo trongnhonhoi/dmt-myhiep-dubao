@@ -1745,7 +1745,7 @@ with tab_multi:
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
     with subtab_eom:
         st.markdown("#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng 8/2026")
-        st.caption("Cột trước ngày hiện tại (01 - 26/08): Số liệu đo đếm thực tế Công tơ 171C. Cột dự báo (27 - 31/08): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
+        st.caption("Cột trước ngày hiện tại (01 - 26/08): Số liệu sản lượng tổng hợp trực tiếp từ file **P.txt** (Đo đếm 110kV SCADA / Công tơ 171C). Cột dự báo (27 - 31/08): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
         
         enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên bức xạ các ngày gần nhất và dự báo thời tiết.")
         
@@ -1755,13 +1755,14 @@ with tab_multi:
         with k1:
             st.metric("🏆 Dự Báo Cả Tháng 8", f"{eom_res['total_projected_month_mwh']:,.2f} MWh", delta=f"{eom_res['total_projected_month_gwh']:.3f} GWh")
         with k2:
-            st.metric("🟢 Thực Tế Công Tơ 171C (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày đã đo đếm")
+            st.metric("🟢 Thực Tế P.txt (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày SCADA 110kV")
         with k3:
             st.metric("🔮 Dự Báo AI Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày AI dự báo")
         with k4:
             st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày", delta=f"Gần nhất: {eom_res['recent_avg_mwh']:.1f} MWh")
 
-        st.info(f"💡 **Cơ sở dữ liệu mô hình:** Các cột ngày 01 đến 26/08 lấy chính xác 100% từ **Công tơ 171C (MH_171C)**. Các cột dự báo ngày 27 đến 31/08 được AI lấy thêm **dữ liệu bức xạ đỉnh trung bình 5 ngày gần nhất ({eom_res['recent_avg_irr']} W/m² ~ {eom_res['recent_avg_mwh']} MWh/ngày)** kết hợp mô hình dự báo thời tiết số trị NWP để đưa ra kết quả dự báo chính xác và mượt mà nhất.")
+        st.info(f"💡 **Cơ sở dữ liệu mô hình:** Các cột ngày 01 đến 26/08 được tổng hợp và tích phân trực tiếp 100% từ chuỗi công suất phát lưới 110kV trong file **P.txt (Công tơ 171C)** (96 chu kỳ: $\\sum P_{{Grid}} \\times 0.25\\text{{h}}$). Các cột dự báo ngày 27 đến 31/08 được AI lấy thêm **dữ liệu bức xạ đỉnh trung bình 5 ngày gần nhất ({eom_res['recent_avg_irr']} W/m² ~ {eom_res['recent_avg_mwh']} MWh/ngày)** kết hợp mô hình dự báo thời tiết số trị NWP để đưa ra kết quả dự báo chính xác và mượt mà nhất.")
+
 
         from plotly.subplots import make_subplots
         fig_eom = make_subplots(specs=[[{"secondary_y": True}]])

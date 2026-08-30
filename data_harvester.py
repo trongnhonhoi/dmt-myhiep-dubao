@@ -183,8 +183,9 @@ class DataHarvester:
 
     def aggregate_month_data(self, year: int = 2026, month: int = 8, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Tổng hợp toàn bộ các ngày đã có trong tháng hiện tại (Tháng 8/2026) từ server
-        Ưu tiên lấy sản lượng thực tế chính xác 100% từ file D.txt / DL.txt (DAILY ENERGY YIELD của nhà máy)
+        Tổng hợp toàn bộ các ngày đã có trong tháng hiện tại từ server SCADA:
+        Ưu tiên hàng đầu: Tính toán sản lượng điện năng thực tế chính xác 100% từ file P.txt
+        (Tích phân chuỗi công suất phát lưới 110kV qua 96 chu kỳ 15 phút: Energy = sum(P_Grid_MW * 0.25h))
         """
         all_dates = self.scan_available_dates()
         month_entries = [d for d in all_dates if d['date'].year == year and d['date'].month == month]
@@ -197,47 +198,52 @@ class DataHarvester:
             e_act = 0.0
             peak_mw = 0.0
             irr_max = 0.0
+            data_source = "P.txt (Đo đếm 110kV)"
 
-            # 1. Đọc trực tiếp từ file D.txt / DL.txt nếu có (chuẩn ghi nhận sản lượng phát lưới SCADA)
-            d_file = os.path.join(entry['folder_path'], 'D.txt')
-            if not os.path.exists(d_file):
-                d_file = os.path.join(entry['folder_path'], 'DL.txt')
-
-            if os.path.exists(d_file):
+            # 1. ƯU TIÊN 1: Lấy trực tiếp từ file P.txt (Tích phân công suất 110kV 96 chu kỳ 15 phút)
+            if res.get('actual_15min') is not None and not res['actual_15min'].empty:
+                e_act = float(res['actual_15min']['Energy_Actual_MWh'].sum())
+                peak_mw = float(res['actual_15min']['P_Grid_Actual_Avg_MW'].max())
+                data_source = "P.txt (SCADA 110kV)"
+            elif entry.get('p_path') and os.path.exists(entry['p_path']):
                 try:
-                    with open(d_file, 'rb') as df_f:
-                        d_text = robust_decode_bytes(df_f.read())
-                        d_lines = [l for l in d_text.splitlines() if l.strip()]
-                        if len(d_lines) >= 3:
-                            last_l = d_lines[-1]
-                            parts = last_l.split(';')
-                            if len(parts) > 1 and parts[1].strip():
-                                e_act = float(parts[1].strip())
+                    with open(entry['p_path'], 'rb') as pf:
+                        p_content = robust_decode_bytes(pf.read())
+                    if '110KV' in p_content.upper() or 'STATION-01' in p_content.upper():
+                        p_df_raw, p_meta = parse_scada_power_txt_advanced(p_content)
+                        df_act = process_actual_power_1min_to_15min(p_df_raw)
+                        e_act = float(df_act['Energy_Actual_MWh'].sum())
+                        peak_mw = float(df_act['P_Grid_Actual_Avg_MW'].max())
+                        data_source = "P.txt (SCADA 110kV)"
                 except Exception:
                     pass
 
-            if entry['date'].day == 26 and entry['date'].month == 8 and entry['date'].year == 2026:
-                e_act = 236.30
-
-            # 2. Nếu chưa có từ D.txt, lấy từ P.txt (110kV)
-            if e_act == 0.0 and res.get('actual_15min') is not None:
-                e_act = float(res['actual_15min']['Energy_Actual_MWh'].sum())
-                peak_mw = float(res['actual_15min']['P_Grid_Actual_Avg_MW'].max())
-
-            # 3. Lấy công suất đỉnh và bức xạ
-            if res.get('actual_15min') is not None and peak_mw == 0.0:
-                peak_mw = float(res['actual_15min']['P_Grid_Actual_Avg_MW'].max())
-
-            if res.get('forecast_15min') is not None:
-                e_fc = float(res['forecast_15min']['Energy_Grid_MWh'].sum())
+            # 2. Lấy bức xạ cực đại nếu có từ file W.txt
+            if res.get('forecast_15min') is not None and not res['forecast_15min'].empty:
+                irr_max = float(res['forecast_15min']['Irradiance_Max_Wm2'].max())
                 if peak_mw == 0.0:
                     peak_mw = float(res['forecast_15min']['P_Grid_Avg_MW'].max())
-                irr_max = float(res['forecast_15min']['Irradiance_Max_Wm2'].max())
-                if e_act == 0.0:
-                    e_act = e_fc
 
-            if peak_mw == 0.0:
-                # Ước lượng peak_mw từ sản lượng thực tế ngày
+            # 3. Fallback phụ: nếu file P.txt bị trống, đọc từ D.txt / DL.txt
+            if e_act == 0.0:
+                d_file = os.path.join(entry['folder_path'], 'D.txt')
+                if not os.path.exists(d_file):
+                    d_file = os.path.join(entry['folder_path'], 'DL.txt')
+                if os.path.exists(d_file):
+                    try:
+                        with open(d_file, 'rb') as df_f:
+                            d_text = robust_decode_bytes(df_f.read())
+                            d_lines = [l for l in d_text.splitlines() if l.strip()]
+                            if len(d_lines) >= 3:
+                                last_l = d_lines[-1]
+                                parts = last_l.split(';')
+                                if len(parts) > 1 and parts[1].strip():
+                                    e_act = float(parts[1].strip())
+                                    data_source = "D.txt"
+                    except Exception:
+                        pass
+
+            if peak_mw == 0.0 and e_act > 0.0:
                 peak_mw = min(40.075, e_act / 6.5)
 
             total_energy_actual_mwh += e_act
@@ -249,6 +255,7 @@ class DataHarvester:
                 'Energy_MWh': round(e_act, 3),
                 'Peak_Power_MW': round(peak_mw, 3),
                 'Max_Irradiance_Wm2': round(irr_max, 1),
+                'Nguồn_Dữ_Liệu': data_source,
                 'Specific_Yield_kWh_kWp': round(e_act * 1000.0 / (50.0 * 1000.0), 2)
             })
 
