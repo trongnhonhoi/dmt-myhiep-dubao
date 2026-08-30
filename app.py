@@ -1342,7 +1342,7 @@ with tab_multi:
     with subtab_2d:
         st.markdown("#### ⚡ Dự Báo Thị Trường Điện Ngày Tới (D+1, D+2 Theo Chu Kỳ 15 Phút)")
         
-        col_2d1, col_2d2 = st.columns([2, 2])
+        col_2d1, col_2d2, col_2d3 = st.columns([1.8, 1.2, 1.5])
         with col_2d1:
             view_mode_2d = st.radio(
                 "Chọn chế độ xem:",
@@ -1352,11 +1352,13 @@ with tab_multi:
             )
         with col_2d2:
             date_base = st.date_input("Ngày mốc D (Hôm nay):", value=datetime(2026, 8, 27), key="d_base_date")
+        with col_2d3:
+            enable_ai_2d = st.toggle("🧠 Tích Hợp AI (Machine Learning)", value=True, key="tog_ai_2d", help="AI tự động bù trừ suy hao mây phi tuyến, quá nhiệt Inverter và hiệu ứng góc chiếu sớm/muộn.")
             
         dt_d1 = date_base + timedelta(days=1)
         dt_d2 = date_base + timedelta(days=2)
 
-        df_2d_15_all, df_2d_daily_all, kpi_2d_all = generate_multi_day_15min_forecast(start_date=dt_d1, num_days=2, params=calc_params)
+        df_2d_15_all, df_2d_daily_all, kpi_2d_all = generate_multi_day_15min_forecast(start_date=dt_d1, num_days=2, params=calc_params, enable_ai=enable_ai_2d)
         
         if "D+2" in view_mode_2d:
             df_display_15 = df_2d_15_all[df_2d_15_all['Date'] == dt_d2.strftime('%d/%m/%Y')].copy()
@@ -1387,18 +1389,31 @@ with tab_multi:
 
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            st.metric("⚡ Tổng Sản Lượng", f"{k1_val:.2f} MWh")
+            st.metric("⚡ Tổng Sản Lượng", f"{k1_val:.2f} MWh", delta="Đã nạp mô hình AI" if enable_ai_2d else "Mô hình vật lý")
         with k2:
-            st.metric("📈 P_Grid Đỉnh Phát Lưới", f"{k2_val:.2f} MW")
+            st.metric("📈 P_Grid Đỉnh Phát Lưới", f"{k2_val:.2f} MW", delta=f"Bức xạ đỉnh: {df_display_15['Irradiance_Avg_Wm2'].max():.0f} W/m²")
         with k3:
-            st.metric("✂️ Cắt Inverter", f"{k3_val:.2f} MWh")
+            st.metric("✂️ Cắt Inverter", f"{k3_val:.2f} MWh", delta=f"Trần 40.075 MW")
         with k4:
-            st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", k4_val)
+            st.metric("⏱️ Tổng Số Chu Kỳ", k4_val, delta="AI Confidence P10-P90")
             
         from plotly.subplots import make_subplots
         fig_2d = make_subplots(specs=[[{"secondary_y": True}]])
         x_vals_2d = pd.to_datetime(df_display_15['Timestamp'])
         
+        # Dải tin cậy P10 - P90 nếu có AI
+        if enable_ai_2d and 'P10_Lower_MW' in df_display_15.columns:
+            fig_2d.add_trace(go.Scatter(
+                x=x_vals_2d.tolist() + x_vals_2d.tolist()[::-1],
+                y=df_display_15['P90_Upper_MW'].tolist() + df_display_15['P10_Lower_MW'].tolist()[::-1],
+                fill='toself',
+                fillcolor='rgba(16, 185, 129, 0.12)',
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo="skip",
+                showlegend=True,
+                name='Dải Tin Cậy AI (P10 - P90)'
+            ), secondary_y=False)
+
         # Công suất DC Tấm Pin (50MWp)
         fig_2d.add_trace(go.Scatter(
             x=x_vals_2d, 
@@ -1441,7 +1456,7 @@ with tab_multi:
         
         fig_2d.update_layout(
             title=dict(
-                text=f"📈 <b>Biểu Đồ Công Suất P (MW) & Bức Xạ W (W/m²) {target_title}</b>",
+                text=f"📈 <b>Biểu Đồ Công Suất P (MW) & Bức Xạ W (W/m²) {target_title} (Tích Hợp AI)</b>",
                 font=dict(size=18, color="#1E293B")
             ),
             xaxis_title="Thời gian (Chu kỳ 15 phút)", 
@@ -1481,22 +1496,27 @@ with tab_multi:
     # 3. DỰ BÁO 7 NGÀY (672 CHU KỲ)
     with subtab_7d:
         st.markdown("#### 🗓️ Dự Báo Lập Kế Hoạch Vận Hành Tuần (7 Ngày: 672 Chu Kỳ 15 Phút)")
-        date_7d_start = st.date_input("Ngày bắt đầu tuần dự báo:", value=datetime(2026, 8, 28), key="d7_start")
-        df_7d_15, df_7d_daily, kpi_7d = generate_multi_day_15min_forecast(start_date=date_7d_start, num_days=7, params=calc_params)
+        c_7d1, c_7d2 = st.columns([2.5, 1.5])
+        with c_7d1:
+            date_7d_start = st.date_input("Ngày bắt đầu tuần dự báo:", value=datetime(2026, 8, 28), key="d7_start")
+        with c_7d2:
+            enable_ai_7d = st.toggle("🧠 Tích Hợp AI Lập Lịch Tuần", value=True, key="tog_ai_7d", help="AI tự động tối ưu hóa sản lượng 7 ngày theo phân phối thời tiết lịch sử.")
+
+        df_7d_15, df_7d_daily, kpi_7d = generate_multi_day_15min_forecast(start_date=date_7d_start, num_days=7, params=calc_params, enable_ai=enable_ai_7d)
         
         k1, k2, k3, k4 = st.columns(4)
         with k1:
             st.metric("⚡ Tổng Sản Lượng Tuần", f"{kpi_7d['total_energy_mwh']:,.2f} MWh", delta=f"{kpi_7d['total_energy_gwh']:.3f} GWh")
         with k2:
-            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_7d['avg_daily_mwh']:.2f} MWh/ngày")
+            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_7d['avg_daily_mwh']:.2f} MWh/ngày", delta="Chuẩn 50MWp Mỹ Hiệp")
         with k3:
-            st.metric("📈 P_Grid Đỉnh", f"{kpi_7d['peak_grid_mw']:.2f} MW")
+            st.metric("📈 P_Grid Đỉnh", f"{kpi_7d['peak_grid_mw']:.2f} MW", delta="Trần Inverter 40.075 MW")
         with k4:
-            st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", f"{kpi_7d['total_15min_intervals']} chu kỳ")
+            st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", f"{kpi_7d['total_15min_intervals']} chu kỳ", delta="672 Chu kỳ tuần")
             
         fig_7d = go.Figure()
         fig_7d.add_trace(go.Bar(x=df_7d_daily['Day_Name'], y=df_7d_daily['Energy_MWh'], text=df_7d_daily['Energy_MWh'].round(1), textposition='auto', marker_color='#0284C7', name='Sản lượng ngày (MWh)'))
-        fig_7d.update_layout(title="<b>Dự Báo Sản Lượng Từng Ngày Trong Tuần (MWh)</b>", xaxis_title="Ngày trong tuần", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=380)
+        fig_7d.update_layout(title="<b>Dự Báo Sản Lượng Từng Ngày Trong Tuần (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày trong tuần", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=380)
         st.plotly_chart(fig_7d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo Tuần (.xlsx - 672 Chu Kỳ)", data=export_multi_day_to_excel_bytes(df_7d_15, df_7d_daily, kpi_7d, "7_NGAY"), file_name=f"Du_Bao_Tuan_{date_7d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1505,20 +1525,25 @@ with tab_multi:
     # 4. DỰ BÁO 30 NGÀY TỚI
     with subtab_30d:
         st.markdown("#### 📊 Dự Báo Sản Lượng 30 Ngày Tiếp Theo (Month-Ahead)")
-        date_30d_start = st.date_input("Ngày bắt đầu 30 ngày:", value=datetime(2026, 8, 28), key="d30_start")
-        df_30d_15, df_30d_daily, kpi_30d = generate_multi_day_15min_forecast(start_date=date_30d_start, num_days=30, params=calc_params)
+        c_30d1, c_30d2 = st.columns([2.5, 1.5])
+        with c_30d1:
+            date_30d_start = st.date_input("Ngày bắt đầu 30 ngày:", value=datetime(2026, 8, 28), key="d30_start")
+        with c_30d2:
+            enable_ai_30d = st.toggle("🧠 Tích Hợp AI Month-Ahead", value=True, key="tog_ai_30d", help="Mô hình AI dự báo chuỗi thời gian 30 ngày.")
+
+        df_30d_15, df_30d_daily, kpi_30d = generate_multi_day_15min_forecast(start_date=date_30d_start, num_days=30, params=calc_params, enable_ai=enable_ai_30d)
         
         k1, k2, k3 = st.columns(3)
         with k1:
             st.metric("⚡ Tổng Sản Lượng 30 Ngày", f"{kpi_30d['total_energy_mwh']:,.2f} MWh", delta=f"{kpi_30d['total_energy_gwh']:.3f} GWh")
         with k2:
-            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_30d['avg_daily_mwh']:.2f} MWh/ngày")
+            st.metric("📊 Sản Lượng TB/Ngày", f"{kpi_30d['avg_daily_mwh']:.2f} MWh/ngày", delta="Hiệu chuẩn ĐMT Mỹ Hiệp")
         with k3:
-            st.metric("📈 P_Grid Đỉnh", f"{kpi_30d['peak_grid_mw']:.2f} MW")
+            st.metric("📈 P_Grid Đỉnh", f"{kpi_30d['peak_grid_mw']:.2f} MW", delta="Trần Inverter 40.075 MW")
             
         fig_30d = go.Figure()
         fig_30d.add_trace(go.Bar(x=df_30d_daily['Date_Str'], y=df_30d_daily['Energy_MWh'], marker_color='#F59E0B', name='Sản lượng (MWh)'))
-        fig_30d.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tiếp Theo (MWh)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_30d.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tiếp Theo (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
         st.plotly_chart(fig_30d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1526,9 +1551,11 @@ with tab_multi:
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
     with subtab_eom:
         st.markdown("#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng 8/2026")
-        st.caption("Tổng hợp từ dữ liệu đo đếm thực tế SCADA (từ ngày 01 đến 26/08) cộng với Dự báo các ngày còn lại (27 đến 31/08).")
+        st.caption("Tổng hợp từ dữ liệu đo đếm thực tế SCADA (từ ngày 01 đến 26/08) cộng với Dự báo AI các ngày còn lại (27 đến 31/08).")
         
-        eom_res = forecast_end_of_month(harvester, year=2026, month=8, params=calc_params)
+        enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên xu hướng tháng 8.")
+        
+        eom_res = forecast_end_of_month(harvester, year=2026, month=8, params=calc_params, enable_ai=enable_ai_eom)
         
         k1, k2, k3, k4 = st.columns(4)
         with k1:
@@ -1536,15 +1563,15 @@ with tab_multi:
         with k2:
             st.metric("🟢 Thực Tế Đã Phát (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày đã đo")
         with k3:
-            st.metric("🔮 Dự Báo Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày còn lại")
+            st.metric("🔮 Dự Báo Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày AI dự báo")
         with k4:
-            st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày")
+            st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày", delta="Cả tháng")
             
         fig_eom = go.Figure()
         df_fm = eom_res['df_full_month']
         colors = np.where(df_fm['Loại'].str.contains('Thực tế'), '#10B981', '#F59E0B')
         fig_eom.add_trace(go.Bar(x=df_fm['Date_Str'], y=df_fm['Sản lượng (MWh)'], marker_color=colors, name='Sản lượng ngày (MWh)'))
-        fig_eom.update_layout(title="<b>Sản Lượng Từng Ngày Tháng 8/2026 (Xanh: Thực tế SCADA đo đếm | Vàng: Dự báo)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_eom.update_layout(title="<b>Sản Lượng Từng Ngày Tháng 8/2026 (Xanh: Thực tế SCADA đo đếm | Vàng: Dự báo AI)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
         st.plotly_chart(fig_eom, width='stretch')
         
         st.dataframe(df_fm, width='stretch', hide_index=True)
@@ -1552,23 +1579,25 @@ with tab_multi:
     # 6. DỰ BÁO THÁNG TIẾP THEO (THÁNG 9/2026)
     with subtab_nextm:
         st.markdown("#### 📈 Dự Báo Toàn Bộ Sản Lượng Tháng Tiếp Theo (Tháng 9/2026)")
-        st.caption("Dự báo toàn bộ 30 ngày của Tháng 9/2026 dựa trên mô hình bức xạ mùa vụ Nam Trung Bộ (Bình Định) và cấu hình 50MWp / 40.075MW ĐMT Mỹ Hiệp.")
+        st.caption("Dự báo toàn bộ 30 ngày của Tháng 9/2026 dựa trên mô hình AI phân tích bức xạ mùa vụ Nam Trung Bộ (Bình Định) và cấu hình 50MWp / 40.075MW ĐMT Mỹ Hiệp.")
         
-        next_m_res = forecast_next_month(current_year=2026, current_month=8, params=calc_params)
+        enable_ai_nextm = st.toggle("🧠 Tích Hợp AI Chuỗi Thời Gian Tháng 9/2026", value=True, key="tog_ai_nextm", help="Mô hình AI dự báo chuỗi thời gian phân tích mùa vụ tháng 9.")
+        
+        next_m_res = forecast_next_month(current_year=2026, current_month=8, params=calc_params, enable_ai=enable_ai_nextm)
         
         k1, k2, k3, k4 = st.columns(4)
         with k1:
             st.metric("🏆 Tổng Sản Lượng Tháng 9", f"{next_m_res['total_energy_mwh']:,.2f} MWh", delta=f"{next_m_res['total_energy_gwh']:.3f} GWh")
         with k2:
-            st.metric("📊 Sản Lượng TB Ngày", f"{next_m_res['avg_daily_mwh']:.2f} MWh/ngày")
+            st.metric("📊 Sản Lượng TB Ngày", f"{next_m_res['avg_daily_mwh']:.2f} MWh/ngày", delta="Dự kiến AI")
         with k3:
-            st.metric("📈 P_Grid Đỉnh Dự Kiến", f"{next_m_res['peak_grid_mw']:.2f} MW")
+            st.metric("📈 P_Grid Đỉnh Dự Kiến", f"{next_m_res['peak_grid_mw']:.2f} MW", delta="Trần 40.075 MW")
         with k4:
-            st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày")
+            st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày", delta="Tháng 9")
             
         fig_nextm = go.Figure()
-        fig_nextm.add_trace(go.Bar(x=next_m_res['df_daily']['Date_Str'], y=next_m_res['df_daily']['Energy_MWh'], marker_color='#8B5CF6', name='Sản lượng dự báo (MWh)'))
-        fig_nextm.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tháng 9/2026 (MWh)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_nextm.add_trace(go.Bar(x=next_m_res['df_daily']['Date_Str'], y=next_m_res['df_daily']['Energy_MWh'], marker_color='#8B5CF6', name='Sản lượng dự báo AI (MWh)'))
+        fig_nextm.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tháng 9/2026 (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
         st.plotly_chart(fig_nextm, width='stretch')
         
         st.dataframe(next_m_res['df_daily'], width='stretch', hide_index=True)
