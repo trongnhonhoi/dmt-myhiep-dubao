@@ -87,213 +87,250 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS giao diện Đậm Chất Ngành Năng Lượng Mặt Trời (Modern Clean Solar Station UI/UX)
+# =========================================================================
+# GIAO DIỆN PHÒNG ĐIỀU KHIỂN TRUNG TÂM SCADA (DARK MODE CONTROL ROOM THEME)
+# Thiết kế chuyên dụng cho Kỹ sư Vận hành & Điều độ Nhà máy Điện Mặt Trời
+# =========================================================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     
+    /* Font hệ thống & Chế độ nền tối chuẩn phòng SCADA */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #E2E8F0;
     }
 
-    /* Giảm khoảng trắng thừa trên cùng của trang */
+    /* Giảm khoảng trắng thừa trên cùng & tối ưu hóa màn hình điều khiển */
     .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2.5rem !important;
-        max-width: 98% !important;
+        padding-top: 1.2rem !important;
+        padding-bottom: 2.0rem !important;
+        max-width: 98.5% !important;
+        background-color: #070A13 !important;
     }
 
-    /* Hero Banner Header Hiện Đại */
+    /* Hero Banner - Bảng Điều Khiển Trung Tâm SCADA */
     .hero-solar-banner {
-        background: linear-gradient(135deg, #0A192F 0%, #112240 50%, #002855 85%, #00509D 100%);
-        border-radius: 16px;
-        padding: 20px 26px;
-        color: white;
-        margin-bottom: 18px;
-        box-shadow: 0 10px 28px -6px rgba(0, 40, 85, 0.35);
-        border: 1px solid rgba(255, 214, 10, 0.25);
+        background: linear-gradient(135deg, #050811 0%, #0A1124 40%, #081B38 80%, #042454 100%);
+        border-radius: 14px;
+        padding: 18px 24px;
+        color: #F8FAFC;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 229, 255, 0.12);
+        border: 1px solid rgba(0, 229, 255, 0.35);
         position: relative;
         overflow: hidden;
     }
     .hero-solar-banner::after {
         content: "⚡";
         position: absolute;
-        right: 20px;
-        top: 10px;
-        font-size: 5.0rem;
-        opacity: 0.10;
+        right: 18px;
+        top: 8px;
+        font-size: 5.2rem;
+        opacity: 0.08;
         pointer-events: none;
     }
     .plant-main-title {
-        font-size: 2.1rem;
+        font-size: 2.15rem;
         font-weight: 800;
-        letter-spacing: 0.6px;
+        letter-spacing: 0.8px;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #FFD60A 0%, #FFC300 35%, #38BDF8 80%, #7DD3FC 100%);
+        background: linear-gradient(90deg, #00E5FF 0%, #00F0FF 30%, #FFD600 70%, #00E676 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 3px;
+        margin-bottom: 2px;
         line-height: 1.2;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace;
     }
     .plant-sub-title {
-        font-size: 0.95rem;
-        color: #CBD5E1;
-        font-weight: 500;
+        font-size: 0.92rem;
+        color: #94A3B8;
+        font-weight: 600;
         margin-bottom: 10px;
-        letter-spacing: 0.2px;
+        letter-spacing: 0.3px;
     }
     
-    /* Solar Badges */
+    /* SCADA Telemetry Badges */
     .solar-badge {
         display: inline-flex;
         align-items: center;
         padding: 4px 11px;
-        border-radius: 20px;
+        border-radius: 6px;
         font-size: 0.80rem;
-        font-weight: 600;
+        font-weight: 650;
         margin-right: 6px;
         margin-bottom: 4px;
+        font-family: 'JetBrains Mono', monospace;
         transition: all 0.2s ease;
     }
     .solar-badge:hover {
         transform: translateY(-1px);
     }
     .badge-dc {
-        background: rgba(255, 195, 0, 0.15);
-        color: #FDE047;
-        border: 1px solid rgba(253, 224, 71, 0.35);
+        background: rgba(255, 214, 0, 0.12);
+        color: #FFD600;
+        border: 1px solid rgba(255, 214, 0, 0.35);
     }
     .badge-ac {
-        background: rgba(56, 189, 248, 0.15);
-        color: #7DD3FC;
-        border: 1px solid rgba(56, 189, 248, 0.35);
+        background: rgba(0, 229, 255, 0.12);
+        color: #00E5FF;
+        border: 1px solid rgba(0, 229, 255, 0.35);
     }
     .badge-module {
-        background: rgba(16, 185, 129, 0.15);
-        color: #6EE7B7;
-        border: 1px solid rgba(16, 185, 129, 0.35);
+        background: rgba(0, 230, 118, 0.12);
+        color: #00E676;
+        border: 1px solid rgba(0, 230, 118, 0.35);
     }
     .badge-grid {
-        background: rgba(168, 85, 247, 0.15);
-        color: #D8B4FE;
-        border: 1px solid rgba(168, 85, 247, 0.35);
+        background: rgba(192, 132, 252, 0.12);
+        color: #C084FC;
+        border: 1px solid rgba(192, 132, 252, 0.35);
     }
 
-    /* Tabs Styling - Gọn gàng, phân tầng chuyên nghiệp */
+    /* SCADA Server Bar */
+    .server-status-card {
+        background: #0A1120;
+        border: 1px solid #1E293B;
+        border-left: 4px solid #00E676;
+        padding: 10px 16px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        font-size: 0.88rem;
+        color: #CBD5E1;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Tabs Styling - Giao diện Bảng Điều Khiển Console Chuyên Dụng */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
-        background-color: #F1F5F9;
+        background-color: #0B101D;
         padding: 6px 8px;
-        border-radius: 12px;
-        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        border: 1px solid #1E293B;
         margin-bottom: 14px;
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 8px !important;
+        border-radius: 6px !important;
         padding: 8px 16px !important;
-        font-weight: 600 !important;
-        font-size: 0.90rem !important;
-        color: #475569 !important;
+        font-weight: 650 !important;
+        font-size: 0.88rem !important;
+        color: #94A3B8 !important;
         background: transparent !important;
         border: none !important;
         transition: all 0.2s ease !important;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important;
-        color: #0284C7 !important;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+        background-color: #111C33 !important;
+        color: #00E5FF !important;
+        box-shadow: 0 0 12px rgba(0, 229, 255, 0.2) !important;
         font-weight: 750 !important;
+        border: 1px solid rgba(0, 229, 255, 0.4) !important;
     }
 
-    /* Metric Cards - Siêu Đẹp & Gọn */
+    /* SCADA Telemetry Metric Cards - Dễ Quan Sát, Không Mỏi Mắt */
     [data-testid="stMetric"] {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 14px 18px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-        transition: all 0.25s ease;
+        background: #0D1322 !important;
+        border: 1px solid #1E293B !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+        transition: all 0.25s ease !important;
     }
     [data-testid="stMetric"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-        border-color: #CBD5E1;
+        box-shadow: 0 8px 24px rgba(0, 229, 255, 0.1) !important;
+        border-color: rgba(0, 229, 255, 0.4) !important;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.82rem !important;
-        font-weight: 650 !important;
-        color: #64748B !important;
+        font-size: 0.80rem !important;
+        font-weight: 700 !important;
+        color: #94A3B8 !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.3px !important;
+        letter-spacing: 0.5px !important;
     }
     [data-testid="stMetricValue"] {
         font-size: 1.65rem !important;
         font-weight: 800 !important;
-        color: #0F172A !important;
+        color: #F8FAFC !important;
+        font-family: 'JetBrains Mono', monospace !important;
         margin-top: 2px !important;
         margin-bottom: 2px !important;
     }
     [data-testid="stMetricDelta"] {
-        font-size: 0.82rem !important;
+        font-size: 0.80rem !important;
         font-weight: 600 !important;
+        font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Buttons Styling - Hiện đại & Chuẩn UI */
+    /* Nút Bấm Thao Tác Chuẩn SCADA */
     .stButton > button {
-        border-radius: 8px !important;
-        font-weight: 650 !important;
-        font-size: 0.88rem !important;
-        padding: 8px 18px !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.86rem !important;
+        padding: 8px 16px !important;
+        background: #111C33 !important;
+        color: #00E5FF !important;
+        border: 1px solid rgba(0, 229, 255, 0.4) !important;
         transition: all 0.2s ease !important;
     }
     .stButton > button:hover {
+        background: #00E5FF !important;
+        color: #050811 !important;
+        box-shadow: 0 0 14px rgba(0, 229, 255, 0.45) !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
     .stDownloadButton > button {
-        border-radius: 8px !important;
-        font-weight: 650 !important;
-        font-size: 0.88rem !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.86rem !important;
         padding: 8px 16px !important;
+        background: #064E3B !important;
+        color: #6EE7B7 !important;
+        border: 1px solid #059669 !important;
         transition: all 0.2s ease !important;
     }
     .stDownloadButton > button:hover {
+        background: #059669 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.4) !important;
         transform: translateY(-1px);
     }
 
-    /* Tinh chỉnh Dataframe & Table */
+    /* Bảng Số Liệu SCADA Telemetry (Dataframe) */
     [data-testid="stDataFrame"] {
-        border-radius: 10px;
+        border-radius: 8px;
         overflow: hidden;
-        border: 1px solid #E2E8F0;
+        border: 1px solid #1E293B;
+        background-color: #0A0E1A;
     }
 
-    /* Khung Thuyết Minh Vận Hành Hiện Đại */
+    /* Khung Thuyết Minh Vận Hành SCADA Dark Mode */
     .narrative-box {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 14px;
-        padding: 20px;
-        margin-top: 14px;
-        margin-bottom: 18px;
-        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+        background: #0A101E;
+        border: 1px solid #1E293B;
+        border-radius: 12px;
+        padding: 18px;
+        margin-top: 12px;
+        margin-bottom: 16px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
     }
     .narrative-top-bar {
-        border-bottom: 2px solid #F1F5F9;
-        padding-bottom: 14px;
-        margin-bottom: 16px;
+        border-bottom: 1px solid #1E293B;
+        padding-bottom: 12px;
+        margin-bottom: 14px;
     }
     .narrative-top-title {
-        font-size: 1.25rem;
+        font-size: 1.20rem;
         font-weight: 800;
-        color: #0F172A;
-        letter-spacing: 0.2px;
-        margin-bottom: 4px;
+        color: #00E5FF;
+        letter-spacing: 0.4px;
+        margin-bottom: 3px;
+        font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace;
     }
     .narrative-top-meta {
-        font-size: 0.88rem;
-        color: #64748B;
-        margin-bottom: 10px;
+        font-size: 0.86rem;
+        color: #94A3B8;
+        margin-bottom: 8px;
     }
     .narrative-badge-wrap {
         display: flex;
@@ -303,36 +340,37 @@ st.markdown("""
     .nbadge {
         display: inline-flex;
         align-items: center;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 0.82rem;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-size: 0.80rem;
         font-weight: 650;
+        font-family: 'JetBrains Mono', monospace;
     }
     .nbadge-day {
-        background: #EFF6FF;
-        color: #1D4ED8;
-        border: 1px solid #BFDBFE;
+        background: rgba(56, 189, 248, 0.12);
+        color: #38BDF8;
+        border: 1px solid rgba(56, 189, 248, 0.35);
     }
     .nbadge-weather {
-        background: #F0FDF4;
-        color: #15803D;
-        border: 1px solid #BBF7D0;
+        background: rgba(0, 230, 118, 0.12);
+        color: #00E676;
+        border: 1px solid rgba(0, 230, 118, 0.35);
     }
     .nbadge-energy {
-        background: #FEF3C7;
-        color: #B45309;
-        border: 1px solid #FDE68A;
+        background: rgba(255, 214, 0, 0.12);
+        color: #FFD600;
+        border: 1px solid rgba(255, 214, 0, 0.35);
     }
     .nbadge-peak {
-        background: #F3E8FF;
-        color: #7E22CE;
-        border: 1px solid #E9D5FF;
+        background: rgba(192, 132, 252, 0.12);
+        color: #C084FC;
+        border: 1px solid rgba(192, 132, 252, 0.35);
     }
     
     .narrative-cards-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        gap: 12px;
     }
     @media (max-width: 900px) {
         .narrative-cards-grid {
@@ -341,57 +379,47 @@ st.markdown("""
     }
     
     .ncard {
-        background: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        padding: 14px 16px;
+        background: #0E1424;
+        border: 1px solid #1E293B;
+        border-radius: 8px;
+        padding: 12px 15px;
         transition: all 0.2s ease;
     }
     .ncard:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+        box-shadow: 0 6px 16px rgba(0, 229, 255, 0.08);
+        border-color: #334155;
     }
     .ncard-weather {
-        border-left: 4px solid #0284C7;
+        border-left: 4px solid #00E5FF;
     }
     .ncard-power {
-        border-left: 4px solid #10B981;
+        border-left: 4px solid #00E676;
     }
     .ncard-temp {
-        border-left: 4px solid #F59E0B;
+        border-left: 4px solid #FFD600;
     }
     .ncard-dispatch {
-        border-left: 4px solid #8B5CF6;
+        border-left: 4px solid #C084FC;
     }
     
     .ncard-head {
-        font-size: 0.94rem;
+        font-size: 0.90rem;
         font-weight: 750;
-        color: #0F172A;
-        margin-bottom: 6px;
+        color: #F8FAFC;
+        margin-bottom: 5px;
         display: flex;
         align-items: center;
         gap: 6px;
     }
     .ncard-body {
-        font-size: 0.88rem;
-        color: #334155;
-        line-height: 1.6;
+        font-size: 0.85rem;
+        color: #CBD5E1;
+        line-height: 1.55;
     }
     .dispatch-item {
-        margin-bottom: 4px;
-        line-height: 1.5;
-    }
-
-    /* SCADA Server Bar */
-    .server-status-card {
-        background: linear-gradient(90deg, #F0FDF4 0%, #ECFDF5 100%);
-        border: 1px solid #A7F3D0;
-        border-left: 4px solid #10B981;
-        padding: 10px 16px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        font-size: 0.88rem;
+        margin-bottom: 3px;
+        line-height: 1.45;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -779,7 +807,7 @@ with tab_1day:
         y=df_f15['P_DC_Avg_MW'], 
         mode='lines', 
         name='Công suất DC Tấm Pin (50MWp)', 
-        line=dict(color='#F59E0B', width=2, dash='dot'),
+        line=dict(color='#FFD600', width=2, dash='dot'),
         yaxis='y1'
     ))
     fig_p.add_trace(go.Scatter(
@@ -787,17 +815,19 @@ with tab_1day:
         y=df_f15['P_Grid_Avg_MW'], 
         mode='lines+markers', 
         name='Công suất Phát Lưới P_Grid (MW)', 
-        line=dict(color='#10B981', width=3), 
+        line=dict(color='#00E676', width=3), 
+        marker=dict(size=4, color='#00E676'),
         fill='tozeroy', 
-        fillcolor='rgba(16, 185, 129, 0.18)',
+        fillcolor='rgba(0, 230, 118, 0.14)',
         yaxis='y1'
     ))
     fig_p.add_hline(
         y=ac_capacity, 
         line_dash="dash", 
-        line_color="#EF4444", 
+        line_color="#FF1744", 
         line_width=2.5, 
-        annotation_text=f"Trần Inverter {ac_capacity:.3f} MW"
+        annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
+        annotation_font=dict(color="#FF1744")
     )
     
     # Trục Y phải: Bức xạ W (W/m2)
@@ -806,27 +836,31 @@ with tab_1day:
         y=df_f15['Irradiance_Avg_Wm2'],
         mode='lines',
         name='Bức xạ Mặt Trời W (W/m²)',
-        line=dict(color='#38BDF8', width=2, dash='dashdot'),
+        line=dict(color='#00E5FF', width=2, dash='dashdot'),
         yaxis='y2'
     ))
     
     fig_p.update_layout(
-        xaxis_title="Thời gian (Chu kỳ 15 phút)",
+        xaxis=dict(title="Thời gian (Chu kỳ 15 phút)", gridcolor="#162032"),
         yaxis=dict(
-            title=dict(text="<b>Công suất (MW)</b>", font=dict(color="#10B981")),
-            tickfont=dict(color="#10B981"),
-            side="left"
+            title=dict(text="<b>Công suất (MW)</b>", font=dict(color="#00E676")),
+            tickfont=dict(color="#00E676"),
+            side="left",
+            gridcolor="#162032"
         ),
         yaxis2=dict(
-            title=dict(text="<b>Bức xạ W (W/m²)</b>", font=dict(color="#0284C7")),
-            tickfont=dict(color="#0284C7"),
+            title=dict(text="<b>Bức xạ W (W/m²)</b>", font=dict(color="#00E5FF")),
+            tickfont=dict(color="#00E5FF"),
             overlaying="y",
             side="right",
-            range=[0, max(1100, float(df_f15['Irradiance_Avg_Wm2'].max() * 1.25))]
+            range=[0, max(1100, float(df_f15['Irradiance_Avg_Wm2'].max() * 1.25))],
+            showgrid=False
         ),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#E2E8F0")),
         hovermode="x unified",
-        template="plotly_white",
+        template="plotly_dark",
+        plot_bgcolor="#0A0E1A",
+        paper_bgcolor="#0A0E1A",
         height=480
     )
     st.plotly_chart(fig_p, width='stretch')
@@ -1023,7 +1057,7 @@ with tab_18c:
         x=x_fc_times + x_fc_times[::-1],
         y=y_p90 + y_p10[::-1],
         fill='toself',
-        fillcolor='rgba(16, 185, 129, 0.12)',
+        fillcolor='rgba(0, 230, 118, 0.10)',
         line=dict(color='rgba(255,255,255,0)'),
         hoverinfo="skip",
         showlegend=True,
@@ -1036,10 +1070,10 @@ with tab_18c:
         y=df_18_ai['P_Grid_Avg_MW'],
         mode='lines+markers',
         name='P_Grid Dự Báo AI (MW)',
-        line=dict(color='#10B981', width=3),
-        marker=dict(size=6, color='#10B981'),
+        line=dict(color='#00E676', width=3),
+        marker=dict(size=6, color='#00E676'),
         fill='tozeroy',
-        fillcolor='rgba(16, 185, 129, 0.18)'
+        fillcolor='rgba(0, 230, 118, 0.15)'
     ), secondary_y=False)
 
     # Trace 3: Công suất DC Dàn Pin
@@ -1048,7 +1082,7 @@ with tab_18c:
         y=df_18_ai['P_DC_Avg_MW'],
         mode='lines',
         name='P_DC Tấm Pin (MW)',
-        line=dict(color='#F59E0B', width=2, dash='dot')
+        line=dict(color='#FFD600', width=2, dash='dot')
     ), secondary_y=False)
 
     # Trace 4: Baseline nếu không có AI (để so sánh)
@@ -1058,7 +1092,7 @@ with tab_18c:
             y=df_18_ai['P_Grid_Baseline_MW'],
             mode='lines',
             name='P_Grid Gốc (Chưa AI)',
-            line=dict(color='#94A3B8', width=1.8, dash='dash')
+            line=dict(color='#64748B', width=1.8, dash='dash')
         ), secondary_y=False)
 
     # Trace 5: Bức xạ Mặt Trời Dự Báo AI (Trục Y phụ bên phải)
@@ -1067,26 +1101,37 @@ with tab_18c:
         y=df_18_ai['Irradiance_Avg_Wm2'],
         mode='lines+markers',
         name='Bức Xạ Hiệu Chỉnh AI (W/m²)',
-        line=dict(color='#0EA5E9', width=2, dash='dashdot'),
-        marker=dict(size=5, color='#0EA5E9')
+        line=dict(color='#00E5FF', width=2, dash='dashdot'),
+        marker=dict(size=5, color='#00E5FF')
     ), secondary_y=True)
 
     # Đường giới hạn Inverter
-    fig_18.add_hline(y=ac_capacity, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"Trần Inverter {ac_capacity:.3f} MW", secondary_y=False)
+    fig_18.add_hline(
+        y=ac_capacity, 
+        line_dash="dash", 
+        line_color="#FF1744", 
+        line_width=2, 
+        annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
+        annotation_font=dict(color="#FF1744"),
+        secondary_y=False
+    )
 
     fig_18.update_layout(
         title=f"<b>Biểu Đồ Công Suất & Bức Xạ {fc_intervals} Chu Kỳ Cuốn Chiếu ({kpis_18_ai['start_time'].strftime('%H:%M')} - {kpis_18_ai['end_time'].strftime('%H:%M')}) - Tích Hợp AI</b>",
         xaxis_title="Khung Giờ 15 Phút (Chu Kỳ Dự Báo)",
         yaxis_title="Công Suất Phát Điện (MW)",
         hovermode="x unified",
-        template="plotly_white",
+        template="plotly_dark",
+        plot_bgcolor="#0A0E1A",
+        paper_bgcolor="#0A0E1A",
         height=450,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, font=dict(color="#E2E8F0"))
     )
-    fig_18.update_yaxes(title_text="Công Suất (MW)", secondary_y=False, range=[0, 45])
+    fig_18.update_xaxes(gridcolor="#162032")
+    fig_18.update_yaxes(title_text="Công Suất (MW)", secondary_y=False, range=[0, 45], gridcolor="#162032")
     fig_18.update_yaxes(title_text="Bức Xạ (W/m²)", secondary_y=True, showgrid=False, range=[0, 1200])
     
-    st.plotly_chart(fig_18, use_container_width=True)
+    st.plotly_chart(fig_18, width='stretch')
 
     # 6. BẢNG DỮ LIỆU 18 CHU KỲ VÀ NÚT XUẤT BÁO CÁO
     st.markdown("##### 📋 Bảng Chi Tiết 18 Chu Kỳ Dự Báo & Độ Lệch Hiệu Chỉnh AI:")
@@ -1138,10 +1183,20 @@ with tab_comp:
             st.metric("⚡ Chênh Lệch Điện Năng", f"{comp_kpi['total_energy_actual_mwh']:.2f} MWh", delta=f"{comp_kpi['total_diff_energy_mwh']:+.2f} MWh vs DB")
             
         fig_c = go.Figure()
-        fig_c.add_trace(go.Scatter(x=comp_df['Timestamp'], y=comp_df['P_Grid_Avg_MW'], mode='lines', name='P_Grid Dự Báo (MW)', line=dict(color='#2563EB', width=2.5, dash='dash')))
-        fig_c.add_trace(go.Scatter(x=comp_df['Timestamp'], y=comp_df['P_Grid_Actual_Avg_MW'], mode='lines+markers', name='P_Grid Thực Tế Đo Đếm 110kV (MW)', line=dict(color='#EA580C', width=3)))
-        fig_c.add_trace(go.Bar(x=comp_df['Timestamp'], y=comp_df['Diff_Power_MW'], name='Độ Lệch (Thực tế - DB) (MW)', marker_color=np.where(comp_df['Diff_Power_MW'] >= 0, 'rgba(16, 185, 129, 0.5)', 'rgba(239, 68, 68, 0.5)')))
-        fig_c.update_layout(title="<b>So Khớp Công Suất Dự Báo vs Thực Tế 110kV & Độ Lệch</b>", xaxis_title="Thời gian", yaxis_title="Công suất (MW)", hovermode="x unified", template="plotly_white", height=450)
+        fig_c.add_trace(go.Scatter(x=comp_df['Timestamp'], y=comp_df['P_Grid_Avg_MW'], mode='lines', name='P_Grid Dự Báo (MW)', line=dict(color='#00E5FF', width=2.5, dash='dash')))
+        fig_c.add_trace(go.Scatter(x=comp_df['Timestamp'], y=comp_df['P_Grid_Actual_Avg_MW'], mode='lines+markers', name='P_Grid Thực Tế Đo Đếm 110kV (MW)', line=dict(color='#00E676', width=3), marker=dict(size=4, color='#00E676')))
+        fig_c.add_trace(go.Bar(x=comp_df['Timestamp'], y=comp_df['Diff_Power_MW'], name='Độ Lệch (Thực tế - DB) (MW)', marker_color=np.where(comp_df['Diff_Power_MW'] >= 0, 'rgba(0, 230, 118, 0.6)', 'rgba(255, 23, 68, 0.6)')))
+        fig_c.update_layout(
+            title="<b>So Khớp Công Suất Dự Báo vs Thực Tế 110kV & Độ Lệch</b>",
+            xaxis=dict(title="Thời gian", gridcolor="#162032"),
+            yaxis=dict(title="Công suất (MW)", gridcolor="#162032"),
+            hovermode="x unified",
+            template="plotly_dark",
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
+            height=450,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#E2E8F0"))
+        )
         st.plotly_chart(fig_c, width='stretch')
         
         c_cdl1, c_cdl2, _ = st.columns([1.5, 1.5, 4])
@@ -1170,117 +1225,52 @@ with tab_multi:
         "📈 6. Dự Báo Toàn Bộ Tháng 9/2026"
     ])
     
-    # 1. MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE)
+    # 1. SUBTAB: MÔ HÌNH DỰ BÁO THỐNG NHẤT
     with subtab_unified:
-        st.markdown("#### 🌟 Mô Hình Dự Báo Lai Ghép Thống Nhất (Unified Ensemble Solar Forecasting)")
-        st.caption("Thuật toán kết hợp đa trọng số giữa **Mô hình Khí tượng Số trị (NWP)** và **Mô hình Đo đếm Lịch sử SCADA Mỹ Hiệp** nhằm tối ưu độ chính xác và giảm thiểu sai số đối soát EVN / A0 / A3.")
-        
-        # Bảng điều khiển tham số lai ghép
-        col_ens1, col_ens2, col_ens3 = st.columns([1.8, 1.5, 1.2])
+        st.markdown("#### 🌟 Mô Hình Dự Báo Sản Lượng Thống Nhất (Unified Hybrid Multi-Model)")
+        st.caption("Tổng hợp từ 3 trụ cột: Dữ liệu Khí tượng số Phù Mỹ (NWP) + Lịch sử đo đếm SCADA 2020-2026 + Mô hình pin Sharp NU-440 (Tổn thất nhiệt cell & Inverter 40.075 MW).")
+
+        col_ens1, col_ens2, col_ens3 = st.columns([1.8, 1.2, 2.0])
         with col_ens1:
-            ensemble_strategy = st.selectbox(
-                "🎯 Chiến Lược Lai Ghép Thống Nhất:",
-                [
-                    "🌟 Tự Động Tối Ưu (Auto Dynamic Weighting)",
-                    "⚖️ Cân Bằng 50% Khí Tượng - 50% Lịch Sử",
-                    "⛅ Ưu Tiên Khí Tượng NWP (75% Khí Tượng - 25% Lịch Sử)",
-                    "📈 Ưu Tiên Lịch Sử SCADA (25% Khí Tượng - 75% Lịch Sử)",
-                    "🎛️ Tùy Chỉnh Trọng Số Thủ Công (Custom Weight)"
-                ],
-                index=0,
-                key="select_ens_strat"
-            )
+            start_ens_date = st.date_input("Chọn ngày bắt đầu chuỗi dự báo thống nhất:", value=datetime(2026, 8, 27), key="ens_date_input")
         with col_ens2:
-            forecast_horizon = st.selectbox(
-                "⏱️ Khung Thời Gian Dự Báo:",
-                [
-                    "1 Ngày (96 Chu kỳ 15 phút)",
-                    "2 Ngày Tới (192 Chu kỳ - D+1, D+2)",
-                    "7 Ngày Tới (672 Chu kỳ - Kế hoạch Tuần)"
-                ],
-                index=0,
-                key="select_ens_horizon"
-            )
+            ens_num_days = st.selectbox("Số ngày dự báo:", [1, 2, 3, 5, 7], index=2, key="ens_days_select")
         with col_ens3:
-            start_ens_date = st.date_input(
-                "📅 Ngày Bắt Đầu:",
-                value=datetime(2026, 8, 28),
-                key="ens_start_date_pick"
-            )
+            st.write("")
+            enable_ai_flag = st.toggle("🧠 Tích Hợp AI Nắn Chỉnh Sai Số", value=True, key="tog_ai_unified", help="Mô hình AI tự động bù trừ suy hao nhiệt độ cell pin và độ phủ mây phi tuyến.")
 
-        # Mapping mode
-        if "Tự Động" in ensemble_strategy:
-            ens_mode_key = "AUTO"
-            w_custom = 0.50
-        elif "Cân Bằng" in ensemble_strategy:
-            ens_mode_key = "EQUAL"
-            w_custom = 0.50
-        elif "Ưu Tiên Khí Tượng" in ensemble_strategy:
-            ens_mode_key = "NWP_PRIORITY"
-            w_custom = 0.75
-        elif "Ưu Tiên Lịch Sử" in ensemble_strategy:
-            ens_mode_key = "HIST_PRIORITY"
-            w_custom = 0.25
-        else:
-            ens_mode_key = "CUSTOM"
-            w_slider = st.slider(
-                "🎚️ Trọng số Khí Tượng NWP (%) vs Lịch Sử SCADA (%):",
-                min_value=0, max_value=100, value=50, step=5,
-                help="100% = Hoàn toàn theo Khí tượng, 0% = Hoàn toàn theo Lịch sử SCADA."
-            )
-            w_custom = w_slider / 100.0
+        df_uni_15, df_uni_daily, uni_narratives = generate_unified_hybrid_forecast(
+            start_date=start_ens_date,
+            num_days=ens_num_days,
+            harvester=harvester,
+            params=calc_params,
+            enable_ai=enable_ai_flag
+        )
 
-        enable_ai_flag = st.toggle("🧠 Tích Hợp AI (Machine Learning Error Correction)", value=True, help="Bật để AI tự động điều chỉnh bù suy hao do mây, quá nhiệt Inverter và hiệu ứng góc chiếu buổi sáng/chiều.")
+        selected_day_idx = 0
+        if ens_num_days > 1:
+            day_choices = [f"Ngày {i+1}: {nar['day_name']} ({nar['date_str']})" for i, nar in enumerate(uni_narratives)]
+            selected_day_label = st.selectbox("📅 Chọn ngày chi tiết để xem biểu đồ 96 chu kỳ & Thuyết minh:", day_choices, index=0)
+            selected_day_idx = day_choices.index(selected_day_label)
 
-        n_days_ens = 1 if "1 Ngày" in forecast_horizon else (2 if "2 Ngày" in forecast_horizon else 7)
+        cur_nar = uni_narratives[selected_day_idx]
+        cur_day_summary = df_uni_daily.iloc[selected_day_idx]
+        
+        start_idx = selected_day_idx * 96
+        end_idx = start_idx + 96
+        df_plot_15 = df_uni_15.iloc[start_idx:end_idx].copy()
 
-        with st.spinner("Đang tổng hợp mô hình khí tượng vệ tinh và dữ liệu lịch sử SCADA Mỹ Hiệp..."):
-            nwp_data = fetch_phu_my_weather_forecast(days=max(n_days_ens, 2))
-            df_uni_15, df_uni_daily, uni_narratives = generate_unified_hybrid_forecast(
-                start_date=start_ens_date,
-                num_days=n_days_ens,
-                nwp_data=nwp_data,
-                params=calc_params,
-                ensemble_mode=ens_mode_key,
-                custom_nwp_weight=w_custom,
-                enable_ai=enable_ai_flag
-            )
-
-        if len(df_uni_15) > 0 and len(df_uni_daily) > 0:
-            # Lựa chọn ngày xem chi tiết nếu dự báo nhiều ngày
-            if n_days_ens > 1:
-                day_options = {r['Day_Name'] + ' (' + r['Date_Str'] + ')': r['Date_Str'] for _, r in df_uni_daily.iterrows()}
-                selected_day_label = st.selectbox("📅 Chọn ngày hiển thị biểu đồ & thuyết minh chi tiết:", list(day_options.keys()), index=0)
-                selected_date_str = day_options[selected_day_label]
-                df_plot_15 = df_uni_15[df_uni_15['Date'] == selected_date_str].copy()
-                cur_day_summary = df_uni_daily[df_uni_daily['Date_Str'] == selected_date_str].iloc[0]
-                cur_nar = next((n for n in uni_narratives if n['date_str'] == selected_date_str), uni_narratives[0])
-            else:
-                df_plot_15 = df_uni_15.copy()
-                cur_day_summary = df_uni_daily.iloc[0]
-                cur_nar = uni_narratives[0]
-
-            # 4 Thẻ KPI Dự Báo Thống Nhất
-            k1, k2, k3, k4 = st.columns(4)
-            with k1:
-                st.metric(
-                    "⚡ Sản Lượng Thống Nhất",
-                    f"{cur_day_summary['Energy_Unified_MWh']:.2f} MWh",
-                    delta=f"NWP: {cur_day_summary['Energy_NWP_MWh']:.1f} | SCADA: {cur_day_summary['Energy_Hist_MWh']:.1f} MWh"
-                )
-            with k2:
-                st.metric(
-                    "📈 P_Grid Đỉnh Thống Nhất",
-                    f"{cur_day_summary['Peak_Grid_MW']:.2f} MW",
-                    delta=f"Bức xạ đỉnh: {cur_day_summary['Max_Irradiance_Wm2']:.0f} W/m²"
-                )
-            with k3:
-                st.metric(
-                    "⚖️ Tỷ Lệ Lai Ghép",
-                    f"{cur_day_summary['Weight_NWP_Pct']:.0f}% NWP / {cur_day_summary['Weight_Hist_Pct']:.0f}% SCADA",
-                    delta="Đã hiệu chuẩn trần 40.075 MW"
-                )
-            with k4:
+        if not df_plot_15.empty:
+            m1, m2, m3, m4, m5 = st.columns(5)
+            with m1:
+                st.metric("⚡ Sản Lượng Thống Nhất", f"{cur_day_summary['Energy_Unified_MWh']:.2f} MWh", delta=f"{cur_day_summary['Energy_Unified_MWh']/40.075:.1f} Giờ đỉnh (Psh)")
+            with m2:
+                st.metric("📈 P_Grid Đỉnh Dự Kiến", f"{cur_day_summary['Peak_Grid_MW']:.2f} MW", delta=f"Trần 40.075 MW")
+            with m3:
+                st.metric("☀️ Bức Xạ Đỉnh", f"{cur_day_summary['Max_Irradiance_Wm2']:.0f} W/m²")
+            with m4:
+                st.metric("✂️ Inverter Clipping Loss", f"{cur_day_summary['Clipping_Loss_MWh']:.2f} MWh", delta="Cắt ngọn AC", delta_color="inverse")
+            with m5:
                 st.metric(
                     "🎯 Dải Tin Cậy P10 - P90",
                     f"{df_plot_15['P10_Lower_MW'].max():.1f} - {df_plot_15['P90_Upper_MW'].max():.1f} MW",
@@ -1517,7 +1507,7 @@ with tab_multi:
                 x=x_vals_2d.tolist() + x_vals_2d.tolist()[::-1],
                 y=df_display_15['P90_Upper_MW'].tolist() + df_display_15['P10_Lower_MW'].tolist()[::-1],
                 fill='toself',
-                fillcolor='rgba(16, 185, 129, 0.12)',
+                fillcolor='rgba(0, 230, 118, 0.10)',
                 line=dict(color='rgba(255,255,255,0)'),
                 hoverinfo="skip",
                 showlegend=True,
@@ -1530,7 +1520,7 @@ with tab_multi:
             y=df_display_15['P_DC_Avg_MW'], 
             mode='lines', 
             name='Công suất DC Tấm Pin (50MWp)', 
-            line=dict(color='#F59E0B', width=2, dash='dot')
+            line=dict(color='#FFD600', width=2, dash='dot')
         ), secondary_y=False)
 
         # Công suất Phát Lưới P_Grid (MW)
@@ -1539,10 +1529,10 @@ with tab_multi:
             y=df_display_15['P_Grid_Avg_MW'], 
             mode='lines+markers', 
             name='Công suất Phát Lưới P_Grid (MW)', 
-            line=dict(color='#10B981', width=3), 
+            line=dict(color='#00E676', width=3), 
             fill='tozeroy', 
-            fillcolor='rgba(16, 185, 129, 0.18)',
-            marker=dict(size=4)
+            fillcolor='rgba(0, 230, 118, 0.14)',
+            marker=dict(size=4, color='#00E676')
         ), secondary_y=False)
 
         # Bức xạ Mặt Trời W (W/m²)
@@ -1551,15 +1541,16 @@ with tab_multi:
             y=df_display_15['Irradiance_Avg_Wm2'], 
             mode='lines', 
             name='Bức xạ Mặt Trời W (W/m²)', 
-            line=dict(color='#0EA5E9', width=2, dash='dashdot')
+            line=dict(color='#00E5FF', width=2, dash='dashdot')
         ), secondary_y=True)
 
         fig_2d.add_hline(
             y=ac_capacity,
             line_dash="dash",
-            line_color="#EF4444",
+            line_color="#FF1744",
             line_width=2,
             annotation_text=f"Trần Inverter {ac_capacity:.3f} MW",
+            annotation_font=dict(color="#FF1744"),
             annotation_position="top right",
             secondary_y=False
         )
@@ -1567,16 +1558,18 @@ with tab_multi:
         fig_2d.update_layout(
             title=dict(
                 text=f"📈 <b>Biểu Đồ Công Suất P (MW) & Bức Xạ W (W/m²) {target_title} (Tích Hợp AI)</b>",
-                font=dict(size=18, color="#1E293B")
+                font=dict(size=17, color="#00E5FF")
             ),
-            xaxis_title="Thời gian (Chu kỳ 15 phút)", 
+            xaxis=dict(title="Thời gian (Chu kỳ 15 phút)", gridcolor="#162032"), 
             hovermode="x unified", 
-            template="plotly_white", 
+            template="plotly_dark", 
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
             height=480,
-            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(color="#E2E8F0"))
         )
         
-        fig_2d.update_yaxes(title_text="Công suất (MW)", secondary_y=False, range=[0, 50])
+        fig_2d.update_yaxes(title_text="Công suất (MW)", secondary_y=False, range=[0, 50], gridcolor="#162032")
         fig_2d.update_yaxes(title_text="Bức xạ W (W/m²)", secondary_y=True, range=[0, 1200], showgrid=False)
 
         st.plotly_chart(fig_2d, width='stretch')
@@ -1625,8 +1618,16 @@ with tab_multi:
             st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", f"{kpi_7d['total_15min_intervals']} chu kỳ", delta="672 Chu kỳ tuần")
             
         fig_7d = go.Figure()
-        fig_7d.add_trace(go.Bar(x=df_7d_daily['Day_Name'], y=df_7d_daily['Energy_MWh'], text=df_7d_daily['Energy_MWh'].round(1), textposition='auto', marker_color='#0284C7', name='Sản lượng ngày (MWh)'))
-        fig_7d.update_layout(title="<b>Dự Báo Sản Lượng Từng Ngày Trong Tuần (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày trong tuần", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=380)
+        fig_7d.add_trace(go.Bar(x=df_7d_daily['Day_Name'], y=df_7d_daily['Energy_MWh'], text=df_7d_daily['Energy_MWh'].round(1), textposition='auto', marker_color='#00E5FF', name='Sản lượng ngày (MWh)'))
+        fig_7d.update_layout(
+            title="<b>Dự Báo Sản Lượng Từng Ngày Trong Tuần (MWh) - Tích Hợp AI</b>",
+            xaxis=dict(title="Ngày trong tuần", gridcolor="#162032"),
+            yaxis=dict(title="Sản lượng (MWh)", gridcolor="#162032"),
+            template="plotly_dark",
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
+            height=380
+        )
         st.plotly_chart(fig_7d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo Tuần (.xlsx - 672 Chu Kỳ)", data=export_multi_day_to_excel_bytes(df_7d_15, df_7d_daily, kpi_7d, "7_NGAY"), file_name=f"Du_Bao_Tuan_{date_7d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1652,8 +1653,16 @@ with tab_multi:
             st.metric("📈 P_Grid Đỉnh", f"{kpi_30d['peak_grid_mw']:.2f} MW", delta="Trần Inverter 40.075 MW")
             
         fig_30d = go.Figure()
-        fig_30d.add_trace(go.Bar(x=df_30d_daily['Date_Str'], y=df_30d_daily['Energy_MWh'], marker_color='#F59E0B', name='Sản lượng (MWh)'))
-        fig_30d.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tiếp Theo (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_30d.add_trace(go.Bar(x=df_30d_daily['Date_Str'], y=df_30d_daily['Energy_MWh'], marker_color='#FFD600', name='Sản lượng (MWh)'))
+        fig_30d.update_layout(
+            title="<b>Dự Báo Sản Lượng 30 Ngày Tiếp Theo (MWh) - Tích Hợp AI</b>",
+            xaxis=dict(title="Ngày", gridcolor="#162032", tickangle=-45),
+            yaxis=dict(title="Sản lượng (MWh)", gridcolor="#162032"),
+            template="plotly_dark",
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
+            height=400
+        )
         st.plotly_chart(fig_30d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1679,9 +1688,17 @@ with tab_multi:
             
         fig_eom = go.Figure()
         df_fm = eom_res['df_full_month']
-        colors = np.where(df_fm['Loại'].str.contains('Thực tế'), '#10B981', '#F59E0B')
+        colors = np.where(df_fm['Loại'].str.contains('Thực tế'), '#00E676', '#FFD600')
         fig_eom.add_trace(go.Bar(x=df_fm['Date_Str'], y=df_fm['Sản lượng (MWh)'], marker_color=colors, name='Sản lượng ngày (MWh)'))
-        fig_eom.update_layout(title="<b>Sản Lượng Từng Ngày Tháng 8/2026 (Xanh: Thực tế SCADA đo đếm | Vàng: Dự báo AI)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_eom.update_layout(
+            title="<b>Sản Lượng Từng Ngày Tháng 8/2026 (Xanh lá: Thực tế SCADA đo đếm | Vàng: Dự báo AI)</b>",
+            xaxis=dict(title="Ngày", gridcolor="#162032", tickangle=-45),
+            yaxis=dict(title="Sản lượng (MWh)", gridcolor="#162032"),
+            template="plotly_dark",
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
+            height=400
+        )
         st.plotly_chart(fig_eom, width='stretch')
         
         st.dataframe(df_fm, width='stretch', hide_index=True)
@@ -1706,8 +1723,16 @@ with tab_multi:
             st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày", delta="Tháng 9")
             
         fig_nextm = go.Figure()
-        fig_nextm.add_trace(go.Bar(x=next_m_res['df_daily']['Date_Str'], y=next_m_res['df_daily']['Energy_MWh'], marker_color='#8B5CF6', name='Sản lượng dự báo AI (MWh)'))
-        fig_nextm.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tháng 9/2026 (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_nextm.add_trace(go.Bar(x=next_m_res['df_daily']['Date_Str'], y=next_m_res['df_daily']['Energy_MWh'], marker_color='#C084FC', name='Sản lượng dự báo AI (MWh)'))
+        fig_nextm.update_layout(
+            title="<b>Dự Báo Sản Lượng 30 Ngày Tháng 9/2026 (MWh) - Tích Hợp AI</b>",
+            xaxis=dict(title="Ngày", gridcolor="#162032", tickangle=-45),
+            yaxis=dict(title="Sản lượng (MWh)", gridcolor="#162032"),
+            template="plotly_dark",
+            plot_bgcolor="#0A0E1A",
+            paper_bgcolor="#0A0E1A",
+            height=400
+        )
         st.plotly_chart(fig_nextm, width='stretch')
         
         st.dataframe(next_m_res['df_daily'], width='stretch', hide_index=True)
