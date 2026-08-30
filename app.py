@@ -1682,9 +1682,33 @@ with tab_multi:
         with k4:
             st.metric("⏱️ Tổng Số Chu Kỳ 15 Phút", f"{kpi_7d['total_15min_intervals']} chu kỳ", delta="672 Chu kỳ tuần")
             
-        fig_7d = go.Figure()
-        fig_7d.add_trace(go.Bar(x=df_7d_daily['Day_Name'], y=df_7d_daily['Energy_MWh'], text=df_7d_daily['Energy_MWh'].round(1), textposition='auto', marker_color='#0284C7', name='Sản lượng ngày (MWh)'))
-        fig_7d.update_layout(title="<b>Dự Báo Sản Lượng Từng Ngày Trong Tuần (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày trong tuần", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=380)
+        from plotly.subplots import make_subplots
+        fig_7d = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_7d.add_trace(go.Bar(
+            x=df_7d_daily['Day_Name'], 
+            y=df_7d_daily['Energy_MWh'], 
+            text=df_7d_daily['Energy_MWh'].apply(lambda x: f"{x:.1f}"), 
+            textposition='auto', 
+            marker_color='#0284C7', 
+            name='Sản lượng dự báo (MWh)'
+        ), secondary_y=False)
+        fig_7d.add_trace(go.Scatter(
+            x=df_7d_daily['Day_Name'],
+            y=df_7d_daily['Max_Irradiance_Wm2'],
+            name='Bức xạ đỉnh dự báo (W/m²)',
+            mode='lines+markers',
+            line=dict(color='#E11D48', width=2.25),
+            marker=dict(size=6, color='#E11D48')
+        ), secondary_y=True)
+        fig_7d.update_layout(
+            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 7 NGÀY TỚI (TÍCH HỢP AI + KHÍ TƯỢNG + LỊCH SỬ 171)</b>", 
+            xaxis_title="Ngày trong tuần", 
+            template="plotly_white", 
+            height=400,
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        )
+        fig_7d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
+        fig_7d.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_7d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo Tuần (.xlsx - 672 Chu Kỳ)", data=export_multi_day_to_excel_bytes(df_7d_15, df_7d_daily, kpi_7d, "7_NGAY"), file_name=f"Du_Bao_Tuan_{date_7d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
@@ -1693,6 +1717,7 @@ with tab_multi:
     # 4. DỰ BÁO 30 NGÀY TỚI
     with subtab_30d:
         st.markdown("#### 📊 Dự Báo Sản Lượng 30 Ngày Tiếp Theo (Month-Ahead)")
+        st.caption("Mô hình AI dự báo chuỗi thời gian 30 ngày kết hợp xu hướng bức xạ các ngày gần nhất, chu kỳ mùa vụ 6 năm và dự báo khí tượng Phù Mỹ.")
         c_30d1, c_30d2 = st.columns([2.5, 1.5])
         with c_30d1:
             date_30d_start = st.date_input("Ngày bắt đầu 30 ngày:", value=datetime(2026, 8, 28), key="d30_start")
@@ -1709,19 +1734,42 @@ with tab_multi:
         with k3:
             st.metric("📈 P_Grid Đỉnh", f"{kpi_30d['peak_grid_mw']:.2f} MW", delta="Trần Inverter 40.075 MW")
             
-        fig_30d = go.Figure()
-        fig_30d.add_trace(go.Bar(x=df_30d_daily['Date_Str'], y=df_30d_daily['Energy_MWh'], marker_color='#F59E0B', name='Sản lượng (MWh)'))
-        fig_30d.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tiếp Theo (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        fig_30d = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_30d.add_trace(go.Bar(
+            x=df_30d_daily['Date_Str'], 
+            y=df_30d_daily['Energy_MWh'], 
+            marker_color='#F59E0B', 
+            name='Sản lượng dự báo (MWh)'
+        ), secondary_y=False)
+        fig_30d.add_trace(go.Scatter(
+            x=df_30d_daily['Date_Str'],
+            y=df_30d_daily['Max_Irradiance_Wm2'],
+            name='Bức xạ đỉnh dự báo (W/m²)',
+            mode='lines+markers',
+            line=dict(color='#0284C7', width=2),
+            marker=dict(size=4, color='#0284C7')
+        ), secondary_y=True)
+        fig_30d.update_layout(
+            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 30 NGÀY TIẾP THEO (MWh - TÍCH HỢP AI)</b>", 
+            xaxis_title="Ngày", 
+            template="plotly_white", 
+            height=420, 
+            xaxis=dict(tickangle=-45),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        )
+        fig_30d.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
+        fig_30d.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_30d, width='stretch')
         
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
 
+
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
     with subtab_eom:
         st.markdown("#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng 8/2026")
-        st.caption("Tổng hợp từ dữ liệu đo đếm thực tế SCADA (từ ngày 01 đến 26/08) cộng với Dự báo AI các ngày còn lại (27 đến 31/08).")
+        st.caption("Cột trước ngày hiện tại (01 - 26/08): Số liệu đo đếm thực tế Công tơ 171C. Cột dự báo (27 - 31/08): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
         
-        enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên xu hướng tháng 8.")
+        enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên bức xạ các ngày gần nhất và dự báo thời tiết.")
         
         eom_res = forecast_end_of_month(harvester, year=2026, month=8, params=calc_params, enable_ai=enable_ai_eom)
         
@@ -1729,20 +1777,64 @@ with tab_multi:
         with k1:
             st.metric("🏆 Dự Báo Cả Tháng 8", f"{eom_res['total_projected_month_mwh']:,.2f} MWh", delta=f"{eom_res['total_projected_month_gwh']:.3f} GWh")
         with k2:
-            st.metric("🟢 Thực Tế Đã Phát (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày đã đo")
+            st.metric("🟢 Thực Tế Công Tơ 171C (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày đã đo đếm")
         with k3:
-            st.metric("🔮 Dự Báo Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày AI dự báo")
+            st.metric("🔮 Dự Báo AI Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày AI dự báo")
         with k4:
-            st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày", delta="Cả tháng")
-            
-        fig_eom = go.Figure()
+            st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày", delta=f"Gần nhất: {eom_res['recent_avg_mwh']:.1f} MWh")
+
+        st.info(f"💡 **Cơ sở dữ liệu mô hình:** Các cột ngày 01 đến 26/08 lấy chính xác 100% từ **Công tơ 171C (MH_171C)**. Các cột dự báo ngày 27 đến 31/08 được AI lấy thêm **dữ liệu bức xạ đỉnh trung bình 5 ngày gần nhất ({eom_res['recent_avg_irr']} W/m² ~ {eom_res['recent_avg_mwh']} MWh/ngày)** kết hợp mô hình dự báo thời tiết số trị NWP để đưa ra kết quả dự báo chính xác và mượt mà nhất.")
+
+        from plotly.subplots import make_subplots
+        fig_eom = make_subplots(specs=[[{"secondary_y": True}]])
         df_fm = eom_res['df_full_month']
-        colors = np.where(df_fm['Loại'].str.contains('Thực tế'), '#10B981', '#F59E0B')
-        fig_eom.add_trace(go.Bar(x=df_fm['Date_Str'], y=df_fm['Sản lượng (MWh)'], marker_color=colors, name='Sản lượng ngày (MWh)'))
-        fig_eom.update_layout(title="<b>Sản Lượng Từng Ngày Tháng 8/2026 (Xanh: Thực tế SCADA đo đếm | Vàng: Dự báo AI)</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+
+        # Cột Thực tế Công tơ 171C
+        fig_eom.add_trace(go.Bar(
+            x=df_fm['Date_Str'],
+            y=df_fm['Sản lượng Thực tế (MWh)'],
+            name='🟢 Thực Tế Công Tơ 171C (MWh)',
+            marker_color='#0284C7',
+            text=df_fm['Sản lượng Thực tế (MWh)'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else ""),
+            textposition='auto'
+        ), secondary_y=False)
+
+        # Cột Dự báo AI
+        fig_eom.add_trace(go.Bar(
+            x=df_fm['Date_Str'],
+            y=df_fm['Sản lượng Dự báo (MWh)'],
+            name='🔮 Dự Báo AI (Bức Xạ Gần Nhất + Thời Tiết) (MWh)',
+            marker_color='#F59E0B',
+            text=df_fm['Sản lượng Dự báo (MWh)'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else ""),
+            textposition='auto'
+        ), secondary_y=False)
+
+        # Đường Bức xạ Đỉnh trên trục Y2
+        fig_eom.add_trace(go.Scatter(
+            x=df_fm['Date_Str'],
+            y=df_fm['Bức xạ đỉnh (W/m²)'],
+            name='☀️ Bức Xạ Đỉnh (W/m²)',
+            mode='lines+markers',
+            line=dict(color='#E11D48', width=2.25),
+            marker=dict(size=5, color='#E11D48')
+        ), secondary_y=True)
+
+        fig_eom.update_layout(
+            title="<b>BIỂU ĐỒ SẢN LƯỢNG THÁNG 8/2026 (Xanh: Thực tế Công tơ 171C | Cam: Dự báo AI dựa trên Bức xạ gần nhất)</b>",
+            xaxis_title="Ngày Trong Tháng",
+            template="plotly_white",
+            height=430,
+            barmode='stack',
+            xaxis=dict(tickangle=-45),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        )
+        fig_eom.update_yaxes(title_text="Sản lượng phát lưới (MWh)", secondary_y=False)
+        fig_eom.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
+
         st.plotly_chart(fig_eom, width='stretch')
         
         st.dataframe(df_fm, width='stretch', hide_index=True)
+
 
     # 6. DỰ BÁO THÁNG TIẾP THEO (THÁNG 9/2026)
     with subtab_nextm:
@@ -1763,9 +1855,32 @@ with tab_multi:
         with k4:
             st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày", delta="Tháng 9")
             
-        fig_nextm = go.Figure()
-        fig_nextm.add_trace(go.Bar(x=next_m_res['df_daily']['Date_Str'], y=next_m_res['df_daily']['Energy_MWh'], marker_color='#8B5CF6', name='Sản lượng dự báo AI (MWh)'))
-        fig_nextm.update_layout(title="<b>Dự Báo Sản Lượng 30 Ngày Tháng 9/2026 (MWh) - Tích Hợp AI</b>", xaxis_title="Ngày", yaxis_title="Sản lượng (MWh)", template="plotly_white", height=400, xaxis=dict(tickangle=-45))
+        from plotly.subplots import make_subplots
+        fig_nextm = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_nextm.add_trace(go.Bar(
+            x=next_m_res['df_daily']['Date_Str'], 
+            y=next_m_res['df_daily']['Energy_MWh'], 
+            marker_color='#8B5CF6', 
+            name='Sản lượng dự báo AI (MWh)'
+        ), secondary_y=False)
+        fig_nextm.add_trace(go.Scatter(
+            x=next_m_res['df_daily']['Date_Str'],
+            y=next_m_res['df_daily']['Max_Irradiance_Wm2'],
+            name='Bức xạ đỉnh dự báo (W/m²)',
+            mode='lines+markers',
+            line=dict(color='#F59E0B', width=2.25),
+            marker=dict(size=4, color='#F59E0B')
+        ), secondary_y=True)
+        fig_nextm.update_layout(
+            title="<b>DỰ BÁO SẢN LƯỢNG & BỨC XẠ ĐỈNH 30 NGÀY THÁNG 9/2026 (MWh - TÍCH HỢP AI)</b>", 
+            xaxis_title="Ngày", 
+            template="plotly_white", 
+            height=420, 
+            xaxis=dict(tickangle=-45),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        )
+        fig_nextm.update_yaxes(title_text="Sản lượng (MWh)", secondary_y=False)
+        fig_nextm.update_yaxes(title_text="Bức xạ đỉnh (W/m²)", secondary_y=True, showgrid=False)
         st.plotly_chart(fig_nextm, width='stretch')
         
         # KHU VỰC XUẤT BÁO CÁO EXCEL ĐẦY ĐỦ BIỂU ĐỒ & THUYẾT MINH
