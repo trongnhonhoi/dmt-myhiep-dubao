@@ -371,7 +371,7 @@ def export_next_month_forecast_to_excel_bytes(next_m_res: Dict[str, Any], params
         fmt_num_4dp = workbook.add_format({'num_format': '#,##0.0000', 'border': 1, 'align': 'right', 'valign': 'vcenter', 'font_size': 9})
 
         # =====================================================================
-        # SHEET 1: THUYẾT MINH VẬN HÀNH & KỸ THUẬT (CHUẨN NHÀ MÁY ĐIỆN)
+        # SHEET 1: THUYẾT MINH VẬN HÀNH & KỸ THUẬT NỘI BỘ NHÀ MÁY
         # =====================================================================
         ws1 = workbook.add_worksheet('1. THUYET_MINH_VAN_HANH')
         ws1.set_column('A:A', 5)
@@ -381,34 +381,34 @@ def export_next_month_forecast_to_excel_bytes(next_m_res: Dict[str, Any], params
         ws1.set_column('E:E', 25)
         ws1.set_column('F:F', 20)
 
-        # Header Báo Cáo
-        ws1.write('B2', "BỘ CÔNG THƯƠNG - TẬP ĐOÀN ĐIỆN LỰC VIỆT NAM", workbook.add_format({'bold': True, 'font_size': 9, 'align': 'center'}))
-        ws1.write('B3', "NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp)", workbook.add_format({'bold': True, 'font_size': 10, 'align': 'center', 'font_color': '#0369A1'}))
-        ws1.write('B4', "Số: ........ /BC-ĐMTMH-SCADA", workbook.add_format({'italic': True, 'font_size': 9, 'align': 'center'}))
+        # Header Báo Cáo Nội Bộ
+        ws1.write('B2', "NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP", workbook.add_format({'bold': True, 'font_size': 11, 'align': 'center', 'font_color': '#0369A1'}))
+        ws1.write('B3', "PHÒNG KỸ THUẬT & QUẢN LÝ VẬN HÀNH (O&M)", workbook.add_format({'bold': True, 'font_size': 9, 'align': 'center', 'font_color': '#334155'}))
+        ws1.write('B4', "Mã tài liệu: NB-O&M-DB-2026/09", workbook.add_format({'italic': True, 'font_size': 8.5, 'align': 'center', 'font_color': '#64748B'}))
         
-        ws1.write('E2', "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", workbook.add_format({'bold': True, 'font_size': 9, 'align': 'center'}))
-        ws1.write('E3', "Độc lập - Tự do - Hạnh phúc", workbook.add_format({'bold': True, 'font_size': 9, 'align': 'center'}))
-        ws1.write('E4', f"Bình Định, ngày {datetime.now().strftime('%d')} tháng {datetime.now().strftime('%m')} năm {datetime.now().strftime('%Y')}", workbook.add_format({'italic': True, 'font_size': 9, 'align': 'center'}))
+        ws1.write('E2', "TÀI LIỆU LƯU HÀNH NỘI BỘ", workbook.add_format({'bold': True, 'font_size': 10, 'align': 'center', 'font_color': '#B45309', 'fg_color': '#FEF3C7', 'border': 1}))
+        ws1.write('E3', "QUẢN TRỊ SẢN LƯỢNG & BẢO TRÌ THIẾT BỊ", workbook.add_format({'italic': True, 'font_size': 8.5, 'align': 'center', 'font_color': '#64748B'}))
+        ws1.write('E4', f"Mỹ Hiệp, ngày {datetime.now().strftime('%d')} tháng {datetime.now().strftime('%m')} năm {datetime.now().strftime('%Y')}", workbook.add_format({'italic': True, 'font_size': 9, 'align': 'center'}))
 
-        ws1.merge_range('B6:E6', f"BÁO CÁO DỰ BÁO SẢN LƯỢNG ĐIỆN NĂNG THÁNG TỚI ({month_name.upper()})", fmt_super_title)
-        ws1.merge_range('B7:E7', f"Phục vụ lập kế hoạch vận hành thị trường điện & đăng ký biểu đồ điều độ hệ thống điện Quốc gia (A0/A3)", fmt_sub_title)
+        ws1.merge_range('B6:E6', f"BÁO CÁO DỰ BÁO KẾ HOẠCH SẢN LƯỢNG ĐIỆN THÁNG TỚI ({month_name.upper()})", fmt_super_title)
+        ws1.merge_range('B7:E7', f"Phục vụ công tác quản trị sản lượng nội bộ, lập lịch bảo trì O&M và tối ưu hóa hiệu suất phát điện nhà máy", fmt_sub_title)
 
         # I. BẢNG TỔNG HỢP CHỈ TIÊU KỸ THUẬT & DỰ BÁO THÁNG
-        ws1.merge_range('B9:E9', "I. TỔNG HỢP CÁC CHỈ TIÊU DỰ BÁO SẢN LƯỢNG & KỸ THUẬT CHÍNH", fmt_section_hdr)
+        ws1.merge_range('B9:E9', "I. TỔNG HỢP CÁC CHỈ TIÊU SẢN LƯỢNG & THÔNG SỐ VẬN HÀNH NỘI BỘ", fmt_section_hdr)
         
         kpi_rows = [
-            ("1. Tên nhà máy điện:", "Nhà máy Điện Mặt Trời Mỹ Hiệp (50MWp / 40.075MW AC)"),
-            ("2. Vị trí địa lý & Pháp lý:", "Thôn Vạn Phước, Xã Phù Mỹ Nam, Tỉnh Bình Định"),
-            ("3. Tháng dự báo vận hành:", f"{month_name} (Tổng số: {days_count} ngày | 2.880 chu kỳ 15 phút)"),
-            ("4. Tổng sản lượng dự báo phát lưới (MWh):", total_energy_mwh),
+            ("1. Đơn vị quản lý vận hành:", "Nhà máy Điện Mặt Trời Mỹ Hiệp (50MWp DC / 40.075MW AC)"),
+            ("2. Vị trí nhà máy:", "Thôn Vạn Phước, Xã Phù Mỹ Nam, Tỉnh Bình Định"),
+            ("3. Tháng dự báo kế hoạch:", f"{month_name} (Tổng số: {days_count} ngày | 2.880 chu kỳ 15 phút)"),
+            ("4. Tổng sản lượng điện kỳ vọng phát lưới (MWh):", total_energy_mwh),
             ("5. Tổng sản lượng điện tương đương (GWh):", total_energy_gwh),
             ("6. Sản lượng bình quân ngày (MWh/ngày):", avg_daily_mwh),
             ("7. Công suất phát lưới cực đại dự kiến P_max (MW):", peak_grid_mw),
-            ("8. Giới hạn trần nghịch lưu Inverter P_AC (MW):", ac_cap),
+            ("8. Giới hạn công suất Inverter AC P_limit (MW):", ac_cap),
             ("9. Số giờ phát điện đỉnh tương đương Psh (giờ/ngày):", round(avg_daily_mwh / dc_cap, 2)),
             ("10. Bức xạ mặt trời bình quân mùa vụ (kWh/m2/ngày):", avg_insolation),
             ("11. Hệ số hiệu suất dự kiến toàn nhà máy (PR %):", f"{round(avg_daily_mwh / (avg_insolation * dc_cap) * 100, 1)}%"),
-            ("12. Sản lượng cắt ngọn do trần Inverter (MWh):", total_clipping_mwh)
+            ("12. Sản lượng cắt ngọn do trần Inverter Clipping (MWh):", total_clipping_mwh)
         ]
         for idx, (label, val) in enumerate(kpi_rows, start=10):
             ws1.write(idx, 1, label, fmt_kpi_label)
@@ -423,12 +423,12 @@ def export_next_month_forecast_to_excel_bytes(next_m_res: Dict[str, Any], params
 
         # II. CĂN CỨ KỸ THUẬT & MÔ HÌNH TOÁN HIỆU CHUẨN
         curr_r = 23
-        ws1.merge_range(curr_r, 1, curr_r, 4, "II. CĂN CỨ KỸ THUẬT & PHƯƠNG PHÁP LUẬN DỰ BÁO KHÍ TƯỢNG - AI", fmt_section_hdr)
+        ws1.merge_range(curr_r, 1, curr_r, 4, "II. THÔNG SỐ DANH ĐỊNH THIẾT BỊ & NGUYÊN LÝ HIỆU CHUẨN MÔ HÌNH", fmt_section_hdr)
         
         nar_sec2 = [
-            ("1. Căn cứ pháp lý:", "• Thông tư 25/2016/TT-BCT và Thông tư 39/2015/TT-BCT của Bộ Công Thương quy định hệ thống điện truyền tải và phân phối.\n• Quy trình điều độ và dự báo công suất phát nguồn năng lượng tái tạo của Cục Điều tiết Điện lực & EVN/A0/A3.\n• Hợp đồng Mua bán điện (PPA) Nhà máy ĐMT Mỹ Hiệp công suất 50MWp ký với Công ty Mua bán Điện (EVNEPC)."),
-            ("2. Cấu hình thiết bị nhà máy:", f"• Tổng công suất dàn pin DC: {dc_cap:.2f} MWp gồm các chuỗi module Sharp NU-440 (Monocrystalline, hệ số suy giảm công suất theo nhiệt độ Pmp: -0.347%/°C, nhiệt độ danh định NOCT: 45°C).\n• Hệ thống Inverter nghịch lưu trung tâm: Giới hạn trần phát công suất xoay chiều AC nghiêm ngặt ở mức {ac_cap:.3f} MW.\n• Trạm biến áp nâng áp: 110kV/22kV kết nối đường dây 110kV mạch kép truyền tải về lưới điện quốc gia."),
-            ("3. Nguyên lý hiệu chuẩn 1000 W/m2 -> 40 MW:", "• Mô hình hiệu chuẩn chuẩn hóa công suất phát lưới thực tế: Khi bức xạ mặt trời đạt 1000 W/m2 (sau khi trừ tổn thất nhiệt cell ở ~48°C, tổn thất bụi bẩn 2.0%, tổn thất cáp DC 1.2%, hiệu suất Inverter 98.5% và tổn thất MBA 1.5%), hệ thống phát đúng 40.000 MW lên thanh cái 110kV (hệ số phát k = 0.040 MW per W/m2).\n• Khi bức xạ vượt 1001.8 W/m2, công suất được Inverter cắt ngọn (Clipping) giữ phẳng ở 40.075 MW, phần năng lượng dôi dư được hạch toán là Clipping Loss.")
+            ("1. Cấu hình thiết bị nhà máy:", f"• Tổng công suất dàn pin DC: {dc_cap:.2f} MWp gồm các chuỗi module Sharp NU-440 (Monocrystalline, hệ số suy giảm công suất theo nhiệt độ Pmp: -0.347%/°C, nhiệt độ danh định NOCT: 45°C).\n• Hệ thống Inverter nghịch lưu trung tâm: Giới hạn trần phát công suất xoay chiều AC nghiêm ngặt ở mức {ac_cap:.3f} MW (Tỷ số DC/AC = {dc_cap/ac_cap:.3f}, Over-paneling {(dc_cap/ac_cap - 1)*100:.1f}%).\n• Trạm biến áp nâng áp nội bộ: 110kV/22kV kết nối đường dây 110kV truyền tải điện."),
+            ("2. Nguyên lý hiệu chuẩn 1000 W/m2 -> 40 MW:", "• Mô hình hiệu chuẩn chuẩn hóa công suất phát lưới thực tế: Khi bức xạ mặt trời đạt 1000 W/m2 (sau khi trừ tổn thất nhiệt cell ở ~48°C, tổn thất bụi bẩn 2.0%, tổn thất cáp DC 1.2%, hiệu suất Inverter 98.5% và tổn thất MBA 1.5%), hệ thống phát đúng 40.000 MW lên thanh cái 110kV (hệ số phát k = 0.040 MW per W/m2).\n• Khi bức xạ vượt 1001.8 W/m2, công suất được Inverter cắt ngọn (Clipping) giữ phẳng ở 40.075 MW, phần năng lượng dôi dư được hạch toán là Clipping Loss phục vụ đánh giá nâng cấp thiết bị."),
+            ("3. Ứng dụng AI nắn chỉnh sai số:", "• Mô hình AI tự động phân tích độ lệch lịch sử SCADA 2020 - 2026 tại Phù Mỹ, tối ưu hóa phân phối sản lượng theo đặc thù thời tiết mùa vụ và góc chiếu mặt trời từng khung giờ.")
         ]
         curr_r += 1
         for title_i, content_i in nar_sec2:
@@ -438,39 +438,40 @@ def export_next_month_forecast_to_excel_bytes(next_m_res: Dict[str, Any], params
 
         # III. ĐẶC ĐIỂM KHÍ TƯỢNG VÙNG PHÙ MỸ TRONG THÁNG
         curr_r += 1
-        ws1.merge_range(curr_r, 1, curr_r, 4, f"III. ĐẶC ĐIỂM KHÍ TƯỢNG, BỨC XẠ & MÙA VỤ {month_name.upper()} TẠI NAM TRUNG BỘ", fmt_section_hdr)
+        ws1.merge_range(curr_r, 1, curr_r, 4, f"III. ĐẶC ĐIỂM KHÍ TƯỢNG, BỨC XẠ & MÙA VỤ {month_name.upper()} TẠI KHU VỰC NHÀ MÁY", fmt_section_hdr)
         curr_r += 1
         
         nar_sec3 = (
             f"• Khu vực huyện Phù Mỹ (Bình Định) trong {month_name} bước vào giai đoạn chuyển tiếp cuối mùa khô sang mùa mưa.\n"
             f"• Bức xạ mặt trời trung bình ngày dự báo đạt {avg_insolation:.2f} kWh/m2/ngày, tương đương {round(avg_daily_mwh / dc_cap, 2)} giờ nắng đỉnh (Psh).\n"
             "• Đặc trưng nhiệt độ môi trường ban ngày dao động từ 27°C - 35°C; nhiệt độ mặt pin giữa trưa đạt 48°C - 55°C gây suy giảm ~8.0% - 10.4% công suất Pmp danh định.\n"
-            "• Tần suất mây dông nhiệt cục bộ thường xuất hiện vào khung giờ chiều (sau 14:30), mô hình AI đã tự động phân tích và áp dụng trọng số suy giảm phù hợp."
+            "• Tần suất mây dông nhiệt cục bộ thường xuất hiện vào khung giờ chiều (sau 14:30), đội ngũ vận hành O&M cần theo dõi chặt chẽ biểu đồ phát điện tức thời trên hệ thống SCADA."
         )
         ws1.merge_range(curr_r, 1, curr_r + 3, 4, nar_sec3, fmt_text_cell)
         curr_r += 4
 
-        # IV. KẾ HOẠCH VẬN HÀNH & KHUYẾN NGHỊ ĐIỀU ĐỘ
+        # IV. KẾ HOẠCH VẬN HÀNH & BẢO TRÌ O&M NỘI BỘ
         curr_r += 1
-        ws1.merge_range(curr_r, 1, curr_r, 4, "IV. KẾ HOẠCH VẬN HÀNH, BẢO TRÌ & KHUYẾN NGHỊ ĐIỀU ĐỘ", fmt_section_hdr)
+        ws1.merge_range(curr_r, 1, curr_r, 4, "IV. KẾ HOẠCH BẢO TRÌ O&M, VỆ SINH TẤM PIN & TỐI ƯU HÓA HIỆU SUẤT", fmt_section_hdr)
         curr_r += 1
         
         nar_sec4 = (
-            "1. Kế hoạch vệ sinh tấm pin: Tổ chức vệ sinh các khối panel DC định kỳ vào tuần 2 và tuần 4 của tháng để duy trì tổn thất bụi bẩn (Soiling loss) dưới 2.0%.\n"
-            "2. Chế độ làm mát Inverter: Bật cưỡng bức hệ thống thông gió/điều hòa trạm Inverter vào khung giờ 10:30 - 13:30 khi công suất tiệm cận trần 40.075 MW.\n"
-            "3. Bảo đảm độ tin cậy kết nối SCADA: Giám sát liên tục tín hiệu đo đếm W.txt và P.txt truyền về trung tâm điều độ A0/A3, sai số dự báo duy trì < 5% NMAE."
+            "1. Kế hoạch vệ sinh tấm pin: Tổ chức rửa pin định kỳ 2 đợt (Đợt 1: Ngày 08-12/09; Đợt 2: Ngày 22-26/09) nhằm duy trì tổn thất bụi bẩn (Soiling loss) dưới 2.0%.\n"
+            "2. Chế độ làm mát & Kiểm tra Inverter: Kiểm tra hệ thống quạt hút gió/làm mát cưỡng bức cho các khối Inverter trung tâm, đặc biệt vào khung giờ nắng gắt 10:30 - 13:30 để tránh hiện tượng quá nhiệt giảm tải (Thermal Derating).\n"
+            "3. Kiểm tra nhiệt hồng ngoại (Thermograpy): Rà soát định kỳ các hộp gom dây Combiner Box, đầu nối MC4 và các khối pin nhằm phát hiện sớm điểm nóng (Hot-spot).\n"
+            "4. Đảm bảo dữ liệu SCADA & Trạm thời tiết: Thường xuyên lau chùi cảm biến bức xạ Pyranometer và kiểm tra tín hiệu cảm biến nhiệt độ mặt pin."
         )
-        ws1.merge_range(curr_r, 1, curr_r + 3, 4, nar_sec4, fmt_text_cell)
-        curr_r += 5
+        ws1.merge_range(curr_r, 1, curr_r + 4, 4, nar_sec4, fmt_text_cell)
+        curr_r += 6
 
-        # Chữ ký phê duyệt
-        ws1.write(curr_r, 1, "NGƯỜI LẬP BÁO CÁO", fmt_sign_title)
-        ws1.write(curr_r, 2, "TRƯỞNG CA VẬN HÀNH SCADA", fmt_sign_title)
-        ws1.merge_range(curr_r, 3, curr_r, 4, "GIÁM ĐỐC NHÀ MÁY / QUẢN ĐỐC", fmt_sign_title)
+        # Chữ ký nội bộ
+        ws1.write(curr_r, 1, "KỸ SƯ KỸ THUẬT & O&M", fmt_sign_title)
+        ws1.write(curr_r, 2, "TRƯỞNG PHÒNG KỸ THUẬT O&M", fmt_sign_title)
+        ws1.merge_range(curr_r, 3, curr_r, 4, "QUẢN ĐỐC / GIÁM ĐỐC NHÀ MÁY", fmt_sign_title)
         
         ws1.write(curr_r + 1, 1, "(Ký, ghi rõ họ tên)", fmt_sign_sub)
         ws1.write(curr_r + 1, 2, "(Ký, ghi rõ họ tên)", fmt_sign_sub)
-        ws1.merge_range(curr_r + 1, 3, curr_r + 1, 4, "(Ký tên & đóng dấu)", fmt_sign_sub)
+        ws1.merge_range(curr_r + 1, 3, curr_r + 1, 4, "(Ký tên & phê duyệt)", fmt_sign_sub)
 
 
         # =====================================================================
@@ -574,8 +575,8 @@ def export_next_month_forecast_to_excel_bytes(next_m_res: Dict[str, Any], params
         ws3.set_column('J:L', 16)
         ws3.set_column('M:N', 18)
 
-        ws3.write('A1', f"DỮ LIỆU ĐIỀU ĐỘ CHI TIẾT 2.880 CHU KỲ 15 PHÚT {month_name.upper()}", fmt_super_title)
-        ws3.write('A2', f"Nhà máy ĐMT Mỹ Hiệp - Phục vụ nạp dữ liệu vào phần mềm điều độ thị trường điện của EVN / A0 / A3", fmt_sub_title)
+        ws3.write('A1', f"DỮ LIỆU DỰ BÁO CHI TIẾT 2.880 CHU KỲ 15 PHÚT {month_name.upper()}", fmt_super_title)
+        ws3.write('A2', f"Nhà máy ĐMT Mỹ Hiệp - Phục vụ công tác theo dõi, đánh giá và quản lý vận hành nội bộ", fmt_sub_title)
 
         headers_s3 = [
             "Ngày", "Chu kỳ ngày", "Chu kỳ tháng", "Bắt đầu", "Kết thúc",

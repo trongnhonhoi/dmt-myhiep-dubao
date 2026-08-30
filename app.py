@@ -1712,18 +1712,18 @@ with tab_multi:
         st.plotly_chart(fig_nextm, width='stretch')
         
         # KHU VỰC XUẤT BÁO CÁO EXCEL ĐẦY ĐỦ BIỂU ĐỒ & THUYẾT MINH
-        st.markdown("##### 📥 Xuất Báo Cáo Dự Báo Sản Lượng Tháng 9/2026 (File Excel Đầy Đủ Biểu Đồ & Thuyết Minh Chuẩn SCADA):")
+        st.markdown("##### 📥 Xuất Báo Cáo Nội Bộ Dự Báo Kế Hoạch Sản Lượng Tháng 9/2026 (File Excel Chuẩn O&M Nhà Máy):")
         c_ex1, c_ex2, c_ex3 = st.columns([2.5, 1.5, 1.5])
         with c_ex1:
             excel_nextm_bytes = export_next_month_forecast_to_excel_bytes(next_m_res, params=calc_params)
             st.download_button(
-                "📊 TẢI BÁO CÁO EXCEL THÁNG 9/2026 (.xlsx)",
+                "📊 TẢI BÁO CÁO EXCEL NỘI BỘ THÁNG 9/2026 (.xlsx)",
                 data=excel_nextm_bytes,
-                file_name=f"Bao_Cao_Du_Bao_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}_MyHiep.xlsx",
+                file_name=f"Bao_Cao_Noi_Bo_Du_Bao_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}_MyHiep.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
                 width='stretch',
-                help="File Excel chuẩn gồm 4 Sheet: 1. Thuyết minh vận hành kỹ thuật | 2. Tổng hợp 30 ngày & Biểu đồ Excel | 3. Chi tiết 2.880 chu kỳ 15 phút | 4. Dữ liệu chứng minh & Đối soát SCADA."
+                help="File Excel nội bộ gồm 4 Sheet: 1. Thuyết minh kỹ thuật & quản lý O&M | 2. Tổng hợp 30 ngày & Biểu đồ Excel nhúng | 3. Chi tiết 2.880 chu kỳ 15 phút | 4. Dữ liệu chứng minh & Đối soát SCADA."
             )
         with c_ex2:
             st.download_button(
@@ -1744,9 +1744,9 @@ with tab_multi:
             )
 
         # XEM TRƯỚC BẢNG DỮ LIỆU & THUYẾT MINH VẬN HÀNH
-        with st.expander("📑 **XEM TRƯỚC BẢN THUYẾT MINH DỰ BÁO VẬN HÀNH & BẢNG 30 NGÀY**", expanded=False):
+        with st.expander("📑 **XEM TRƯỚC BẢN THUYẾT MINH KỸ THUẬT NỘI BỘ & BẢNG 30 NGÀY**", expanded=False):
             tab_n_view, tab_d_view, tab_proof_view = st.tabs([
-                "📝 1. Bản Thuyết Minh Kỹ Thuật (Chuẩn Vận Hành SCADA)",
+                "📝 1. Bản Thuyết Minh Kỹ Thuật Nội Bộ (O&M)",
                 "📊 2. Bảng Số Liệu 30 Ngày",
                 "🔍 3. Dữ Liệu Chứng Minh & Đối Soát Lịch Sử"
             ])
@@ -1755,35 +1755,36 @@ with tab_multi:
                 st.markdown(f"""
                 <div class="narrative-box">
                     <div class="narrative-top-bar">
-                        <div class="narrative-top-title">📑 BẢN THUYẾT MINH DỰ BÁO SẢN LƯỢNG ĐIỆN THÁNG 9/2026</div>
+                        <div class="narrative-top-title">📑 BÁO CÁO NỘI BỘ: KẾ HOẠCH & DỰ BÁO SẢN LƯỢNG ĐIỆN THÁNG 9/2026</div>
                         <div class="narrative-top-meta">
-                            🏢 <b>Nhà máy ĐMT Mỹ Hiệp (50MWp / 40.075MW)</b> | 📍 Thôn Vạn Phước, Xã Phù Mỹ Nam, T. Bình Định | ⏱️ Áp dụng: 01/09/2026 - 30/09/2026
+                            🏢 <b>Nhà máy ĐMT Mỹ Hiệp (50MWp / 40.075MW)</b> | 📋 <b>Phòng Kỹ Thuật & Vận Hành O&M</b> | ⏱️ Áp dụng nội bộ: 01/09/2026 - 30/09/2026
                         </div>
                         <div class="narrative-badge-wrap">
                             <span class="nbadge nbadge-day">📅 30 Ngày (2.880 Chu kỳ 15p)</span>
-                            <span class="nbadge nbadge-energy">⚡ Tổng dự kiến: <b>{next_m_res['total_energy_mwh']:,.2f} MWh ({next_m_res['total_energy_gwh']:.3f} GWh)</b></span>
+                            <span class="nbadge nbadge-energy">⚡ Tổng kỳ vọng: <b>{next_m_res['total_energy_mwh']:,.2f} MWh ({next_m_res['total_energy_gwh']:.3f} GWh)</b></span>
                             <span class="nbadge nbadge-peak">📈 Đỉnh: <b>{next_m_res['peak_grid_mw']:.2f} MW</b></span>
                             <span class="nbadge nbadge-weather">☀️ Bức xạ TB: <b>{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày</b></span>
                         </div>
                     </div>
                     <div class="narrative-cards-grid">
                         <div class="ncard ncard-weather">
-                            <div class="ncard-head">⛅ 1. ĐẶC ĐIỂM KHÍ TƯỢNG VÙNG PHÙ MỸ THÁNG 9</div>
+                            <div class="ncard-head">⛅ 1. ĐẶC ĐIỂM BỨC XẠ & MÙA VỤ THÁNG 9 TẠI NHÀ MÁY</div>
                             <div class="ncard-body">
-                                • Khu vực chuyển tiếp cuối mùa khô sang mùa mưa, bức xạ trung bình đạt ~{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày ({next_m_res['total_energy_mwh']/50.0/30.0:.2f} giờ nắng đỉnh Psh).<br>
-                                • Nhiệt độ môi trường ban ngày dao động 28°C - 35°C, nhiệt độ mặt cell pin trưa đạt 48°C - 53°C gây suy giảm ~8% - 9.7% công suất danh định.
+                                • Bức xạ trung bình đạt ~{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày ({next_m_res['total_energy_mwh']/50.0/30.0:.2f} giờ nắng đỉnh Psh).<br>
+                                • Nhiệt độ mặt cell pin trưa đạt 48°C - 53°C gây suy giảm ~8% - 9.7% công suất Pmp danh định.<br>
+                                • Tần suất mây dông chiều cần được kíp trực O&M giám sát sát sao trên SCADA.
                             </div>
                         </div>
                         <div class="ncard ncard-power">
                             <div class="ncard-head">⚡ 2. CƠ CHẾ HIỆU CHUẨN KỸ THUẬT & AI</div>
                             <div class="ncard-body">
-                                • Áp dụng chuẩn hiệu chuẩn: <b>1000 W/m² phát đúng 40.000 MW</b> lên thanh cái 110kV.<br>
-                                • Khi bức xạ > 1001.8 W/m², Inverter tự động cắt ngọn (Clipping) giữ phẳng ở mức trần <b>40.075 MW</b>.<br>
-                                • Mô hình AI chuỗi thời gian tự động nắn chỉnh sai số theo phân phối mây dông chiều.
+                                • Hiệu chuẩn thực nghiệm: <b>1000 W/m² phát 40.000 MW</b> lên thanh cái 110kV.<br>
+                                • Khi bức xạ > 1001.8 W/m², Inverter cắt ngọn giữ trần <b>40.075 MW</b>, năng lượng dôi dư hạch toán vào Clipping Loss.<br>
+                                • AI nắn chỉnh sai số theo dữ liệu lịch sử SCADA 2020-2026.
                             </div>
                         </div>
                         <div class="ncard ncard-temp">
-                            <div class="ncard-head">🌡️ 3. ĐÁNH GIÁ TỔN THẤT & HIỆU SUẤT PR</div>
+                            <div class="ncard-head">🌡️ 3. QUẢN TRỊ TỔN THẤT & HIỆU SUẤT PR NỘI BỘ</div>
                             <div class="ncard-body">
                                 • Hệ số suy giảm nhiệt độ tấm pin Sharp NU-440: -0.347%/°C.<br>
                                 • Tổn thất bụi bẩn (Soiling): 2.0% | Tổn thất cáp DC: 1.2% | Hiệu suất Inverter: 98.5% | Tổn thất MBA: 1.5%.<br>
@@ -1791,11 +1792,11 @@ with tab_multi:
                             </div>
                         </div>
                         <div class="ncard ncard-dispatch">
-                            <div class="ncard-head">📋 4. KHUYẾN NGHỊ ĐIỀU ĐỘ & BẢO TRÌ</div>
+                            <div class="ncard-head">📋 4. KẾ HOẠCH BẢO TRÌ O&M & RỬA TẤM PIN</div>
                             <div class="ncard-body">
-                                • Lập lịch vệ sinh tấm pin vào tuần 2 & tuần 4 để duy trì hiệu suất quang điện tối đa.<br>
-                                • Duy trì hệ thống làm mát cưỡng bức cho các khối Inverter lúc cao điểm trưa (11:00 - 13:00).<br>
-                                • Sẵn sàng đáp ứng lệnh sa thải công suất khẩn cấp từ Trung tâm Điều độ HTĐ Quốc gia (A0/A3).
+                                • Tổ chức rửa pin định kỳ 2 đợt (Đợt 1: Ngày 08-12/09; Đợt 2: Ngày 22-26/09) để đảm bảo độ sạch mặt pin.<br>
+                                • Duy trì làm mát cưỡng bức cho các khối Inverter lúc cao điểm trưa (11:00 - 13:00).<br>
+                                • Định kỳ chụp ảnh nhiệt hồng ngoại phát hiện sớm điểm nóng (Hot-spot).
                             </div>
                         </div>
                     </div>
