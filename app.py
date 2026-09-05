@@ -2789,7 +2789,7 @@ elif selected_menu == NAV_OPTIONS[6]:
 
         with col_dd3:
             show_poa = st.checkbox("☀️ Hiển thị Bức xạ POA/GHI (W/m²)", value=True, key="dd_show_poa")
-            zoom_sun = st.checkbox("🔍 Chỉ phóng to giờ nắng (05:30 - 18:00)", value=True, key="dd_zoom_sun")
+            time_window = st.selectbox("Khung giờ hiển thị:", ["05:00 - 18:00 (Giờ phát điện)", "00:00 - 23:59 (Toàn bộ 24h)"], index=0, key="dd_time_win")
 
         # Nạp dữ liệu Deep-Dive
         deep_res = inv_mgr.get_inverter_deepdive_profile(tf_code, selected_inv_id)
@@ -2822,63 +2822,111 @@ elif selected_menu == NAV_OPTIONS[6]:
             with dk6:
                 st.metric("🏢 Đỉnh Trạm Biến Áp", f"{d_met['station_peak_kw']:.1f} kW", delta=f"{deep_res['station_name']}")
 
-            # Lọc khung giờ nắng nếu chọn zoom
+            # Lọc khung giờ 05:00 - 18:00 chuẩn xác theo chỉ đạo người dùng
             df_plot = df_prof.copy()
-            if zoom_sun:
-                df_plot = df_plot[(df_plot['Timestamp'] >= '05:30') & (df_plot['Timestamp'] <= '18:00')]
+            if 'Time_HHMM' not in df_plot.columns:
+                df_plot['Time_HHMM'] = df_plot['Timestamp'].astype(str).apply(
+                    lambda x: re.search(r'(\d{1,2}:\d{2})', x).group(1).zfill(5) if re.search(r'(\d{1,2}:\d{2})', x) else x
+                )
 
-            # Vẽ biểu đồ chuỗi thời gian Plotly
+            if "05:00 - 18:00" in time_window:
+                df_plot = df_plot[(df_plot['Time_HHMM'] >= '05:00') & (df_plot['Time_HHMM'] <= '18:00')].copy()
+
+            # Vẽ biểu đồ chuỗi thời gian Plotly độ tương phản cao, màu sắc sắc nét
             from plotly.subplots import make_subplots
             fig_dd = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # Đường 1: Bức xạ POA (nếu bật)
+            # 1. Đường Bức xạ POA / GHI (nếu bật) - Màu vàng ánh dương trong suốt
             if show_poa and 'POA_Wm2' in df_plot.columns and df_plot['POA_Wm2'].max() > 0:
                 fig_dd.add_trace(
                     go.Scatter(
-                        x=df_plot['Timestamp'],
+                        x=df_plot['Time_HHMM'],
                         y=df_plot['POA_Wm2'],
                         name='☀️ Bức Xạ POA / GHI (W/m²)',
-                        line=dict(color='#F59E0B', width=1.5, dash='dot'),
+                        line=dict(color='#F59E0B', width=2),
                         fill='tozeroy',
-                        fillcolor='rgba(245, 158, 11, 0.08)',
-                        hovertemplate='Thời gian: %{x}<br>Bức xạ: <b>%{y:.1f} W/m²</b><extra></extra>'
+                        fillcolor='rgba(245, 158, 11, 0.12)',
+                        hovertemplate='Bức xạ POA: <b>%{y:.1f} W/m²</b><extra></extra>'
                     ),
                     secondary_y=True
                 )
 
-            # Đường 2: Trung vị Trạm P(kW)
+            # 2. Đường Trung Vị Trạm P (kW) - Màu xanh lam nổi bật làm chuẩn đối sánh
             fig_dd.add_trace(
                 go.Scatter(
-                    x=df_plot['Timestamp'],
+                    x=df_plot['Time_HHMM'],
                     y=df_plot['Station_Median_kW'],
                     name=f'🏢 Trung Vị Trạm {deep_res["station_tag"]} (kW)',
-                    line=dict(color='#0284C7', width=2, dash='dash'),
-                    hovertemplate='Thời gian: %{x}<br>TB Trạm: <b>%{y:.1f} kW</b><extra></extra>'
+                    line=dict(color='#1D4ED8', width=2.5, dash='solid'),
+                    hovertemplate=f'TB Trạm {deep_res["station_tag"]}: <b>%{{y:.1f}} kW</b><extra></extra>'
                 ),
                 secondary_y=False
             )
 
-            # Đường 3: Inverter được chọn P(kW)
-            inv_color = '#EF4444' if d_met['health_status'] == 'CRITICAL' else ('#F59E0B' if d_met['health_status'] == 'MAJOR' else ('#EAB308' if d_met['health_status'] == 'MINOR' else '#10B981'))
+            # 3. Đường Công Suất Inverter Được Chọn (kW) - Phân biệt màu trạng thái tương phản cao
+            color_map = {
+                'NORMAL': '#059669',    # Xanh ngọc đậm sắc nét
+                'MINOR': '#D97706',     # Vàng hổ phách
+                'MAJOR': '#EA580C',     # Cam đậm rực rỡ
+                'CRITICAL': '#DC2626'   # Đỏ thẫm cảnh báo
+            }
+            inv_color = color_map.get(d_met['health_status'], '#059669')
+
             fig_dd.add_trace(
                 go.Scatter(
-                    x=df_plot['Timestamp'],
+                    x=df_plot['Time_HHMM'],
                     y=df_plot['Inv_Power_kW'],
-                    name=f'⚡ {selected_inv_id} (kW)',
-                    line=dict(color=inv_color, width=3),
-                    hovertemplate='Thời gian: %{x}<br>Công suất Inverter: <b>%{y:.1f} kW</b><extra></extra>'
+                    name=f'⚡ {selected_inv_id} ({d_met["health_status"]})',
+                    line=dict(color=inv_color, width=3.5),
+                    hovertemplate=f'{selected_inv_id}: <b>%{{y:.1f}} kW</b><extra></extra>'
                 ),
                 secondary_y=False
             )
 
+            # Cấu hình lưới và hiển thị thời gian 05:00 - 18:00
+            tick_hours = [f"{h:02d}:00" for h in range(5, 19)] if "05:00 - 18:00" in time_window else [f"{h:02d}:00" for h in range(0, 24, 2)]
+            max_p = max(180.0, float(df_plot['Inv_Power_kW'].max()) * 1.08 if not df_plot.empty else 180.0, float(df_plot['Station_Median_kW'].max()) * 1.08 if not df_plot.empty else 180.0)
+
             fig_dd.update_layout(
-                title=f"<b>ĐƯỜNG CONG CÔNG SUẤT 1 PHÚT: {selected_inv_id} vs TRẠM {deep_res['station_name']} ({deep_res['date_str']})</b>",
+                title=dict(
+                    text=f"<b>ĐƯỜNG CONG CÔNG SUẤT 1 PHÚT: {selected_inv_id} vs TRẠM {deep_res['station_name']} ({deep_res['date_str']} | 05:00 - 18:00)</b>",
+                    font=dict(size=15, color='#0F172A')
+                ),
                 template='plotly_white',
-                height=460,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis=dict(title="Thời Gian (1 Phút)", showgrid=True),
-                yaxis=dict(title="Công Suất Inverter P (kW)", showgrid=True),
-                yaxis2=dict(title="Bức Xạ POA / GHI (W/m²)", showgrid=False)
+                height=480,
+                hovermode='x unified',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.03,
+                    xanchor="right",
+                    x=1,
+                    bgcolor="rgba(255, 255, 255, 0.8)",
+                    bordercolor="#E2E8F0",
+                    borderwidth=1
+                ),
+                xaxis=dict(
+                    title="Thời Gian (1 Phút / Điểm Đo)",
+                    tickmode='array',
+                    tickvals=tick_hours,
+                    showgrid=True,
+                    gridcolor='rgba(226, 232, 240, 0.8)',
+                    linecolor='#CBD5E1'
+                ),
+                yaxis=dict(
+                    title="Công Suất Inverter P (kW)",
+                    range=[0, max_p],
+                    showgrid=True,
+                    gridcolor='rgba(226, 232, 240, 0.8)',
+                    linecolor='#CBD5E1'
+                ),
+                yaxis2=dict(
+                    title="Bức Xạ Mặt Trời (W/m²)",
+                    range=[0, 1200],
+                    showgrid=False,
+                    linecolor='#CBD5E1'
+                ),
+                margin=dict(l=50, r=50, t=70, b=40)
             )
 
             st.plotly_chart(fig_dd, use_container_width=True)

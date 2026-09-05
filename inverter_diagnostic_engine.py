@@ -876,9 +876,22 @@ class InverterAnomalyManager:
             except Exception:
                 pass
 
-        # 8. Tạo DataFrame 1-minute profile
+        # 8. Trích xuất giờ phút HH:MM chuẩn xác cho 1,440 phút
+        clean_times = []
+        for ts in timestamps:
+            m = re.search(r'(\d{1,2}:\d{2})', str(ts))
+            if m:
+                t_s = m.group(1)
+                if len(t_s.split(':')[0]) == 1:
+                    t_s = '0' + t_s
+                clean_times.append(t_s)
+            else:
+                clean_times.append(str(ts))
+
+        # Tạo DataFrame 1-minute profile
         df_profile = pd.DataFrame({
             'Timestamp': timestamps,
+            'Time_HHMM': clean_times,
             'Inv_Power_kW': np.round(inv_power, 2),
             'Station_Median_kW': np.round(st_median_power, 2),
             'Station_Mean_kW': np.round(st_mean_power, 2),
