@@ -38,6 +38,7 @@ from performance_report_engine import (
 from inverter_diagnostic_engine import (
     InverterAnomalyManager,
     export_inverter_diagnostics_to_excel_bytes,
+    export_inverter_30day_heatmap_excel_bytes,
     STATION_CONFIG
 )
 
@@ -2494,7 +2495,7 @@ elif selected_menu == NAV_OPTIONS[6]:
             🚨 HỆ THỐNG PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN SỰ CỐ INVERTER (S1 - S7)
         </div>
         <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-            Tự động quét và phân tích dữ liệu 1 phút của <b>229 Inverter Huawei SUN2000-175KTL-H0</b> (Kiến trúc Fuseless - 18 Strings DC cắm trực tiếp vào Inverter, không tủ Combiner Box) thuộc <b>7 Trạm biến áp</b> (S1..S7) từ máy chủ SCADA (Đã loại trừ 4 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18, INV 2.2.18); phát hiện mất điện / ngắt CB AC 800V, hở mạch/lỏng giắc MC4 chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
+            Tự động quét và phân tích dữ liệu 1 phút của <b>229 Inverter Huawei SUN2000-175KTL-H0</b> Hệ thống phát hiện mất điện / ngắt CB AC 800V, hở mạch/lỏng giắc MC4 chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -2629,11 +2630,12 @@ elif selected_menu == NAV_OPTIONS[6]:
             st.success("✅ Toàn bộ 229 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
 
         # 3. BIỂU ĐỒ TRỰC QUAN HÓA
-        tab_chart1, tab_chart2, tab_chart3, tab_chart4 = st.tabs([
+        tab_chart1, tab_chart2, tab_chart3, tab_chart4, tab_chart5 = st.tabs([
             "📊 1. So Sánh Sản Lượng & Tổn Thất 7 Trạm (S1 - S7)",
-            "🗺️ 2. Ma Trận Trạng Thái 229 Inverter (Health Grid)",
+            "🧩 2. Ma Trận Trạng Thái 229 Inverter (Health Grid)",
             "🏆 3. Top 15 Inverter Phát Điện Tốt Nhất",
-            "📉 4. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất"
+            "📉 4. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất",
+            "🗺️ 5. Bản Đồ Nhiệt 30 Ngày & Chuỗi String DC"
         ])
 
         with tab_chart1:
@@ -2738,6 +2740,270 @@ elif selected_menu == NAV_OPTIONS[6]:
                 height=480
             )
             st.plotly_chart(fig_worst, use_container_width=True)
+
+        with tab_chart5:
+            st.markdown(r"""
+            <div style="background: #0F172A; border-radius: 10px; padding: 14px 20px; color: white; margin-bottom: 15px; border-left: 5px solid #F59E0B;">
+                <div style="font-weight: 750; font-size: 1.15rem; color: #F59E0B;">
+                    🗺️ BẢN ĐỒ NHIỆT 30 NGÀY & ƯỚC LƯỢNG SỐ CHUỖI STRING DC HỎNG (229 INVERTER HUAWEI 175KTL-H0)
+                </div>
+                <div style="font-size: 0.85rem; color: #CBD5E1; margin-top: 4px; line-height: 1.5;">
+                    Phân tích chuỗi thời gian 30 ngày cho <b>229 Inverter</b> (Kiến trúc Fuseless - 18 Strings DC cắm trực tiếp giắc MC4). Ước tính chính xác số chuỗi String DC bị hở mạch/mất dòng (<i>N_dead = 18 - N_active</i>), phát hiện lỗi kinh niên, Inverter ngắt CB nhiều ngày và định lượng tổng tổn thất năng lượng.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.spinner("⏳ Đang tổng hợp ma trận bản đồ nhiệt 30 ngày cho 229 Inverter..."):
+                hm_data = inv_mgr.get_inverter_30day_heatmap_data(target_date=tf_code, num_days=30)
+
+            if hm_data.get('status') == 'SUCCESS':
+                k30 = hm_data['kpis_30d']
+                
+                # 4 Thẻ KPI 30 Ngày
+                hk1, hk2, hk3, hk4 = st.columns(4)
+                with hk1:
+                    est_money_lost = k30['total_plant_loss_mwh_30d'] * 1000.0 * 1644.0 / 1e6 # Giả định giá FIT 1.644đ/kWh
+                    st.metric("📉 Tổng Tổn Thất 30 Ngày", f"{k30['total_plant_loss_mwh_30d']:,.3f} MWh", delta=f"~{est_money_lost:,.1f} triệu VNĐ thất thoát", delta_color="inverse")
+                with hk2:
+                    st.metric("🎯 TB Chuỗi String Hỏng", f"{k30['avg_dead_strings_per_day']:.1f} Strings/ngày", delta=f"Toàn nhà máy ({hm_data['num_days']} ngày)", delta_color="inverse" if k30['avg_dead_strings_per_day'] > 0 else "normal")
+                with hk3:
+                    st.metric("🚨 Inverter Lỗi Kinh Niên", f"{k30['chronic_inverters_count']} / {k30['total_inverters']} INV", delta="Lỗi hỏng ≥ 7 ngày", delta_color="inverse" if k30['chronic_inverters_count'] > 0 else "normal")
+                with hk4:
+                    st.metric("🟢 Inverter Hoàn Hảo", f"{k30['perfect_inverters_count']} / {k30['total_inverters']} INV", delta=f"{k30['perfect_inverters_count']/k30['total_inverters']*100:.1f}% vận hành 100% tốt")
+
+                st.markdown("---")
+
+                # Bộ điều khiển Heatmap
+                c_hm1, c_hm2, c_hm3, c_hm4 = st.columns([1.8, 1.4, 1.8, 1.4])
+                with c_hm1:
+                    hm_metric = st.selectbox(
+                        "Chỉ số hiển thị trên Bản đồ nhiệt:",
+                        [
+                            "🔴 Số Chuỗi String DC Hỏng (0 - 18 Chuỗi / INV)",
+                            "⚡ Tỉ Lệ Công Suất Phát (% Ratio vs Trạm)",
+                            "📉 Sản Lượng Tổn Thất (kWh / Ngày)"
+                        ],
+                        index=0,
+                        key="hm_metric_sel"
+                    )
+                with c_hm2:
+                    hm_station = st.selectbox(
+                        "Lọc theo trạm:",
+                        ["Tất Cả 7 Trạm (229 Inverter)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                        index=0,
+                        key="hm_station_sel"
+                    )
+                with c_hm3:
+                    hm_filter_fault = st.selectbox(
+                        "Lọc trạng thái Inverter:",
+                        [
+                            "Hiển thị toàn bộ Inverter trong phạm vi lọc",
+                            "🚨 Chỉ hiển thị Inverter có lỗi String DC trong 30 ngày",
+                            "🔴 Chỉ hiển thị Inverter lỗi Kinh Niên (≥ 7 ngày)"
+                        ],
+                        index=0,
+                        key="hm_fault_sel"
+                    )
+                with c_hm4:
+                    hm_sort = st.selectbox(
+                        "Sắp xếp hàng Inverter:",
+                        ["Theo Trạm & Thứ Tự Inverter", "Theo Mức Độ Lỗi Giảm Dần"],
+                        index=0,
+                        key="hm_sort_sel"
+                    )
+
+                # Chọn ma trận hiển thị
+                if "Số Chuỗi String DC Hỏng" in hm_metric:
+                    target_matrix = hm_data['matrix_dead_strings'].copy()
+                    colorscale = [
+                        [0.0, '#10B981'],    # 0 String hỏng (Xanh ngọc - Bình thường)
+                        [0.06, '#34D399'],   # 1 String
+                        [0.17, '#FBBF24'],   # 2-3 Strings (Vàng)
+                        [0.35, '#F59E0B'],   # 4-6 Strings (Cam hổ phách)
+                        [0.65, '#EF4444'],   # 7-12 Strings (Đỏ)
+                        [0.90, '#B91C1C'],   # 13-17 Strings (Đỏ đậm)
+                        [1.0, '#581C87']     # 18 Strings (Tím thẫm - Offline hoàn toàn)
+                    ]
+                    z_min, z_max = 0, 18
+                    colorbar_title = "Số String Hỏng"
+                    hover_val_label = "Số String DC hỏng"
+                    hover_unit = "chuỗi"
+                elif "Tỉ Lệ Công Suất" in hm_metric:
+                    target_matrix = hm_data['matrix_ratio'].copy()
+                    colorscale = 'RdYlGn'
+                    z_min, z_max = 0, 100
+                    colorbar_title = "Tỉ Lệ vs Trạm (%)"
+                    hover_val_label = "Hiệu suất vs Trạm"
+                    hover_unit = "%"
+                else:
+                    target_matrix = hm_data['matrix_loss'].copy()
+                    colorscale = 'YlOrRd'
+                    z_min, z_max = 0, float(target_matrix.drop(columns=['Station_Tag'], errors='ignore').max().max())
+                    colorbar_title = "Tổn Thất (kWh)"
+                    hover_val_label = "Tổn thất ước tính"
+                    hover_unit = "kWh"
+
+                # Lọc theo trạm
+                if "Tất Cả" not in hm_station:
+                    s_tag_pick = hm_station.split(' ')[0]
+                    target_matrix = target_matrix[target_matrix['Station_Tag'] == s_tag_pick]
+
+                # Bỏ cột Station_Tag khỏi ma trận vẽ
+                plot_matrix = target_matrix.drop(columns=['Station_Tag'], errors='ignore')
+
+                # Lọc theo lỗi nếu chọn
+                summary_30d = hm_data['inverter_summary_30d'].set_index('Inverter_ID')
+                if "Chỉ hiển thị Inverter có lỗi" in hm_filter_fault:
+                    faulty_inv_ids = summary_30d[summary_30d['Days_With_Fault'] > 0].index
+                    plot_matrix = plot_matrix.loc[plot_matrix.index.isin(faulty_inv_ids)]
+                elif "Chỉ hiển thị Inverter lỗi Kinh Niên" in hm_filter_fault:
+                    chronic_inv_ids = summary_30d[summary_30d['Days_With_Fault'] >= 7].index
+                    plot_matrix = plot_matrix.loc[plot_matrix.index.isin(chronic_inv_ids)]
+
+                # Sắp xếp
+                if "Mức Độ Lỗi Giảm Dần" in hm_sort and not plot_matrix.empty:
+                    order = [inv for inv in summary_30d.index if inv in plot_matrix.index]
+                    plot_matrix = plot_matrix.reindex(order)
+
+                if plot_matrix.empty:
+                    st.info("ℹ️ Không có Inverter nào thỏa mãn điều kiện lọc đã chọn.")
+                else:
+                    # Tạo Heatmap Plotly
+                    date_cols = plot_matrix.columns.tolist()
+                    inv_rows = plot_matrix.index.tolist()
+                    z_values = plot_matrix.values
+
+                    # Chiều cao linh hoạt theo số dòng
+                    chart_h = max(450, min(1200, len(inv_rows) * 16 + 150))
+
+                    fig_hm = go.Figure(data=go.Heatmap(
+                        z=z_values,
+                        x=date_cols,
+                        y=inv_rows,
+                        colorscale=colorscale,
+                        zmin=z_min,
+                        zmax=z_max,
+                        colorbar=dict(
+                            title=colorbar_title,
+                            thickness=15,
+                            len=0.8
+                        ),
+                        hovertemplate='<b>%{y}</b> (%{x})<br>' + hover_val_label + ': <b>%{z} ' + hover_unit + '</b><extra></extra>'
+                    ))
+
+                    fig_hm.update_layout(
+                        title=dict(
+                            text=f"<b>BẢN ĐỒ NHIỆT 30 NGÀY ({hm_data['start_date']} - {hm_data['end_date']}) - {len(inv_rows)} INVERTER</b>",
+                            font=dict(size=14, color='#0F172A')
+                        ),
+                        template='plotly_white',
+                        height=chart_h,
+                        xaxis=dict(
+                            title="Ngày Đo Đếm SCADA",
+                            tickangle=-45,
+                            showgrid=False
+                        ),
+                        yaxis=dict(
+                            title="Mã Inverter",
+                            autorange="reversed",
+                            dtick=1 if len(inv_rows) <= 50 else None,
+                            showgrid=False
+                        ),
+                        margin=dict(l=80, r=40, t=60, b=80)
+                    )
+
+                    st.plotly_chart(fig_hm, use_container_width=True)
+
+                # -------------------------------------------------------------
+                # BIỂU ĐỒ XU HƯỚNG TỔNG SỐ CHUỖI STRING HỎNG TOÀN NHÀ MÁY (30 NGÀY)
+                # -------------------------------------------------------------
+                st.markdown("##### 📈 Xu Hướng Tổng Số Chuỗi String DC Hỏng & Số Inverter Lỗi Toàn Nhà Máy (30 Ngày):")
+                df_daily_trend = hm_data['daily_metrics']
+                
+                from plotly.subplots import make_subplots
+                fig_trend = make_subplots(specs=[[{"secondary_y": True}]])
+
+                fig_trend.add_trace(
+                    go.Bar(
+                        x=df_daily_trend['date_str'],
+                        y=df_daily_trend['total_dead_strings'],
+                        name='🔴 Tổng Chuỗi String DC Hỏng (Toàn Nhà Máy)',
+                        marker_color='#EF4444',
+                        hovertemplate='Ngày: %{x}<br>Số String DC hỏng: <b>%{y} chuỗi</b><extra></extra>'
+                    ),
+                    secondary_y=False
+                )
+
+                fig_trend.add_trace(
+                    go.Scatter(
+                        x=df_daily_trend['date_str'],
+                        y=df_daily_trend['faulty_inverters_count'],
+                        name='⚠️ Số Inverter Có Lỗi (INV)',
+                        line=dict(color='#F59E0B', width=3),
+                        mode='lines+markers',
+                        hovertemplate='Ngày: %{x}<br>Số INV có lỗi: <b>%{y} Inverter</b><extra></extra>'
+                    ),
+                    secondary_y=True
+                )
+
+                fig_trend.update_layout(
+                    title="<b>DIỄN BIẾN SỰ CỐ CHUỖI STRING DC & INVERTER HỎNG THEO TỪNG NGÀY (30 NGÀY)</b>",
+                    template='plotly_white',
+                    height=380,
+                    hovermode='x unified',
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    xaxis=dict(title="Ngày", tickangle=-45),
+                    yaxis=dict(title="Tổng Chuỗi String DC Hỏng (Chuỗi)", showgrid=True),
+                    yaxis2=dict(title="Số Lượng Inverter Lỗi (INV)", showgrid=False)
+                )
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+                # -------------------------------------------------------------
+                # BẢNG TOP INVERTER LỖI KINH NIÊN & KHUYẾN NGHỊ O&M
+                # -------------------------------------------------------------
+                st.markdown("##### 📋 Bảng Danh Sách Inverter Có Sự Cố Chuỗi DC Nhiều Nhất Trong 30 Ngày (Cần Bảo Dưỡng O&M):")
+                df_chronic = hm_data['inverter_summary_30d'][hm_data['inverter_summary_30d']['Days_With_Fault'] > 0].copy()
+
+                if not df_chronic.empty:
+                    df_chronic_show = df_chronic[[
+                        'Inverter_ID', 'Station_Tag', 'Days_With_Fault', 'Critical_Days',
+                        'Avg_Dead_Strings', 'Max_Dead_Strings', 'Total_Loss_kWh_30d',
+                        'Avg_Ratio_Pct_30d', 'Fault_Pattern'
+                    ]].copy()
+                    df_chronic_show.columns = [
+                        'Mã Inverter', 'Trạm', 'Số Ngày Lỗi', 'Số Ngày Offline',
+                        'String Hỏng TB/Ngày', 'String Hỏng Max', 'Tổn Thất 30D (kWh)',
+                        'Hiệu Suất TB (%)', 'Phân Loại Tình Trạng O&M'
+                    ]
+                    st.dataframe(
+                        df_chronic_show.style.format({
+                            'String Hỏng TB/Ngày': '{:.1f}',
+                            'Tổn Thất 30D (kWh)': '{:,.1f}',
+                            'Hiệu Suất TB (%)': '{:.1f}%'
+                        }),
+                        use_container_width=True,
+                        height=min(400, len(df_chronic_show) * 38 + 50)
+                    )
+                else:
+                    st.success("🎉 Xuất sắc! Toàn bộ 229 Inverter trong 30 ngày qua đều vận hành tốt 100%, không phát hiện chuỗi String DC nào bị hỏng!")
+
+                # Nút tải Excel 30 ngày
+                st.markdown("---")
+                c_hm_dl1, c_hm_dl2 = st.columns([2.5, 3.5])
+                with c_hm_dl1:
+                    hm_excel_bytes = export_inverter_30day_heatmap_excel_bytes(hm_data)
+                    st.download_button(
+                        "📥 TẢI BÁO CÁO BẢN ĐỒ NHIỆT 30 NGÀY (.xlsx)",
+                        data=hm_excel_bytes,
+                        file_name=f"Bao_Cao_Ban_Do_Nhiet_30_Ngay_MyHiep_{hm_data['start_date'].replace('/', '')}_{hm_data['end_date'].replace('/', '')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                with c_hm_dl2:
+                    st.caption(f"File Excel bao gồm 5 Sheets: **Tổng quan KPIs 30 ngày**, **Ma trận 229x30 String DC hỏng**, **Ma trận Ratio %**, **Ma trận Tổn thất kWh**, và **Xu hướng ngày**.")
+            else:
+                st.warning(f"⚠️ {hm_data.get('message', 'Không thể tạo bản đồ nhiệt 30 ngày')}")
 
         # -------------------------------------------------------------
         # 4. CHỨC NĂNG SOI CHI TIẾT ĐƯỜNG CONG 1 PHÚT TỪNG INVERTER (DEEP-DIVE)

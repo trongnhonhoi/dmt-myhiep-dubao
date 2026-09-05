@@ -79,6 +79,14 @@ def decode_scada_bytes(raw_bytes: bytes) -> str:
     return cleaned.decode('latin1', errors='ignore')
 
 
+def normalize_inverter_name(inv_name: str, st_name: str) -> str:
+    """Chuẩn hóa tên Inverter và sửa các lỗi gõ nhầm tên từ nhà cung cấp SCADA (ví dụ S6 ghi nhầm INV-4-1-15 thành INV-6-1-15)"""
+    name = inv_name.strip()
+    if ('STATION-06' in st_name.upper() or 'S6' in st_name.upper() or '06' in st_name.upper()) and name == 'INV-4-1-15':
+        return 'INV-6-1-15'
+    return name
+
+
 def parse_station_fast(filepath_or_bytes: Any) -> Tuple[Optional[str], Optional[List[str]], Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Phân tích tốc độ cao file Trạm Inverter (S1..S7)
@@ -102,14 +110,15 @@ def parse_station_fast(filepath_or_bytes: Any) -> Tuple[Optional[str], Optional[
     h1 = lines[0].split(';')
     st_name = h1[0].strip()
 
-    # Tìm các cột Inverter P(kW) - Tự động loại bỏ các Inverter không tồn tại
+    # Tìm các cột Inverter P(kW) - Tự động loại bỏ các Inverter không tồn tại và chuẩn hóa tên
     inv_names = []
     inv_indices = []
     for i in range(3, len(h1), 2):
         if i < len(h1) and h1[i].strip():
             candidate_name = h1[i].strip()
             if not is_excluded_inverter(candidate_name):
-                inv_names.append(candidate_name)
+                norm_name = normalize_inverter_name(candidate_name, st_name)
+                inv_names.append(norm_name)
                 inv_indices.append(i)
 
     data_rows = []
@@ -166,7 +175,7 @@ def parse_station_full(filepath_or_bytes: Any) -> Tuple[Optional[str], Optional[
     h1 = lines[0].split(';')
     st_name = h1[0].strip()
 
-    inv_cols = [(h1[i].strip(), i) for i in range(3, len(h1), 2) if i < len(h1) and h1[i].strip() and not is_excluded_inverter(h1[i].strip())]
+    inv_cols = [(normalize_inverter_name(h1[i].strip(), st_name), i) for i in range(3, len(h1), 2) if i < len(h1) and h1[i].strip() and not is_excluded_inverter(h1[i].strip())]
     records = {inv[0]: [] for inv in inv_cols}
     timestamps = []
     tot_p_mw = []
@@ -992,6 +1001,196 @@ class InverterAnomalyManager:
             }
         }
 
+    def get_inverter_30day_heatmap_data(self, target_date: Any = None, num_days: int = 30) -> Dict[str, Any]:
+        """
+        Tổng hợp dữ liệu ma trận 30 ngày (229 Inverter x 30 ngày) cho:
+        1. Số chuỗi String DC bị hỏng (0 - 18 Strings / Inverter Huawei SUN2000-175KTL-H0)
+        2. Tỉ lệ công suất so với trạm (% Ratio)
+        3. Tổn thất sản lượng hàng ngày (kWh)
+        4. Trạng thái sức khỏe (NORMAL, MINOR, MAJOR, CRITICAL)
+        """
+        avail = self.get_available_s_dates()
+        if not avail:
+            return {'status': 'NO_DATA', 'message': 'Không tìm thấy dữ liệu SCADA trên máy chủ'}
+
+        # Xác định 30 ngày cần phân tích
+        if target_date is not None:
+            resolved_entries = self.resolve_timeframe_dates(target_date)
+            if resolved_entries:
+                ref_dt = resolved_entries[-1]['date']
+                matched_indices = [idx for idx, e in enumerate(avail) if e['date'] <= ref_dt]
+                if matched_indices:
+                    end_idx = matched_indices[-1] + 1
+                    start_idx = max(0, end_idx - num_days)
+                    selected_entries = avail[start_idx:end_idx]
+                else:
+                    selected_entries = avail[-min(num_days, len(avail)):]
+            else:
+                selected_entries = avail[-min(num_days, len(avail)):]
+        else:
+            selected_entries = avail[-min(num_days, len(avail)):]
+
+        if not selected_entries:
+            return {'status': 'NO_DATA', 'message': 'Không đủ dữ liệu ngày để lập bản đồ nhiệt'}
+
+        # Lấy danh sách 229 Inverter chuẩn hóa (theo thứ tự Trạm S1..S7)
+        # Nạp ngày đầu tiên để lấy danh sách Inverter đầy đủ
+        first_day_res = load_day_inverter_summary_fast(selected_entries[-1]['path'], selected_entries[-1]['date_str'])
+        if first_day_res['status'] != 'SUCCESS':
+            return {'status': 'NO_DATA', 'message': 'Không thể đọc cấu trúc Inverter'}
+
+        base_inv_df = first_day_res['inverter_table']
+        all_inverters = base_inv_df['Inverter_ID'].tolist()
+        inv_station_map = dict(zip(base_inv_df['Inverter_ID'], base_inv_df['Station_Tag']))
+
+        date_labels = [e['date_str'] for e in selected_entries]
+        short_date_labels = [e['date_str'][:5] for e in selected_entries] # DD/MM
+
+        # Khởi tạo các ma trận (Inverters x Days)
+        dead_strings_data = {inv: [] for inv in all_inverters}
+        ratio_data = {inv: [] for inv in all_inverters}
+        loss_kwh_data = {inv: [] for inv in all_inverters}
+        energy_kwh_data = {inv: [] for inv in all_inverters}
+        status_data = {inv: [] for inv in all_inverters}
+
+        daily_metrics = []
+
+        for entry in selected_entries:
+            d_res = load_day_inverter_summary_fast(entry['path'], entry['date_str'])
+            day_inv_map = {}
+            if d_res['status'] == 'SUCCESS':
+                for _, r in d_res['inverter_table'].iterrows():
+                    day_inv_map[r['Inverter_ID']] = r
+
+            day_total_dead_str = 0
+            day_faulty_invs = 0
+            day_loss_kwh = d_res.get('kpis', {}).get('total_loss_kwh', 0.0) if d_res['status'] == 'SUCCESS' else 0.0
+            day_energy_mwh = d_res.get('kpis', {}).get('total_energy_mwh', 0.0) if d_res['status'] == 'SUCCESS' else 0.0
+
+            for inv in all_inverters:
+                if inv in day_inv_map:
+                    row = day_inv_map[inv]
+                    ratio = float(row['Ratio_Station_Pct'])
+                    e_kwh = float(row['Energy_kWh'])
+                    loss = float(row['Est_Loss_kWh'])
+                    st = str(row['Health_Status'])
+
+                    # Tính số chuỗi hỏng ước lượng cho Huawei 175KTL-H0 (18 chuỗi DC)
+                    if st == 'CRITICAL' or e_kwh < 5.0:
+                        dead_str = 18
+                    else:
+                        active_str = max(0, min(18, int(round((ratio / 100.0) * 18))))
+                        dead_str = 18 - active_str
+                else:
+                    ratio = 0.0
+                    e_kwh = 0.0
+                    loss = 0.0
+                    st = 'CRITICAL'
+                    dead_str = 18
+
+                dead_strings_data[inv].append(dead_str)
+                ratio_data[inv].append(round(ratio, 1))
+                loss_kwh_data[inv].append(round(loss, 1))
+                energy_kwh_data[inv].append(round(e_kwh, 1))
+                status_data[inv].append(st)
+
+                if dead_str > 0:
+                    day_total_dead_str += dead_str
+                    day_faulty_invs += 1
+
+            daily_metrics.append({
+                'date_str': entry['date_str'],
+                'short_date': entry['date_str'][:5],
+                'total_dead_strings': day_total_dead_str,
+                'faulty_inverters_count': day_faulty_invs,
+                'total_loss_kwh': round(day_loss_kwh, 1),
+                'total_energy_mwh': round(day_energy_mwh, 2)
+            })
+
+        # Tạo DataFrames ma trận
+        df_matrix_dead_strings = pd.DataFrame(dead_strings_data, index=date_labels).T
+        df_matrix_ratio = pd.DataFrame(ratio_data, index=date_labels).T
+        df_matrix_loss = pd.DataFrame(loss_kwh_data, index=date_labels).T
+        df_matrix_status = pd.DataFrame(status_data, index=date_labels).T
+
+        # Thêm thông tin Station_Tag
+        df_matrix_dead_strings.insert(0, 'Station_Tag', [inv_station_map.get(i, 'S1') for i in df_matrix_dead_strings.index])
+        df_matrix_ratio.insert(0, 'Station_Tag', [inv_station_map.get(i, 'S1') for i in df_matrix_ratio.index])
+        df_matrix_loss.insert(0, 'Station_Tag', [inv_station_map.get(i, 'S1') for i in df_matrix_loss.index])
+
+        # Tính tổng hợp sức khỏe 30 ngày cho từng Inverter
+        inv_health_summary = []
+        for inv in all_inverters:
+            d_strs = dead_strings_data[inv]
+            ratios = ratio_data[inv]
+            losses = loss_kwh_data[inv]
+            statuses = status_data[inv]
+
+            days_count = len(d_strs)
+            fault_days = sum(1 for d in d_strs if d > 0)
+            crit_days = sum(1 for s in statuses if s == 'CRITICAL')
+            avg_dead = float(np.mean(d_strs))
+            max_dead = int(np.max(d_strs))
+            tot_loss = float(np.sum(losses))
+            avg_ratio = float(np.mean(ratios))
+
+            if fault_days >= 15 or crit_days >= 10:
+                pattern = '🔴 Hỏng Kinh Niên / Cần Sửa Chữa Ngay'
+                severity = 3
+            elif fault_days >= 5:
+                pattern = '🟠 Lỗi Thường Xuyên / Chập Chờn'
+                severity = 2
+            elif fault_days > 0:
+                pattern = '🟡 Lỗi Tạm Thời / Ngắn Hạn'
+                severity = 1
+            else:
+                pattern = '🟢 Hoạt Động Tốt Hoàn Toàn 30 Ngày'
+                severity = 0
+
+            inv_health_summary.append({
+                'Inverter_ID': inv,
+                'Station_Tag': inv_station_map.get(inv, 'S1'),
+                'Days_With_Fault': fault_days,
+                'Critical_Days': crit_days,
+                'Avg_Dead_Strings': round(avg_dead, 1),
+                'Max_Dead_Strings': max_dead,
+                'Total_Loss_kWh_30d': round(tot_loss, 1),
+                'Avg_Ratio_Pct_30d': round(avg_ratio, 1),
+                'Fault_Pattern': pattern,
+                'Severity': severity
+            })
+
+        df_inv_summary_30d = pd.DataFrame(inv_health_summary)
+        df_inv_summary_30d.sort_values(by=['Severity', 'Days_With_Fault', 'Total_Loss_kWh_30d'], ascending=[False, False, False], inplace=True)
+
+        # Tổng hợp thống kê toàn nhà máy 30 ngày
+        tot_plant_loss_30d = sum(m['total_loss_kwh'] for m in daily_metrics)
+        avg_dead_strings_plant = float(np.mean([m['total_dead_strings'] for m in daily_metrics]))
+        chronic_inv_count = sum(1 for r in inv_health_summary if r['Days_With_Fault'] >= 7)
+
+        return {
+            'status': 'SUCCESS',
+            'num_days': len(selected_entries),
+            'start_date': selected_entries[0]['date_str'],
+            'end_date': selected_entries[-1]['date_str'],
+            'date_labels': date_labels,
+            'short_date_labels': short_date_labels,
+            'inverter_list': all_inverters,
+            'matrix_dead_strings': df_matrix_dead_strings,
+            'matrix_ratio': df_matrix_ratio,
+            'matrix_loss': df_matrix_loss,
+            'matrix_status': df_matrix_status,
+            'inverter_summary_30d': df_inv_summary_30d,
+            'daily_metrics': pd.DataFrame(daily_metrics),
+            'kpis_30d': {
+                'total_plant_loss_mwh_30d': round(tot_plant_loss_30d / 1000.0, 3),
+                'avg_dead_strings_per_day': round(avg_dead_strings_plant, 1),
+                'chronic_inverters_count': chronic_inv_count,
+                'perfect_inverters_count': sum(1 for r in inv_health_summary if r['Days_With_Fault'] == 0),
+                'total_inverters': len(all_inverters)
+            }
+        }
+
 
 def export_inverter_diagnostics_to_excel_bytes(df_inverters: pd.DataFrame, kpis: Dict[str, Any]) -> bytes:
     """Xuất báo cáo chẩn đoán Inverter chuẩn Excel (.xlsx) với định dạng số và highlight lỗi"""
@@ -1022,3 +1221,46 @@ def export_inverter_diagnostics_to_excel_bytes(df_inverters: pd.DataFrame, kpis:
         pd.DataFrame(kpi_rows).to_excel(writer, sheet_name='Tong_Hop_KPIs', index=False)
 
     return output.getvalue()
+
+
+def export_inverter_30day_heatmap_excel_bytes(heatmap_data: Dict[str, Any]) -> bytes:
+    """Xuất báo cáo bản đồ nhiệt 30 ngày và ma trận chuỗi String DC ra file Excel (.xlsx)"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Tổng Hợp 30 Ngày
+        if 'inverter_summary_30d' in heatmap_data:
+            summary_export = heatmap_data['inverter_summary_30d'][[
+                'Inverter_ID', 'Station_Tag', 'Days_With_Fault', 'Critical_Days',
+                'Avg_Dead_Strings', 'Max_Dead_Strings', 'Total_Loss_kWh_30d',
+                'Avg_Ratio_Pct_30d', 'Fault_Pattern'
+            ]].copy()
+            summary_export.columns = [
+                'Mã Inverter', 'Trạm', 'Số Ngày Lỗi String', 'Số Ngày Offline',
+                'Số String Hỏng TB / Ngày', 'Số String Hỏng Max', 'Tổng Tổn Thất 30 Ngày (kWh)',
+                'Hiệu Suất TB 30 Ngày (%)', 'Phân Loại Sự Cố O&M'
+            ]
+            summary_export.to_excel(writer, sheet_name='Tong_Hop_30_Ngay', index=False)
+
+        # Sheet 2: Ma trận số chuỗi String DC hỏng (229 x 30)
+        if 'matrix_dead_strings' in heatmap_data:
+            heatmap_data['matrix_dead_strings'].to_excel(writer, sheet_name='Ma_Tran_String_Hong')
+
+        # Sheet 3: Ma trận Tỉ lệ công suất Ratio %
+        if 'matrix_ratio' in heatmap_data:
+            heatmap_data['matrix_ratio'].to_excel(writer, sheet_name='Ma_Tran_Ratio_Pct')
+
+        # Sheet 4: Ma trận Sản lượng tổn thất kWh
+        if 'matrix_loss' in heatmap_data:
+            heatmap_data['matrix_loss'].to_excel(writer, sheet_name='Ma_Tran_Ton_That_kWh')
+
+        # Sheet 5: Xu hướng tổng nhà máy theo ngày
+        if 'daily_metrics' in heatmap_data:
+            daily_export = heatmap_data['daily_metrics'].copy()
+            daily_export.columns = [
+                'Ngày', 'Ngày Ngắn', 'Tổng Số String DC Hỏng',
+                'Số Inverter Có Lỗi', 'Tổng Tổn Thất (kWh)', 'Tổng Sản Lượng (MWh)'
+            ]
+            daily_export.to_excel(writer, sheet_name='Xu_Huong_Ngay', index=False)
+
+    return output.getvalue()
+
