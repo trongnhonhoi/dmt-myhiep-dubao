@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import os
 import io
 
@@ -2321,6 +2321,9 @@ with tab_performance:
             if isinstance(d_range, tuple) and len(d_range) == 2:
                 s_date_kpi = datetime.combine(d_range[0], time.min)
                 e_date_kpi = datetime.combine(d_range[1], time.max)
+            elif isinstance(d_range, tuple) and len(d_range) == 1:
+                s_date_kpi = datetime.combine(d_range[0], time.min)
+                e_date_kpi = datetime.combine(d_range[0], time.max)
             else:
                 s_date_kpi = datetime(2026, 8, 1)
                 e_date_kpi = datetime(2026, 8, 26)
