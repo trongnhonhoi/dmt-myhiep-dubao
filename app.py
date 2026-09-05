@@ -2596,21 +2596,9 @@ elif selected_menu == NAV_OPTIONS[6]:
             # Highlight card alerts
             alert_items_html = ""
             for _, r in faulty_inverters.head(8).iterrows():
-                badge_color = "bg-danger" if r['Health_Status'] == 'CRITICAL' else ("bg-warning text-dark" if r['Health_Status'] == 'MAJOR' else "bg-info text-dark")
-                alert_items_html += f"""
-                <div class="col-md-6 mb-2">
-                    <div class="card p-2 border-start border-4 {'border-danger' if r['Health_Status'] == 'CRITICAL' else 'border-warning'} shadow-sm h-100">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> {r['Inverter_ID']} ({r['Station']})</span>
-                            <span class="badge {badge_color}">{r['Health_Status']}</span>
-                        </div>
-                        <div class="text-muted small mt-1">
-                            • <b>Hiện trạng:</b> {r['Anomaly_Type']}<br>
-                            • <b>Sản lượng:</b> <code>{r['Energy_kWh']:.1f} kWh/ng</code> | Đạt: <code>{r['Ratio_Station_Pct']:.1f}%</code> TB trạm | Mất: <code>~{r['Est_Loss_kWh']:.1f} kWh</code>
-                        </div>
-                    </div>
-                </div>
-                """
+                badge_color = "bg-danger text-white" if r['Health_Status'] == 'CRITICAL' else ("bg-warning text-dark" if r['Health_Status'] == 'MAJOR' else "bg-info text-dark")
+                border_color = "border-danger" if r['Health_Status'] == 'CRITICAL' else "border-warning"
+                alert_items_html += f'<div class="col-md-6 mb-2"><div class="card p-2 border-start border-4 {border_color} shadow-sm h-100"><div class="d-flex justify-content-between align-items-center"><span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> {r["Inverter_ID"]} ({r["Station"]})</span><span class="badge {badge_color}">{r["Health_Status"]}</span></div><div class="text-muted small mt-1">• <b>Hiện trạng:</b> {r["Anomaly_Type"]}<br>• <b>Sản lượng:</b> <code>{r["Energy_kWh"]:.1f} kWh/ng</code> | Đạt: <code>{r["Ratio_Station_Pct"]:.1f}%</code> TB trạm | Mất: <code>~{r["Est_Loss_kWh"]:.1f} kWh</code></div></div></div>'
             st.markdown(f'<div class="row g-2 mb-3">{alert_items_html}</div>', unsafe_allow_html=True)
         else:
             st.success("✅ Toàn bộ 233 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
