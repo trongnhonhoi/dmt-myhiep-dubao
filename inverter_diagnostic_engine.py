@@ -425,10 +425,11 @@ class InverterAnomalyManager:
         self._cached_dates = all_day_dirs
         return all_day_dirs
 
-    def resolve_timeframe_dates(self, timeframe_code: str) -> List[Dict[str, Any]]:
+    def resolve_timeframe_dates(self, timeframe_code: Any) -> List[Dict[str, Any]]:
         """
-        Xác định danh sách các ngày tương ứng với mã khung thời gian:
-        D-1..D-7, W-1..W-4, M-1..M-3
+        Xác định danh sách các ngày tương ứng với mã khung thời gian hoặc ngày bất kỳ:
+        - Ngày bất kỳ: 'YYYY-MM-DD', 'DD/MM/YYYY', datetime.date, datetime.datetime
+        - Mã chu kỳ: D-1..D-7 (hoặc D-x), W-1..W-4, M-1..M-3
         """
         avail = self.get_available_s_dates()
         if not avail:
@@ -437,30 +438,64 @@ class InverterAnomalyManager:
         latest_entry = avail[-1]
         latest_date = latest_entry['date']
 
-        # D-1 .. D-7
-        if timeframe_code.startswith('D-'):
+        # 1. Nếu là đối tượng datetime.date hoặc datetime.datetime
+        if isinstance(timeframe_code, (datetime, pd.Timestamp)):
+            target_dt = timeframe_code.date()
+            match = [e for e in avail if e['date'].date() == target_dt]
+            return match if match else []
+        elif hasattr(timeframe_code, 'year') and hasattr(timeframe_code, 'month') and hasattr(timeframe_code, 'day'):
+            target_dt = timeframe_code
+            match = [e for e in avail if e['date'].date() == target_dt]
+            return match if match else []
+
+        timeframe_code_str = str(timeframe_code).strip()
+
+        # 2. Định dạng chuỗi ngày YYYY-MM-DD
+        if re.match(r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}$', timeframe_code_str):
             try:
-                d_offset = int(timeframe_code.split('-')[1])
+                norm_str = timeframe_code_str.replace('/', '-')
+                parts = [int(p) for p in norm_str.split('-')]
+                target_dt = datetime(parts[0], parts[1], parts[2]).date()
+                match = [e for e in avail if e['date'].date() == target_dt]
+                return match if match else []
+            except Exception:
+                pass
+
+        # 3. Định dạng chuỗi ngày DD/MM/YYYY hoặc DD-MM-YYYY
+        if re.match(r'^\d{1,2}[-/]\d{1,2}[-/]\d{4}$', timeframe_code_str):
+            try:
+                norm_str = timeframe_code_str.replace('-', '/')
+                parts = [int(p) for p in norm_str.split('/')]
+                target_dt = datetime(parts[2], parts[1], parts[0]).date()
+                match = [e for e in avail if e['date'].date() == target_dt]
+                return match if match else []
+            except Exception:
+                pass
+
+        # 4. D-1 .. D-7 hoặc D-x
+        if timeframe_code_str.startswith('D-'):
+            try:
+                d_offset = int(timeframe_code_str.split('-')[1])
                 target_dt = latest_date - timedelta(days=d_offset - 1)
                 match = [e for e in avail if e['date'].date() == target_dt.date()]
                 return match if match else [avail[-min(d_offset, len(avail))]]
             except Exception:
                 return [latest_entry]
 
-        # W-1 .. W-4 (Mỗi tuần 7 ngày)
-        elif timeframe_code.startswith('W-'):
+        # 5. W-1 .. W-4 (Mỗi tuần 7 ngày)
+        elif timeframe_code_str.startswith('W-'):
             try:
-                w_offset = int(timeframe_code.split('-')[1])
+                w_offset = int(timeframe_code_str.split('-')[1])
                 end_idx = len(avail) - (w_offset - 1) * 7
                 start_idx = max(0, end_idx - 7)
                 return avail[start_idx:end_idx]
             except Exception:
                 return avail[-7:]
 
-        # M-1 .. M-3 (Tháng)
-        elif timeframe_code.startswith('M-'):
+        # 6. M-1 .. M-3 (Tháng)
+        elif timeframe_code_str.startswith('M-'):
             try:
-                m_offset = int(timeframe_code.split('-')[1])
+                m_offset = int(timeframe_code_str.split('-')[1])
                 cur_m = latest_date.month
                 cur_y = latest_date.year
 
@@ -480,6 +515,11 @@ class InverterAnomalyManager:
                     return avail[start_i:end_i]
             except Exception:
                 return avail[-30:]
+
+        # 7. Thử tìm kiếm trực tiếp trong date_str hoặc path
+        match = [e for e in avail if timeframe_code_str in e['date_str'] or timeframe_code_str in e['path']]
+        if match:
+            return match
 
         return [latest_entry]
 
