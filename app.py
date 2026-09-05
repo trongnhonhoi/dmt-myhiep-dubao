@@ -19,12 +19,19 @@ import data_harvester
 import weather_forecast_engine
 import exporter
 import historical_data_manager
+import performance_report_engine
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
 importlib.reload(weather_forecast_engine)
 importlib.reload(exporter)
 importlib.reload(historical_data_manager)
+importlib.reload(performance_report_engine)
+
+from performance_report_engine import (
+    generate_performance_kpi_table,
+    export_performance_report_to_excel_bytes
+)
 
 from solar_engine import (
     MyHiepSolarPlantConfig,
@@ -573,12 +580,13 @@ if current_day_data is None or current_day_data.get('forecast_15min') is None:
 # =========================================================================
 # 5 TAB ĐIỀU HÀNH & DỰ BÁO ĐA CHU KỲ & ĐỐI SOÁT LỊCH SỬ 4 CÔNG TƠ
 # =========================================================================
-tab_1day, tab_18c, tab_comp, tab_multi, tab_history = st.tabs([
+tab_1day, tab_18c, tab_comp, tab_multi, tab_history, tab_performance = st.tabs([
     "📊 1. Dự Báo 96 Chu Kỳ Ngày (File Đang Chọn)",
     "⚡ 2. Dự Báo 18 Chu Kỳ Cuốn Chiếu (4.5h)",
     "⚖️ 3. So Sánh & Đánh Giá Sai Số (Thực Tế vs Dự Báo)",
     "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
-    "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)"
+    "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
+    "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)"
 ])
 
 
@@ -2268,4 +2276,191 @@ with tab_history:
 
             st.write("")
             st.dataframe(df_hist, width='stretch', hide_index=True)
+
+
+# -------------------------------------------------------------------------
+# TAB 6: BÁO CÁO VẬN HÀNH & CHỈ SỐ HIỆU SUẤT PR (IEC 61724 - 19 CỘT)
+# -------------------------------------------------------------------------
+with tab_performance:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #10B981;">
+        <div style="font-size: 1.35rem; font-weight: 750; color: #34D399; margin-bottom: 4px;">
+            📋 BÁO CÁO CHỈ SỐ HIỆU SUẤT VẬN HÀNH & PR THEO TIÊU CHUẨN IEC 61724
+        </div>
+        <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
+            Tổng hợp dữ liệu vận hành chi tiết 19 cột phục vụ công tác O&M, đánh giá độ sẵn sàng (Availability), hệ số hiệu suất danh định (PR %) và hệ số hiệu suất đã hiệu chỉnh nhiệt độ tấm pin (PR Temp. Corr. %) theo chuẩn quốc tế IEC 61724 / IEC 61724-1.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Bộ điều khiển lọc thời gian
+    col_pf1, col_pf2, col_pf3 = st.columns([1.5, 1.5, 1.5])
+    with col_pf1:
+        perf_filter_mode = st.radio(
+            "📌 Chọn phạm vi báo cáo:",
+            ["📅 Theo Tháng", "📆 Tùy Chọn Khoảng Ngày", "🗄️ Toàn Bộ Lịch Sử (2020 - 2026)"],
+            index=0,
+            horizontal=False,
+            key="perf_filter_mode_select"
+        )
+    
+    with col_pf2:
+        if perf_filter_mode == "📅 Theo Tháng":
+            p_month = st.selectbox("Chọn tháng:", list(range(1, 13)), index=datetime.now().month - 1, key="p_month_sel")
+            p_year = st.selectbox("Chọn năm:", [2026, 2025, 2024, 2023, 2022, 2021, 2020], index=0, key="p_year_sel")
+            s_date_kpi = None
+            e_date_kpi = None
+        elif perf_filter_mode == "📆 Tùy Chọn Khoảng Ngày":
+            d_range = st.date_input(
+                "Chọn khoảng ngày (Từ ngày - Đến ngày):",
+                value=(datetime(2026, 8, 1), datetime(2026, 8, 26)),
+                key="perf_date_range_picker"
+            )
+            p_month = None
+            p_year = None
+            if isinstance(d_range, tuple) and len(d_range) == 2:
+                s_date_kpi = datetime.combine(d_range[0], time.min)
+                e_date_kpi = datetime.combine(d_range[1], time.max)
+            else:
+                s_date_kpi = datetime(2026, 8, 1)
+                e_date_kpi = datetime(2026, 8, 26)
+        else:
+            p_month = None
+            p_year = None
+            s_date_kpi = datetime(2020, 12, 1)
+            e_date_kpi = datetime.now()
+
+    with col_pf3:
+        st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True)
+        btn_gen_perf = st.button("🚀 Tổng Hợp & Xuất Báo Cáo", type="primary", width='stretch', key="btn_run_perf_calc")
+
+    # Tạo bảng dữ liệu KPI 19 cột
+    with st.spinner("Đang tính toán các chỉ số hiệu suất IEC 61724..."):
+        df_perf_table = generate_performance_kpi_table(
+            harvester=harvester,
+            start_date=s_date_kpi,
+            end_date=e_date_kpi,
+            month=p_month,
+            year=p_year
+        )
+
+    if not df_perf_table.empty:
+        # Thẻ chỉ số tổng hợp
+        total_e = float(df_perf_table['Energy'].sum())
+        avg_pr = float(df_perf_table['PR (%)'].mean())
+        avg_pr_tc = float(df_perf_table['PR Temp. Corr. (%)'].mean())
+        sum_poa = float(df_perf_table['POA'].sum())
+        avg_work_h = float(df_perf_table['Working hours'].mean())
+        avg_yield = float(df_perf_table['Specific Yield'].mean())
+        avg_avail = float(df_perf_table['Availability'].mean())
+
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        with m1:
+            st.metric("⚡ Tổng Sản Lượng", f"{total_e:,.2f} MWh", delta=f"{len(df_perf_table)} ngày")
+        with m2:
+            st.metric("☀️ Tổng Bức Xạ POA", f"{sum_poa:.2f} kWh/m²", delta=f"TB: {sum_poa/max(1, len(df_perf_table)):.2f} kWh/m²/ng")
+        with m3:
+            st.metric("🎯 PR Danh Định (TB)", f"{avg_pr:.2f}%", delta="Chuẩn IEC 61724")
+        with m4:
+            st.metric("🌡️ PR Hiệu Chỉnh Nhiệt", f"{avg_pr_tc:.2f}%", delta="Bù nhiệt Sharp NU-440")
+        with m5:
+            st.metric("⏱️ Giờ Phát TB", f"{avg_work_h:.2f} h/ngày", delta=f"Độ sẵn sàng: {avg_avail:.1f}%")
+        with m6:
+            st.metric("📊 Specific Yield TB", f"{avg_yield:.2f} kWh/kWp", delta="50 MWp Mỹ Hiệp")
+
+        # Nút xuất file Excel & CSV
+        st.write("")
+        c_p_btn1, c_p_btn2, c_p_info = st.columns([2.5, 2, 2.5])
+        with c_p_btn1:
+            perf_excel_bytes = export_performance_report_to_excel_bytes(
+                df_perf_table,
+                title_meta=f"BÁO CÁO VẬN HÀNH & CHỈ SỐ HIỆU SUẤT PR ({len(df_perf_table)} NGÀY)"
+            )
+            file_title_suffix = f"Thang_{p_month}_{p_year}" if p_month else f"{len(df_perf_table)}_Ngay"
+            st.download_button(
+                "📊 TẢI BÁO CÁO EXCEL 19 CỘT (.xlsx)",
+                data=perf_excel_bytes,
+                file_name=f"Bao_Cao_Hieu_Suat_PR_MyHiep_{file_title_suffix}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                width='stretch',
+                help="File Excel chuẩn 19 cột với định dạng số, công thức tự động và nhúng biểu đồ đồ họa."
+            )
+        with c_p_btn2:
+            csv_perf_bytes = df_perf_table.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button(
+                "📄 Tải Bảng CSV (.csv)",
+                data=csv_perf_bytes,
+                file_name=f"Bao_Cao_Hieu_Suat_PR_MyHiep_{file_title_suffix}.csv",
+                mime="text/csv",
+                type="secondary",
+                width='stretch'
+            )
+        with c_p_info:
+            st.caption(f"Đã tổng hợp thành công: **{len(df_perf_table)} ngày** | Chuẩn 19 cột IEC 61724.")
+
+        # Biểu đồ Plotly tương tác
+        from plotly.subplots import make_subplots
+        fig_perf = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # Cột Sản lượng (MWh)
+        fig_perf.add_trace(go.Bar(
+            x=df_perf_table['Date'],
+            y=df_perf_table['Energy'],
+            name='⚡ Sản lượng phát lưới (MWh)',
+            marker_color='#0284C7',
+            text=df_perf_table['Energy'].apply(lambda x: f"{x:.1f}"),
+            textposition='auto'
+        ), secondary_y=False)
+
+        # Đường PR (%)
+        fig_perf.add_trace(go.Scatter(
+            x=df_perf_table['Date'],
+            y=df_perf_table['PR (%)'],
+            name='🎯 Hệ số PR (%)',
+            mode='lines+markers',
+            line=dict(color='#10B981', width=2.5),
+            marker=dict(size=6, color='#10B981')
+        ), secondary_y=True)
+
+        # Đường PR Temp. Corr. (%)
+        fig_perf.add_trace(go.Scatter(
+            x=df_perf_table['Date'],
+            y=df_perf_table['PR Temp. Corr. (%)'],
+            name='🌡️ PR Hiệu Chỉnh Nhiệt (%)',
+            mode='lines',
+            line=dict(color='#6366F1', width=2, dash='dot')
+        ), secondary_y=True)
+
+        # Đường POA (kWh/m2)
+        fig_perf.add_trace(go.Scatter(
+            x=df_perf_table['Date'],
+            y=df_perf_table['POA'],
+            name='☀️ Bức xạ POA (kWh/m²)',
+            mode='lines+markers',
+            line=dict(color='#E11D48', width=2),
+            marker=dict(size=4, color='#E11D48')
+        ), secondary_y=True)
+
+        fig_perf.update_layout(
+            title="<b>BIỂU ĐỒ SẢN LƯỢNG (MWh), BỨC XẠ POA (kWh/m²) & HỆ SỐ HIỆU SUẤT PR (%) THEO NGÀY</b>",
+            xaxis_title="Ngày",
+            template="plotly_white",
+            height=460,
+            xaxis=dict(tickangle=-45),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        )
+        fig_perf.update_yaxes(title_text="Sản lượng phát lưới (MWh)", secondary_y=False, rangemode='tozero')
+        fig_perf.update_yaxes(title_text="PR (%) & Bức xạ POA (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
+
+        st.plotly_chart(fig_perf, width='stretch')
+
+        # Hiển thị bảng số liệu 19 cột tương tác
+        st.markdown("##### 📑 Bảng Chi Tiết 19 Cột Vận Hành & Chỉ Số Hiệu Suất PR:")
+        
+        display_df = df_perf_table.drop(columns=['Raw_Date'], errors='ignore')
+        st.dataframe(display_df, width='stretch', height=450, hide_index=True)
+    else:
+        st.warning("⚠️ Không tìm thấy dữ liệu cho khoảng thời gian đã chọn.")
+
 
