@@ -2499,11 +2499,7 @@ elif selected_menu == NAV_OPTIONS[6]:
     </div>
     """, unsafe_allow_html=True)
 
-    @st.cache_resource
-    def get_inv_anomaly_manager():
-        return InverterAnomalyManager(harvester)
-
-    inv_mgr = get_inv_anomaly_manager()
+    inv_mgr = InverterAnomalyManager(harvester)
 
     # Bộ điều khiển chọn khung thời gian (Chọn nhanh D-1..D-7, Chọn Ngày Bất Kỳ, W-1..W-4, M-1..M-3)
     col_tf1, col_tf2, col_tf3 = st.columns([1.6, 2.0, 1.4])

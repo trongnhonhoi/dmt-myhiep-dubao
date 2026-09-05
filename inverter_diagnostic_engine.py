@@ -452,6 +452,8 @@ class InverterAnomalyManager:
             os.path.join(base, str(y), f'*Thang*{m:02d}*', f'{d:02d}.{m:02d}*'),
             os.path.join(base, str(y), f'*', f'{d:02d}.{m:02d}*'),
             os.path.join(base, str(y), f'*', f'{d}.{m}*'),
+            os.path.join(base, str(y), f'*', f'{d:02d}.{m:02d}'),
+            os.path.join(base, '*', '*', f'{d:02d}.{m:02d}*')
         ]
         for cp in cand_patterns:
             matches = glob.glob(cp)
@@ -466,6 +468,24 @@ class InverterAnomalyManager:
                             'path': match,
                             's_count': len(s_files),
                             'files': [os.path.basename(f) for f in s_files]
+                        }
+
+        # Fallback duyệt thư mục năm
+        year_dir = os.path.join(base, str(y))
+        if os.path.exists(year_dir):
+            target_bname_prefix = f"{d:02d}.{m:02d}"
+            for root, dirs, files in os.walk(year_dir):
+                bname = os.path.basename(root)
+                if bname.startswith(target_bname_prefix):
+                    s_files = [f for f in files if re.match(r'.*S[1-7].*\.txt$', f, re.IGNORECASE)]
+                    if s_files:
+                        dt = datetime(y, m, d)
+                        return {
+                            'date': dt,
+                            'date_str': dt.strftime('%d/%m/%Y'),
+                            'path': root,
+                            's_count': len(s_files),
+                            'files': s_files
                         }
         return None
 
