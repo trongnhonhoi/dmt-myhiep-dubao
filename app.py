@@ -2505,12 +2505,17 @@ elif selected_menu == NAV_OPTIONS[6]:
 
     inv_mgr = get_inv_anomaly_manager()
 
-    # Bộ điều khiển chọn khung thời gian (D-1..D-7, Chọn Ngày Bất Kỳ, W-1..W-4, M-1..M-3)
-    col_tf1, col_tf2, col_tf3 = st.columns([1.5, 2.2, 1.3])
+    # Bộ điều khiển chọn khung thời gian (Chọn nhanh D-1..D-7, Chọn Ngày Bất Kỳ, W-1..W-4, M-1..M-3)
+    col_tf1, col_tf2, col_tf3 = st.columns([1.6, 2.0, 1.4])
     with col_tf1:
         group_mode = st.radio(
-            "📌 Chọn nhóm khung thời gian:",
-            ["📅 Theo Ngày Đơn Lẻ (D-1..D-7 / Tùy Chọn)", "🗓️ Theo Tuần (W-1 .. W-4)", "📊 Theo Tháng (M-1 .. M-3)"],
+            "📌 Chọn phương thức thời gian:",
+            [
+                "⚡ Chọn Nhanh (D-1 .. D-7)",
+                "🗓️ Chọn Ngày Bất Kỳ Từ Lịch",
+                "📅 Theo Tuần (W-1 .. W-4)",
+                "📊 Theo Tháng (M-1 .. M-3)"
+            ],
             index=0,
             key="inv_group_mode_radio"
         )
@@ -2520,9 +2525,9 @@ elif selected_menu == NAV_OPTIONS[6]:
         max_d = avail_dates[-1]['date'].date() if avail_dates else datetime.now().date()
         latest_date_str = avail_dates[-1]['date_str'] if avail_dates else ""
 
-        if "Theo Ngày Đơn Lẻ" in group_mode:
+        if "Chọn Nhanh" in group_mode:
             tf_selected = st.selectbox(
-                "Chọn ngày chẩn đoán:",
+                "Chọn ngày chẩn đoán (D-1 .. D-7):",
                 [
                     f"D-1 (Hôm qua / Mới nhất: {latest_date_str})",
                     "D-2 (Trước 2 ngày)",
@@ -2530,24 +2535,22 @@ elif selected_menu == NAV_OPTIONS[6]:
                     "D-4 (Trước 4 ngày)",
                     "D-5 (Trước 5 ngày)",
                     "D-6 (Trước 6 ngày)",
-                    "D-7 (Trước 7 ngày)",
-                    "🗓️ Chọn ngày bất kỳ từ Lịch (Date Picker)..."
+                    "D-7 (Trước 7 ngày)"
                 ],
                 index=0,
                 key="tf_sel_d"
             )
-            if "Chọn ngày bất kỳ" in tf_selected:
-                custom_date = st.date_input(
-                    "📅 Chọn ngày SCADA cần chẩn đoán:",
-                    value=max_d,
-                    min_value=min_d,
-                    max_value=max_d,
-                    format="DD/MM/YYYY",
-                    key="inv_custom_date_picker"
-                )
-                tf_code = custom_date.strftime('%Y-%m-%d')
-            else:
-                tf_code = tf_selected.split(' ')[0]
+            tf_code = tf_selected.split(' ')[0]
+        elif "Chọn Ngày Bất Kỳ" in group_mode:
+            custom_date = st.date_input(
+                "🗓️ Chọn ngày SCADA cần chẩn đoán:",
+                value=max_d,
+                min_value=min_d,
+                max_value=max_d,
+                format="DD/MM/YYYY",
+                key="inv_custom_date_picker"
+            )
+            tf_code = custom_date.strftime('%Y-%m-%d')
         elif "Theo Tuần" in group_mode:
             tf_selected = st.selectbox(
                 "Chọn tuần chẩn đoán:",
@@ -2579,7 +2582,15 @@ elif selected_menu == NAV_OPTIONS[6]:
         st.write("")
         btn_run_diag = st.button("🚀 Chạy Phân Tích & Chẩn Đoán", type="primary", use_container_width=True, key="btn_run_inv_diag")
 
-    with st.spinner(f"Đang quét file S1..S7 và phân tích 229 Inverter cho khung thời gian {tf_code}..."):
+    if '-' in tf_code and len(tf_code.split('-')[0]) == 4:
+        try:
+            tf_display = datetime.strptime(tf_code, '%Y-%m-%d').strftime('%d/%m/%Y')
+        except Exception:
+            tf_display = tf_code
+    else:
+        tf_display = tf_code
+
+    with st.spinner(f"Đang quét file S1..S7 và phân tích 229 Inverter cho {tf_display}..."):
         diag_res = inv_mgr.analyze_timeframe(tf_code)
 
     if diag_res.get('status') == 'SUCCESS':
@@ -2587,8 +2598,9 @@ elif selected_menu == NAV_OPTIONS[6]:
         df_inv = diag_res['inverter_table']
         alerts = diag_res['alerts']
         date_range = diag_res.get('date_range_str', '')
+        disp_title = f"Ngày {date_range}" if (date_range and not tf_code.startswith(('W-', 'M-'))) else f"{tf_code} ({date_range})"
 
-        st.markdown(f"#### 📊 Báo Cáo Chẩn Đoán: **{tf_code}** ({date_range})")
+        st.markdown(f"#### 📊 Báo Cáo Chẩn Đoán: **{disp_title}**")
 
         # 1. 6 Thẻ KPI tổng quan
         m1, m2, m3, m4, m5, m6 = st.columns(6)

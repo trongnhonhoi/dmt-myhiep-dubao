@@ -425,6 +425,50 @@ class InverterAnomalyManager:
         self._cached_dates = all_day_dirs
         return all_day_dirs
 
+    def find_day_dir_direct(self, target_dt: Any) -> Optional[Dict[str, Any]]:
+        """Tìm kiếm trực tiếp thư mục chứa file S1..S7 của 1 ngày bất kỳ"""
+        if isinstance(target_dt, datetime):
+            target_dt = target_dt.date()
+        elif isinstance(target_dt, str):
+            try:
+                if '-' in target_dt:
+                    parts = [int(p) for p in target_dt.split('-')]
+                    target_dt = datetime(parts[0], parts[1], parts[2]).date()
+                elif '/' in target_dt:
+                    parts = [int(p) for p in target_dt.split('/')]
+                    target_dt = datetime(parts[2], parts[1], parts[0]).date()
+            except Exception:
+                return None
+
+        if not hasattr(target_dt, 'year'):
+            return None
+
+        y, m, d = target_dt.year, target_dt.month, target_dt.day
+        base = self.harvester.base_path
+        cand_patterns = [
+            os.path.join(base, str(y), f'*THANG*{m}*', f'{d:02d}.{m:02d}*'),
+            os.path.join(base, str(y), f'*Thang*{m}*', f'{d:02d}.{m:02d}*'),
+            os.path.join(base, str(y), f'*THANG*{m:02d}*', f'{d:02d}.{m:02d}*'),
+            os.path.join(base, str(y), f'*Thang*{m:02d}*', f'{d:02d}.{m:02d}*'),
+            os.path.join(base, str(y), f'*', f'{d:02d}.{m:02d}*'),
+            os.path.join(base, str(y), f'*', f'{d}.{m}*'),
+        ]
+        for cp in cand_patterns:
+            matches = glob.glob(cp)
+            for match in matches:
+                if os.path.isdir(match):
+                    s_files = glob.glob(os.path.join(match, '*S[1-7]*.txt'))
+                    if s_files:
+                        dt = datetime(y, m, d)
+                        return {
+                            'date': dt,
+                            'date_str': dt.strftime('%d/%m/%Y'),
+                            'path': match,
+                            's_count': len(s_files),
+                            'files': [os.path.basename(f) for f in s_files]
+                        }
+        return None
+
     def resolve_timeframe_dates(self, timeframe_code: Any) -> List[Dict[str, Any]]:
         """
         Xác định danh sách các ngày tương ứng với mã khung thời gian hoặc ngày bất kỳ:
@@ -433,7 +477,9 @@ class InverterAnomalyManager:
         """
         avail = self.get_available_s_dates()
         if not avail:
-            return []
+            # Thử tìm kiếm trực tiếp ngày nếu có
+            direct_entry = self.find_day_dir_direct(timeframe_code)
+            return [direct_entry] if direct_entry else []
 
         latest_entry = avail[-1]
         latest_date = latest_entry['date']
@@ -442,11 +488,17 @@ class InverterAnomalyManager:
         if isinstance(timeframe_code, (datetime, pd.Timestamp)):
             target_dt = timeframe_code.date()
             match = [e for e in avail if e['date'].date() == target_dt]
-            return match if match else []
+            if match:
+                return match
+            direct_entry = self.find_day_dir_direct(target_dt)
+            return [direct_entry] if direct_entry else []
         elif hasattr(timeframe_code, 'year') and hasattr(timeframe_code, 'month') and hasattr(timeframe_code, 'day'):
             target_dt = timeframe_code
             match = [e for e in avail if e['date'].date() == target_dt]
-            return match if match else []
+            if match:
+                return match
+            direct_entry = self.find_day_dir_direct(target_dt)
+            return [direct_entry] if direct_entry else []
 
         timeframe_code_str = str(timeframe_code).strip()
 
@@ -457,7 +509,10 @@ class InverterAnomalyManager:
                 parts = [int(p) for p in norm_str.split('-')]
                 target_dt = datetime(parts[0], parts[1], parts[2]).date()
                 match = [e for e in avail if e['date'].date() == target_dt]
-                return match if match else []
+                if match:
+                    return match
+                direct_entry = self.find_day_dir_direct(target_dt)
+                return [direct_entry] if direct_entry else []
             except Exception:
                 pass
 
@@ -468,7 +523,10 @@ class InverterAnomalyManager:
                 parts = [int(p) for p in norm_str.split('/')]
                 target_dt = datetime(parts[2], parts[1], parts[0]).date()
                 match = [e for e in avail if e['date'].date() == target_dt]
-                return match if match else []
+                if match:
+                    return match
+                direct_entry = self.find_day_dir_direct(target_dt)
+                return [direct_entry] if direct_entry else []
             except Exception:
                 pass
 
