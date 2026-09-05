@@ -103,116 +103,117 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS giao diện Đậm Chất Ngành Năng Lượng Mặt Trời (Modern Clean Solar Station UI/UX)
+# =========================================================================
+# GIAO DIỆN BOOTSTRAP 5 CHUYÊN NGHIỆP - NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP
+# =========================================================================
 st.markdown("""
+<!-- Nhúng thư viện Bootstrap 5.3.3 & Bootstrap Icons 1.11.3 -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    :root {
+        --bs-primary: #0284C7;
+        --bs-primary-rgb: 2, 132, 199;
+        --bs-success: #10B981;
+        --bs-success-rgb: 16, 185, 129;
+        --bs-warning: #F59E0B;
+        --bs-warning-rgb: 245, 158, 11;
+        --bs-danger: #EF4444;
+        --bs-danger-rgb: 239, 68, 68;
+        --bs-dark: #0F172A;
+        --bs-dark-rgb: 15, 23, 42;
+        --bs-body-font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    /* Giảm khoảng trắng thừa trên cùng của trang */
+    html, body, [class*="css"] {
+        font-family: var(--bs-body-font-family) !important;
+        color: #1E293B;
+    }
+
     .block-container {
-        padding-top: 1.5rem !important;
+        padding-top: 1.25rem !important;
         padding-bottom: 2.5rem !important;
         max-width: 98% !important;
     }
 
-    /* Hero Banner Header Hiện Đại */
-    .hero-solar-banner {
-        background: linear-gradient(135deg, #0A192F 0%, #112240 50%, #002855 85%, #00509D 100%);
-        border-radius: 16px;
-        padding: 20px 26px;
-        color: white;
-        margin-bottom: 18px;
-        box-shadow: 0 10px 28px -6px rgba(0, 40, 85, 0.35);
-        border: 1px solid rgba(255, 214, 10, 0.25);
+    /* Bootstrap 5 Hero Card Header */
+    .bs-hero-banner {
+        background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0369A1 100%);
+        border-radius: 1rem;
+        padding: 1.5rem 1.75rem;
+        color: #FFFFFF;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         position: relative;
         overflow: hidden;
     }
-    .hero-solar-banner::after {
+    .bs-hero-banner::after {
         content: "⚡";
         position: absolute;
-        right: 20px;
-        top: 10px;
-        font-size: 5.0rem;
-        opacity: 0.10;
+        right: 1.5rem;
+        top: 0.5rem;
+        font-size: 5.5rem;
+        opacity: 0.08;
         pointer-events: none;
     }
-    .plant-main-title {
-        font-size: 2.1rem;
+    .bs-plant-title {
+        font-size: 2.15rem;
         font-weight: 800;
-        letter-spacing: 0.6px;
+        letter-spacing: 0.5px;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #FFD60A 0%, #FFC300 35%, #38BDF8 80%, #7DD3FC 100%);
+        background: linear-gradient(90deg, #FDE047 0%, #F59E0B 35%, #38BDF8 80%, #7DD3FC 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 3px;
         line-height: 1.2;
+        margin-bottom: 0.25rem;
     }
-    .plant-sub-title {
-        font-size: 0.95rem;
+    .bs-plant-subtitle {
+        font-size: 0.92rem;
         color: #CBD5E1;
         font-weight: 500;
-        margin-bottom: 10px;
-        letter-spacing: 0.2px;
-    }
-    
-    /* Solar Badges */
-    .solar-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 11px;
-        border-radius: 20px;
-        font-size: 0.80rem;
-        font-weight: 600;
-        margin-right: 6px;
-        margin-bottom: 4px;
-        transition: all 0.2s ease;
-    }
-    .solar-badge:hover {
-        transform: translateY(-1px);
-    }
-    .badge-dc {
-        background: rgba(255, 195, 0, 0.15);
-        color: #FDE047;
-        border: 1px solid rgba(253, 224, 71, 0.35);
-    }
-    .badge-ac {
-        background: rgba(56, 189, 248, 0.15);
-        color: #7DD3FC;
-        border: 1px solid rgba(56, 189, 248, 0.35);
-    }
-    .badge-module {
-        background: rgba(16, 185, 129, 0.15);
-        color: #6EE7B7;
-        border: 1px solid rgba(16, 185, 129, 0.35);
-    }
-    .badge-grid {
-        background: rgba(168, 85, 247, 0.15);
-        color: #D8B4FE;
-        border: 1px solid rgba(168, 85, 247, 0.35);
+        margin-bottom: 0.75rem;
     }
 
-    /* Tabs Styling - Gọn gàng, phân tầng chuyên nghiệp */
+    /* Bootstrap 5 Badges */
+    .bs-badge-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.8rem;
+        border-radius: 50rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        margin-right: 0.4rem;
+        margin-bottom: 0.35rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .bs-badge-pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Bootstrap 5 Nav Tabs & Nav Pills */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-        background-color: #F1F5F9;
-        padding: 6px 8px;
-        border-radius: 12px;
+        gap: 0.5rem;
+        background-color: #F8FAFC;
+        padding: 0.4rem 0.6rem;
+        border-radius: 0.75rem;
         border: 1px solid #E2E8F0;
-        margin-bottom: 14px;
+        margin-bottom: 1.25rem;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 8px !important;
-        padding: 8px 16px !important;
+        border-radius: 0.5rem !important;
+        padding: 0.55rem 1.15rem !important;
         font-weight: 600 !important;
-        font-size: 0.90rem !important;
+        font-size: 0.88rem !important;
         color: #475569 !important;
         background: transparent !important;
         border: none !important;
-        transition: all 0.2s ease !important;
+        transition: all 0.2s ease-in-out !important;
     }
     .stTabs [aria-selected="true"] {
         background-color: #FFFFFF !important;
@@ -221,205 +222,126 @@ st.markdown("""
         font-weight: 750 !important;
     }
 
-    /* Metric Cards - Siêu Đẹp & Gọn */
+    /* Bootstrap 5 Card Metrics */
     [data-testid="stMetric"] {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 14px 18px;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-        transition: all 0.25s ease;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        border-top: 3.5px solid #0284C7 !important;
+        transition: all 0.2s ease-in-out;
     }
     [data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
+        transform: translateY(-3px);
         box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
         border-color: #CBD5E1;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.82rem !important;
-        font-weight: 650 !important;
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
         color: #64748B !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.3px !important;
+        letter-spacing: 0.4px !important;
     }
     [data-testid="stMetricValue"] {
         font-size: 1.65rem !important;
         font-weight: 800 !important;
         color: #0F172A !important;
-        margin-top: 2px !important;
-        margin-bottom: 2px !important;
+        margin-top: 0.15rem !important;
+        margin-bottom: 0.15rem !important;
     }
     [data-testid="stMetricDelta"] {
-        font-size: 0.82rem !important;
+        font-size: 0.80rem !important;
         font-weight: 600 !important;
     }
 
-    /* Buttons Styling - Hiện đại & Chuẩn UI */
+    /* Bootstrap 5 Buttons */
     .stButton > button {
-        border-radius: 8px !important;
+        border-radius: 0.5rem !important;
         font-weight: 650 !important;
         font-size: 0.88rem !important;
-        padding: 8px 18px !important;
+        padding: 0.5rem 1.25rem !important;
         transition: all 0.2s ease !important;
+        border: 1px solid transparent !important;
     }
     .stButton > button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
     }
     .stDownloadButton > button {
-        border-radius: 8px !important;
+        border-radius: 0.5rem !important;
         font-weight: 650 !important;
         font-size: 0.88rem !important;
-        padding: 8px 16px !important;
+        padding: 0.5rem 1.2rem !important;
         transition: all 0.2s ease !important;
     }
     .stDownloadButton > button:hover {
         transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
 
-    /* Tinh chỉnh Dataframe & Table */
+    /* Bootstrap 5 Form Controls & Inputs */
+    .stTextInput input, .stNumberInput input, .stSelectbox select, .stDateInput input {
+        border-radius: 0.5rem !important;
+        border: 1px solid #CBD5E1 !important;
+        font-size: 0.90rem !important;
+        padding: 0.45rem 0.75rem !important;
+    }
+    .stTextInput input:focus, .stNumberInput input:focus, .stSelectbox select:focus, .stDateInput input:focus {
+        border-color: #0284C7 !important;
+        box-shadow: 0 0 0 0.25rem rgba(2, 132, 199, 0.15) !important;
+    }
+
+    /* Bootstrap 5 Tables & DataFrames */
     [data-testid="stDataFrame"] {
-        border-radius: 10px;
+        border-radius: 0.75rem;
         overflow: hidden;
         border: 1px solid #E2E8F0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
 
-    /* Khung Thuyết Minh Vận Hành Hiện Đại */
-    .narrative-box {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 14px;
-        padding: 20px;
-        margin-top: 14px;
-        margin-bottom: 18px;
-        box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+    /* Bootstrap 5 Alert Boxes */
+    .stAlert {
+        border-radius: 0.75rem !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
     }
-    .narrative-top-bar {
-        border-bottom: 2px solid #F1F5F9;
-        padding-bottom: 14px;
-        margin-bottom: 16px;
+
+    /* Bootstrap 5 Expanders / Accordion */
+    .streamlit-expanderHeader {
+        background-color: #F8FAFC !important;
+        border-radius: 0.5rem !important;
+        font-weight: 650 !important;
+        border: 1px solid #E2E8F0 !important;
+        padding: 0.75rem 1rem !important;
     }
-    .narrative-top-title {
-        font-size: 1.25rem;
-        font-weight: 800;
-        color: #0F172A;
-        letter-spacing: 0.2px;
-        margin-bottom: 4px;
+    .streamlit-expanderHeader:hover {
+        background-color: #F1F5F9 !important;
     }
-    .narrative-top-meta {
-        font-size: 0.88rem;
-        color: #64748B;
-        margin-bottom: 10px;
-    }
-    .narrative-badge-wrap {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-    .nbadge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 0.82rem;
-        font-weight: 650;
-    }
-    .nbadge-day {
-        background: #EFF6FF;
-        color: #1D4ED8;
-        border: 1px solid #BFDBFE;
-    }
-    .nbadge-weather {
+
+    /* SCADA Status Alert */
+    .bs-server-status {
         background: #F0FDF4;
-        color: #15803D;
         border: 1px solid #BBF7D0;
-    }
-    .nbadge-energy {
-        background: #FEF3C7;
-        color: #B45309;
-        border: 1px solid #FDE68A;
-    }
-    .nbadge-peak {
-        background: #F3E8FF;
-        color: #7E22CE;
-        border: 1px solid #E9D5FF;
-    }
-    
-    .narrative-cards-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-    }
-    @media (max-width: 900px) {
-        .narrative-cards-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-    
-    .ncard {
-        background: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        padding: 14px 16px;
-        transition: all 0.2s ease;
-    }
-    .ncard:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
-    }
-    .ncard-weather {
-        border-left: 4px solid #0284C7;
-    }
-    .ncard-power {
         border-left: 4px solid #10B981;
-    }
-    .ncard-temp {
-        border-left: 4px solid #F59E0B;
-    }
-    .ncard-dispatch {
-        border-left: 4px solid #8B5CF6;
-    }
-    
-    .ncard-head {
-        font-size: 0.94rem;
-        font-weight: 750;
-        color: #0F172A;
-        margin-bottom: 6px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .ncard-body {
+        border-radius: 0.5rem;
+        padding: 0.75rem 1.25rem;
         font-size: 0.88rem;
-        color: #334155;
-        line-height: 1.6;
-    }
-    .dispatch-item {
-        margin-bottom: 4px;
-        line-height: 1.5;
-    }
-
-    /* SCADA Server Bar */
-    .server-status-card {
-        background: linear-gradient(90deg, #F0FDF4 0%, #ECFDF5 100%);
-        border: 1px solid #A7F3D0;
-        border-left: 4px solid #10B981;
-        padding: 10px 16px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        font-size: 0.88rem;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- SIDEBAR CẤU HÌNH THÔNG SỐ VẬN HÀNH ---
+# --- SIDEBAR CẤU HÌNH THÔNG SỐ VẬN HÀNH (BOOTSTRAP THEME) ---
 with st.sidebar:
     if os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=190)
     else:
-        st.markdown("⚡ **ELECTRIC BIRD**")
-    st.markdown("## ⚙️ Cấu Hình Thông Số")
+        st.markdown("<h4 class='text-primary fw-bold'><i class='bi bi-lightning-charge-fill text-warning'></i> ELECTRIC BIRD</h4>", unsafe_allow_html=True)
+    
+    st.markdown("<h5 class='fw-bold mt-2'><i class='bi bi-sliders text-primary'></i> Cấu Hình Thông Số</h5>", unsafe_allow_html=True)
     st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")
     
     dc_capacity = st.number_input(
@@ -439,7 +361,7 @@ with st.sidebar:
         help="Tổng công suất định mức xoay chiều AC của hệ thống Inverter."
     )
 
-    st.markdown(f"**Tỉ số DC/AC:** `{dc_capacity / ac_capacity:.3f}` *(Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%)*")
+    st.markdown(f"<div class='p-2 bg-light rounded border text-muted small'><b>Tỉ số DC/AC:</b> <code>{dc_capacity / ac_capacity:.3f}</code> <span class='badge bg-warning text-dark'>Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%</span></div>", unsafe_allow_html=True)
 
     with st.expander("🔧 Thông số Tấm Pin Sharp NU-440", expanded=False):
         st.caption("Datasheet: Sharp NU-440 (NU-JD440) Monocrystalline")
@@ -481,23 +403,23 @@ calc_params = {
 
 
 # =========================================================================
-# BANNER TIÊU ĐỀ ĐẦU TRANG WEB - NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP
+# BANNER TIÊU ĐỀ BOOTSTRAP 5 - NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP
 # =========================================================================
-logo_img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="width: 105px; height: 105px; object-fit: contain; background: #FFFFFF; border-radius: 12px; padding: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.3); border: 2px solid rgba(255, 214, 10, 0.4);" />' if logo_b64 else ''
+logo_img_tag = f'<img src="data:image/png;base64,{logo_b64}" class="img-fluid rounded-3 p-1 bg-white shadow-sm border border-warning" style="width: 100px; height: 100px; object-fit: contain;" />' if logo_b64 else ''
 
 banner_html = f"""
-<div class="hero-solar-banner">
-    <div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap;">
+<div class="bs-hero-banner">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
         {logo_img_tag}
-        <div style="flex: 1; min-width: 280px;">
-            <div class="plant-main-title">NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP</div>
-            <div class="plant-sub-title">HỆ THỐNG DỰ BÁO SẢN LƯỢNG ĐIỆN QUANG ĐIỆN CHU KỲ 15 PHÚT (EVN / A0 / A3)</div>
-            <div style="margin-top: 6px;">
-                <span class="solar-badge badge-dc">☀️ DC: 50.00 MWp</span>
-                <span class="solar-badge badge-ac">⚡ AC Inverter: 40.075 MW</span>
-                <span class="solar-badge badge-module">🔷 Tấm Pin: Sharp NU-440 (-0.347%/°C)</span>
-                <span class="solar-badge badge-grid">🔌 Trạm Nâng Áp: 110kV / 22kV</span>
-                <span class="solar-badge badge-dc">📍 Vị trí: Thôn Vạn Phước, Xã Phù Mỹ Nam, T. Gia Lai (SĐT: 0256 3856 667)</span>
+        <div class="flex-grow-1">
+            <div class="bs-plant-title">NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP</div>
+            <div class="bs-plant-subtitle"><i class="bi bi-broadcast text-warning me-1"></i> HỆ THỐNG DỰ BÁO SẢN LƯỢNG ĐIỆN QUANG ĐIỆN CHU KỲ 15 PHÚT (EVN / A0 / A3)</div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <span class="bs-badge-pill bg-warning text-dark"><i class="bi bi-sun-fill"></i> DC: 50.00 MWp</span>
+                <span class="bs-badge-pill bg-info text-dark"><i class="bi bi-lightning-charge-fill"></i> AC Inverter: 40.075 MW</span>
+                <span class="bs-badge-pill bg-success text-white"><i class="bi bi-cpu-fill"></i> Tấm Pin: Sharp NU-440 (-0.347%/°C)</span>
+                <span class="bs-badge-pill bg-primary text-white"><i class="bi bi-diagram-3-fill"></i> Trạm Nâng Áp: 110kV / 22kV</span>
+                <span class="bs-badge-pill bg-dark text-white border border-secondary"><i class="bi bi-geo-alt-fill text-danger"></i> Thôn Vạn Phước, Xã Phù Mỹ Nam, T. Gia Lai</span>
             </div>
         </div>
     </div>
@@ -522,10 +444,15 @@ if server_connected:
     latest_date_str = latest_entry['date_str'] if latest_entry else "26/08/2026"
     
     st.markdown(f"""
-    <div class="server-status-card">
-        <b>🟢 Dữ Liệu SCADA:</b> <code>{DEFAULT_SERVER_PATH}</code><br>
-        • <b>Cơ sở dữ liệu lịch sử:</b> <code>{len(available_dates):,} ngày đo đếm</code> (2020 - 2026).<br>
-        • <b>Dữ liệu SCADA mới nhất:</b> Ngày <code>{latest_date_str}</code> (gồm đầy đủ <code>W.txt</code> trạm thời tiết và <code>P.txt</code>).
+    <div class="alert alert-success d-flex align-items-center shadow-sm py-2 px-3 mb-3 border-0 border-start border-4 border-success">
+        <div class="fs-4 me-3 text-success"><i class="bi bi-hdd-network-fill"></i></div>
+        <div class="flex-grow-1">
+            <div class="fw-bold text-dark"><i class="bi bi-check-circle-fill text-success me-1"></i> Máy Chủ SCADA Đang Hoạt Động: <code>{DEFAULT_SERVER_PATH}</code></div>
+            <div class="text-muted small mt-1">
+                <span class="badge bg-primary me-2"><i class="bi bi-calendar3"></i> {len(available_dates):,} ngày đo đếm (2020 - 2026)</span>
+                <span class="badge bg-info text-dark"><i class="bi bi-clock-history"></i> Mới nhất: {latest_date_str} (W.txt & P.txt)</span>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 else:
