@@ -2615,19 +2615,19 @@ elif selected_menu == NAV_OPTIONS[6]:
             if st_sums:
                 fig_st = go.Figure()
                 fig_st.add_trace(go.Bar(
-                    x=[f"{k} ({v['station_name']})" for k, v in st_sums.items()],
-                    y=[v['total_energy_mwh'] for v in st_sums.values()],
+                    x=[f"{k} ({v.get('station_name', k)})" for k, v in st_sums.items()],
+                    y=[v.get('total_energy_mwh', 0.0) for v in st_sums.values()],
                     name='⚡ Sản Lượng Phát (MWh)',
                     marker_color='#0284C7',
-                    text=[f"{v['total_energy_mwh']:.1f} MWh" for v in st_sums.values()],
+                    text=[f"{v.get('total_energy_mwh', 0.0):.1f} MWh" for v in st_sums.values()],
                     textposition='auto'
                 ))
                 fig_st.add_trace(go.Bar(
-                    x=[f"{k} ({v['station_name']})" for k, v in st_sums.items()],
-                    y=[v['total_loss_mwh'] for v in st_sums.values()],
+                    x=[f"{k} ({v.get('station_name', k)})" for k, v in st_sums.items()],
+                    y=[v.get('total_loss_mwh', 0.0) for v in st_sums.values()],
                     name='📉 Tổn Thất Do Lỗi (MWh)',
                     marker_color='#EF4444',
-                    text=[f"{v['total_loss_mwh']:.2f} MWh" if v['total_loss_mwh'] > 0.05 else "" for v in st_sums.values()],
+                    text=[f"{v.get('total_loss_mwh', 0.0):.2f} MWh" if v.get('total_loss_mwh', 0.0) > 0.01 else "" for v in st_sums.values()],
                     textposition='auto'
                 ))
                 fig_st.update_layout(

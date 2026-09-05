@@ -312,10 +312,17 @@ def load_day_inverter_summary_fast(day_dir: str, date_str: str = "") -> Dict[str
         'normal_count': count_normal,
         'plant_median_energy_kwh': plant_med_kwh,
         'total_loss_kwh': total_loss_kwh,
-        'total_loss_mwh': total_loss_kwh / 1000.0,
-        'total_energy_mwh': total_plant_energy_mwh,
-        'plant_availability_pct': (count_normal + count_minor) / max(1, total_inv) * 100.0
+        'total_loss_mwh': round(total_loss_kwh / 1000.0, 3),
+        'total_energy_mwh': round(total_plant_energy_mwh, 2),
+        'plant_availability_pct': round((count_normal + count_minor) / max(1, total_inv) * 100.0, 1)
     }
+
+    # Tính toán tổn thất và số lỗi theo từng trạm
+    for s_tag in station_summaries:
+        st_inverters = df_day[df_day['Station_Tag'] == s_tag]
+        st_loss_kwh = float(st_inverters['Est_Loss_kWh'].sum()) if not st_inverters.empty else 0.0
+        station_summaries[s_tag]['total_loss_mwh'] = round(st_loss_kwh / 1000.0, 3)
+        station_summaries[s_tag]['fault_count'] = int((st_inverters['Health_Status'] != 'NORMAL').sum()) if not st_inverters.empty else 0
 
     res = {
         'status': 'SUCCESS',
