@@ -1217,14 +1217,26 @@ with tab_multi:
     </div>
     """, unsafe_allow_html=True)
     
+    cur_sys_dt = datetime.now()
+    cur_year = cur_sys_dt.year
+    cur_month = cur_sys_dt.month
+    
+    if cur_month == 12:
+        next_month_idx = 1
+        next_year_idx = cur_year + 1
+    else:
+        next_month_idx = cur_month + 1
+        next_year_idx = cur_year
+
     subtab_unified, subtab_2d, subtab_7d, subtab_30d, subtab_eom, subtab_nextm = st.tabs([
         "🌟 1. Mô Hình Dự Báo Thống Nhất (Lai Ghép Khí Tượng & Lịch Sử SCADA)",
         "📅 2. Dự Báo 2 Ngày Tới (192 Chu Kỳ - D+1, D+2)",
         "🗓️ 3. Dự Báo 7 Ngày Tới (672 Chu Kỳ - Lịch Tuần)",
         "📊 4. Dự Báo 30 Ngày Tới (Month-Ahead)",
-        "🏁 5. Dự Báo Cuối Tháng 8/2026 (MTD + Còn lại)",
-        "📈 6. Dự Báo Toàn Bộ Tháng 9/2026"
+        f"🏁 5. Dự Báo Cuối Tháng {cur_month}/{cur_year} (MTD + Còn lại)",
+        f"📈 6. Dự Báo Toàn Bộ Tháng {next_month_idx}/{next_year_idx}"
     ])
+
 
     
     # 1. MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE)
@@ -1748,19 +1760,19 @@ with tab_multi:
         st.download_button("📥 Tải Báo Cáo 30 Ngày (.xlsx)", data=export_multi_day_to_excel_bytes(df_30d_15, df_30d_daily, kpi_30d, "30_NGAY"), file_name=f"Du_Bao_30Ngay_{date_30d_start.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
 
 
-    # 5. DỰ BÁO CUỐI THÁNG 8/2026
+    # 5. DỰ BÁO CUỐI THÁNG HIỆN TẠI
     with subtab_eom:
-        st.markdown("#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng 8/2026")
+        st.markdown(f"#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng {cur_month}/{cur_year} (Tháng Hiện Tại)")
         
-        enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên bức xạ các ngày gần nhất và dự báo thời tiết.")
+        enable_ai_eom = st.toggle(f"🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại Tháng {cur_month}/{cur_year}", value=True, key="tog_ai_eom", help=f"AI dự báo chính xác các ngày còn lại trong tháng {cur_month}/{cur_year} dựa trên bức xạ các ngày gần nhất và dự báo thời tiết.")
         
-        eom_res = forecast_end_of_month(harvester, year=2026, month=8, params=calc_params, enable_ai=enable_ai_eom)
+        eom_res = forecast_end_of_month(harvester, year=cur_year, month=cur_month, params=calc_params, enable_ai=enable_ai_eom)
         
         st.caption(f"Cột trước ngày hiện tại (Ngày 01 đến ngày D-1: {eom_res['last_recorded_str']}): Số liệu sản lượng tổng hợp và tích phân trực tiếp 100% từ file **P.txt (Sản lượng SCADA)**. Cột dự báo (Từ ngày D: {eom_res['forecast_start_str']} đến ngày cuối tháng: {eom_res['end_month_str']}): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
 
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            st.metric("🏆 Dự Báo Cả Tháng 8", f"{eom_res['total_projected_month_mwh']:,.2f} MWh", delta=f"{eom_res['total_projected_month_gwh']:.3f} GWh")
+            st.metric(f"🏆 Dự Báo Cả Tháng {cur_month}/{cur_year}", f"{eom_res['total_projected_month_mwh']:,.2f} MWh", delta=f"{eom_res['total_projected_month_gwh']:.3f} GWh")
         with k2:
             st.metric(f"🟢 Thực Tế P.txt (01 đến D-1)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày (Đến {eom_res['last_recorded_str']})")
         with k3:
@@ -1805,7 +1817,7 @@ with tab_multi:
         ), secondary_y=True)
 
         fig_eom.update_layout(
-            title="<b>BIỂU ĐỒ SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY (Xanh: Thực tế P.txt từ ngày 01 đến D-1 | Cam: Dự báo AI từ ngày D đến cuối tháng)</b>",
+            title=f"<b>BIỂU ĐỒ SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY THÁNG {cur_month}/{cur_year} (Xanh: Thực tế P.txt từ ngày 01 đến D-1 | Cam: Dự báo AI từ ngày D đến cuối tháng)</b>",
             xaxis_title="Ngày Trong Tháng",
             template="plotly_white",
             height=430,
@@ -1817,29 +1829,28 @@ with tab_multi:
         fig_eom.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
 
         st.plotly_chart(fig_eom, width='stretch')
-
         
         st.dataframe(df_fm, width='stretch', hide_index=True)
 
 
-    # 6. DỰ BÁO THÁNG TIẾP THEO (THÁNG 9/2026)
+    # 6. DỰ BÁO THÁNG TIẾP THEO
     with subtab_nextm:
-        st.markdown("#### 📈 Dự Báo Toàn Bộ Sản Lượng Tháng Tiếp Theo (Tháng 9/2026)")
-        st.caption("Dự báo toàn bộ 30 ngày của Tháng 9/2026 dựa trên mô hình AI phân tích bức xạ mùa vụ Nam Trung Bộ (Bình Định) và cấu hình 50MWp / 40.075MW ĐMT Mỹ Hiệp.")
+        st.markdown(f"#### 📈 Dự Báo Toàn Bộ Sản Lượng Tháng Tiếp Theo (Tháng {next_month_idx}/{next_year_idx})")
+        st.caption(f"Dự báo toàn bộ {next_month_idx} dựa trên mô hình AI phân tích bức xạ mùa vụ Nam Trung Bộ (Bình Định) và cấu hình 50MWp / 40.075MW ĐMT Mỹ Hiệp.")
         
-        enable_ai_nextm = st.toggle("🧠 Tích Hợp AI Chuỗi Thời Gian Tháng 9/2026", value=True, key="tog_ai_nextm", help="Mô hình AI dự báo chuỗi thời gian phân tích mùa vụ tháng 9.")
+        enable_ai_nextm = st.toggle(f"🧠 Tích Hợp AI Chuỗi Thời Gian Tháng {next_month_idx}/{next_year_idx}", value=True, key="tog_ai_nextm", help=f"Mô hình AI dự báo chuỗi thời gian phân tích mùa vụ tháng {next_month_idx}.")
         
-        next_m_res = forecast_next_month(current_year=2026, current_month=8, params=calc_params, enable_ai=enable_ai_nextm)
+        next_m_res = forecast_next_month(current_year=cur_year, current_month=cur_month, params=calc_params, enable_ai=enable_ai_nextm)
         
         k1, k2, k3, k4 = st.columns(4)
         with k1:
-            st.metric("🏆 Tổng Sản Lượng Tháng 9", f"{next_m_res['total_energy_mwh']:,.2f} MWh", delta=f"{next_m_res['total_energy_gwh']:.3f} GWh")
+            st.metric(f"🏆 Tổng Sản Lượng Tháng {next_m_res['target_month']}", f"{next_m_res['total_energy_mwh']:,.2f} MWh", delta=f"{next_m_res['total_energy_gwh']:.3f} GWh")
         with k2:
             st.metric("📊 Sản Lượng TB Ngày", f"{next_m_res['avg_daily_mwh']:.2f} MWh/ngày", delta=f"Bức xạ TB: {next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²")
         with k3:
             st.metric("📈 P_Grid Đỉnh Dự Kiến", f"{next_m_res['peak_grid_mw']:.2f} MW", delta="Trần 40.075 MW")
         with k4:
-            st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày", delta="Tháng 9")
+            st.metric("☀️ Bức Xạ TB Mùa Vụ", f"{next_m_res.get('avg_insolation_kwh_m2', 4.06):.2f} kWh/m²/ngày", delta=f"Tháng {next_m_res['target_month']}")
             
         from plotly.subplots import make_subplots
         fig_nextm = make_subplots(specs=[[{"secondary_y": True}]])
@@ -1858,7 +1869,7 @@ with tab_multi:
             marker=dict(size=4, color='#F59E0B')
         ), secondary_y=True)
         fig_nextm.update_layout(
-            title="<b>DỰ BÁO SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY 30 NGÀY THÁNG 9/2026 (MWh - TÍCH HỢP AI)</b>", 
+            title=f"<b>DỰ BÁO SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY THÁNG {next_m_res['target_month']:02d}/{next_m_res['target_year']} ({next_m_res['days_in_month']} NGÀY - TÍCH HỢP AI)</b>", 
             xaxis_title="Ngày", 
             template="plotly_white", 
             height=420, 
@@ -1870,31 +1881,31 @@ with tab_multi:
         st.plotly_chart(fig_nextm, width='stretch')
         
         # KHU VỰC XUẤT BÁO CÁO EXCEL ĐẦY ĐỦ BIỂU ĐỒ & THUYẾT MINH
-        st.markdown("##### 📥 Xuất Báo Cáo Nội Bộ Dự Báo Kế Hoạch Sản Lượng Tháng 9/2026 (File Excel Chuẩn O&M Nhà Máy):")
+        st.markdown(f"##### 📥 Xuất Báo Cáo Nội Bộ Dự Báo Kế Hoạch Sản Lượng Tháng {next_m_res['target_month']:02d}/{next_m_res['target_year']} (File Excel Chuẩn O&M Nhà Máy):")
         c_ex1, c_ex2, c_ex3 = st.columns([2.5, 1.5, 1.5])
         with c_ex1:
             excel_nextm_bytes = export_next_month_forecast_to_excel_bytes(next_m_res, params=calc_params)
             st.download_button(
-                "📊 TẢI BÁO CÁO EXCEL NỘI BỘ THÁNG 9/2026 (.xlsx)",
+                f"📊 TẢI BÁO CÁO EXCEL NỘI BỘ THÁNG {next_m_res['target_month']:02d}/{next_m_res['target_year']} (.xlsx)",
                 data=excel_nextm_bytes,
                 file_name=f"Bao_Cao_Noi_Bo_Du_Bao_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}_MyHiep.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
                 width='stretch',
-                help="File Excel nội bộ gồm 4 Sheet: 1. Thuyết minh kỹ thuật & quản lý O&M | 2. Tổng hợp 30 ngày & Biểu đồ Excel nhúng | 3. Chi tiết 2.880 chu kỳ 15 phút | 4. Dữ liệu chứng minh & Đối soát SCADA."
+                help="File Excel nội bộ gồm 4 Sheet: 1. Thuyết minh kỹ thuật & quản lý O&M | 2. Tổng hợp các ngày & Biểu đồ Excel nhúng | 3. Chi tiết các chu kỳ 15 phút | 4. Dữ liệu chứng minh & Đối soát SCADA."
             )
         with c_ex2:
             st.download_button(
-                "📄 Tải Bảng 30 Ngày (.csv)",
+                f"📄 Tải Bảng {next_m_res['days_in_month']} Ngày (.csv)",
                 data=next_m_res['df_daily'].to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
-                file_name=f"Tong_Hop_30Ngay_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}.csv",
+                file_name=f"Tong_Hop_{next_m_res['days_in_month']}Ngay_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}.csv",
                 mime="text/csv",
                 width='stretch'
             )
         with c_ex3:
             df_15_exp = prepare_export_dataframe(next_m_res['df_15min'])
             st.download_button(
-                "⏱️ Tải 2.880 Chu Kỳ 15p (.csv)",
+                f"⏱️ Tải {len(df_15_exp):,} Chu Kỳ 15p (.csv)",
                 data=df_15_exp.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'),
                 file_name=f"Chi_Tiet_15Phut_Thang_{next_m_res['target_month']:02d}_{next_m_res['target_year']}.csv",
                 mime="text/csv",

@@ -618,6 +618,7 @@ def forecast_next_month(
         "target_month": next_month,
         "target_month_name": f"Tháng {next_month}/{next_year}",
         "days_count": days_in_next_month,
+        "days_in_month": days_in_next_month,
         "total_energy_mwh": kpis['total_energy_mwh'],
         "total_energy_gwh": kpis['total_energy_gwh'],
         "avg_daily_mwh": kpis['avg_daily_mwh'],
