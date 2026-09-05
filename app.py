@@ -1,7 +1,6 @@
 """
-HỆ THỐNG DỰ BÁO SẢN LƯỢNG ĐIỆN MẶT TRỜI CHU KỲ 15 PHÚT
-NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp / 40.075MW) - PHÙ MỸ, BÌNH ĐỊNH
-Giao diện chuyên ngành năng lượng mặt trời hiện đại, trực quan, sinh động
+DỰ BÁO SẢN LƯỢNG ĐIỆN MẶT TRỜI CHU KỲ 15 PHÚT
+NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp / 40.075MW) - PHÙ MỸ NAM
 """
 
 import streamlit as st
@@ -517,9 +516,9 @@ if server_connected:
     
     st.markdown(f"""
     <div class="server-status-card">
-        <b>🟢 Máy Chủ Dữ Liệu SCADA Trực Tuyến:</b> <code>{DEFAULT_SERVER_PATH}</code><br>
+        <b>🟢 Dữ Liệu SCADA:</b> <code>{DEFAULT_SERVER_PATH}</code><br>
         • <b>Cơ sở dữ liệu lịch sử:</b> <code>{len(available_dates):,} ngày đo đếm</code> (2020 - 2026).<br>
-        • <b>Dữ liệu SCADA mới nhất:</b> Ngày <code>{latest_date_str}</code> (gồm đầy đủ <code>W.txt</code> trạm thời tiết và <code>P.txt</code> đo đếm 110kV).
+        • <b>Dữ liệu SCADA mới nhất:</b> Ngày <code>{latest_date_str}</code> (gồm đầy đủ <code>W.txt</code> trạm thời tiết và <code>P.txt</code>).
     </div>
     """, unsafe_allow_html=True)
 else:
@@ -578,7 +577,7 @@ tab_1day, tab_18c, tab_comp, tab_multi, tab_history = st.tabs([
     "📊 1. Dự Báo 96 Chu Kỳ Ngày (File Đang Chọn)",
     "⚡ 2. Dự Báo 18 Chu Kỳ Cuốn Chiếu (4.5h)",
     "⚖️ 3. So Sánh & Đánh Giá Sai Số (Thực Tế vs Dự Báo)",
-    "🔮 4. Dự Báo Đa Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
+    "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
     "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)"
 ])
 
@@ -1752,44 +1751,44 @@ with tab_multi:
     # 5. DỰ BÁO CUỐI THÁNG 8/2026
     with subtab_eom:
         st.markdown("#### 🏁 Dự Báo Tổng Sản Lượng Cuối Tháng 8/2026")
-        st.caption("Cột trước ngày hiện tại (01 - 26/08): Số liệu sản lượng tổng hợp trực tiếp từ file **P.txt** (Đo đếm 110kV SCADA / Công tơ 171C). Cột dự báo (27 - 31/08): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
         
         enable_ai_eom = st.toggle("🧠 Tích Hợp AI Hiệu Chỉnh Phần Còn Lại", value=True, key="tog_ai_eom", help="AI dự báo chính xác các ngày còn lại trong tháng dựa trên bức xạ các ngày gần nhất và dự báo thời tiết.")
         
         eom_res = forecast_end_of_month(harvester, year=2026, month=8, params=calc_params, enable_ai=enable_ai_eom)
         
+        st.caption(f"Cột trước ngày hiện tại (Ngày 01 đến ngày D-1: {eom_res['last_recorded_str']}): Số liệu sản lượng tổng hợp và tích phân trực tiếp 100% từ file **P.txt (Sản lượng SCADA)**. Cột dự báo (Từ ngày D: {eom_res['forecast_start_str']} đến ngày cuối tháng: {eom_res['end_month_str']}): AI tích hợp dữ liệu bức xạ các ngày gần nhất và dự báo thời tiết.")
+
         k1, k2, k3, k4 = st.columns(4)
         with k1:
             st.metric("🏆 Dự Báo Cả Tháng 8", f"{eom_res['total_projected_month_mwh']:,.2f} MWh", delta=f"{eom_res['total_projected_month_gwh']:.3f} GWh")
         with k2:
-            st.metric("🟢 Thực Tế P.txt (01-26/08)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày SCADA 110kV")
+            st.metric(f"🟢 Thực Tế P.txt (01 đến D-1)", f"{eom_res['total_actual_mwh']:,.2f} MWh", delta=f"{eom_res['recorded_days']} ngày (Đến {eom_res['last_recorded_str']})")
         with k3:
-            st.metric("🔮 Dự Báo AI Còn Lại (27-31/08)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày AI dự báo")
+            st.metric(f"🔮 Dự Báo AI (Ngày D đến Cuối)", f"{eom_res['total_forecast_remaining_mwh']:,.2f} MWh", delta=f"{eom_res['remaining_days']} ngày (Đến {eom_res['end_month_str']})")
         with k4:
             st.metric("📊 Sản Lượng TB Ngày", f"{eom_res['avg_daily_yield_mwh']:.2f} MWh/ngày", delta=f"Gần nhất: {eom_res['recent_avg_mwh']:.1f} MWh")
 
-        st.info(f"💡 **Cơ sở dữ liệu mô hình:** Các cột ngày 01 đến 26/08 được tổng hợp và tích phân trực tiếp 100% từ chuỗi công suất phát lưới 110kV trong file **P.txt (Công tơ 171C)** (96 chu kỳ: $\\sum P_{{Grid}} \\times 0.25\\text{{h}}$). Các cột dự báo ngày 27 đến 31/08 được AI lấy thêm **dữ liệu bức xạ đỉnh trung bình 5 ngày gần nhất ({eom_res['recent_avg_irr']} W/m² ~ {eom_res['recent_avg_mwh']} MWh/ngày)** kết hợp mô hình dự báo thời tiết số trị NWP để đưa ra kết quả dự báo chính xác và mượt mà nhất.")
-
+        st.info(f"💡 **Cơ sở dữ liệu mô hình:** Các cột ngày 01 đến ngày D-1 ({eom_res['last_recorded_str']}) được tổng hợp và tích phân trực tiếp 100% từ chuỗi công suất phát lưới 110kV trong file **P.txt (Sản lượng SCADA)** (96 chu kỳ: $\\sum P_{{Grid}} \\times 0.25\\text{{h}}$). Các cột dự báo từ ngày D ({eom_res['forecast_start_str']}) đến ngày cuối tháng ({eom_res['end_month_str']}) được AI lấy thêm **dữ liệu bức xạ trung bình 5 ngày gần nhất ({eom_res['recent_avg_irr']} W/m² ~ {eom_res['recent_avg_mwh']} MWh/ngày)** kết hợp mô hình dự báo thời tiết số trị NWP để đưa ra kết quả dự báo chính xác và mượt mà nhất.")
 
         from plotly.subplots import make_subplots
         fig_eom = make_subplots(specs=[[{"secondary_y": True}]])
         df_fm = eom_res['df_full_month']
 
-        # Cột Thực tế Công tơ 171C
+        # Cột Thực tế P.txt (01 đến D-1)
         fig_eom.add_trace(go.Bar(
             x=df_fm['Date_Str'],
             y=df_fm['Sản lượng Thực tế (MWh)'],
-            name='🟢 Thực Tế Công Tơ 171C (MWh)',
+            name='🟢 Thực Tế P.txt (Sản lượng SCADA 01 đến D-1)',
             marker_color='#0284C7',
             text=df_fm['Sản lượng Thực tế (MWh)'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else ""),
             textposition='auto'
         ), secondary_y=False)
 
-        # Cột Dự báo AI
+        # Cột Dự báo AI (Ngày D đến Cuối tháng)
         fig_eom.add_trace(go.Bar(
             x=df_fm['Date_Str'],
             y=df_fm['Sản lượng Dự báo (MWh)'],
-            name='🔮 Dự Báo AI (Bức Xạ Gần Nhất + Thời Tiết) (MWh)',
+            name='🔮 Dự Báo AI (Ngày D đến Cuối Tháng)',
             marker_color='#F59E0B',
             text=df_fm['Sản lượng Dự báo (MWh)'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else ""),
             textposition='auto'
@@ -1806,7 +1805,7 @@ with tab_multi:
         ), secondary_y=True)
 
         fig_eom.update_layout(
-            title="<b>BIỂU ĐỒ SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY THÁNG 8/2026 (Xanh: Thực tế Công tơ 171C | Cam: Dự báo AI)</b>",
+            title="<b>BIỂU ĐỒ SẢN LƯỢNG & TỔNG BỨC XẠ NGÀY (Xanh: Thực tế P.txt từ ngày 01 đến D-1 | Cam: Dự báo AI từ ngày D đến cuối tháng)</b>",
             xaxis_title="Ngày Trong Tháng",
             template="plotly_white",
             height=430,
@@ -1818,6 +1817,7 @@ with tab_multi:
         fig_eom.update_yaxes(title_text="Tổng bức xạ ngày (kWh/m²)", secondary_y=True, showgrid=False, rangemode='tozero')
 
         st.plotly_chart(fig_eom, width='stretch')
+
         
         st.dataframe(df_fm, width='stretch', hide_index=True)
 

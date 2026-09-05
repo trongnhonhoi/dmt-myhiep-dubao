@@ -523,7 +523,7 @@ def forecast_end_of_month(
             combined_daily_rows.append({
                 'Date_Str': r['Date_Str'],
                 'Day': r['Day'],
-                'Loại': '🟢 Thực tế Công tơ 171C',
+                'Loại': '🟢 Thực tế P.txt (Sản lượng SCADA)',
                 'Sản lượng Thực tế (MWh)': e_val,
                 'Sản lượng Dự báo (MWh)': np.nan,
                 'Sản lượng (MWh)': e_val,
@@ -541,7 +541,7 @@ def forecast_end_of_month(
             combined_daily_rows.append({
                 'Date_Str': r['Date_Str'],
                 'Day': r['Date'].day,
-                'Loại': '🔮 Dự báo AI (Bức xạ gần nhất + Thời tiết)',
+                'Loại': '🔮 Dự báo AI (Từ ngày D đến cuối tháng)',
                 'Sản lượng Thực tế (MWh)': np.nan,
                 'Sản lượng Dự báo (MWh)': e_val,
                 'Sản lượng (MWh)': e_val,
@@ -551,12 +551,20 @@ def forecast_end_of_month(
                 'Giờ nắng PSH (h)': round(e_val / 50.0, 2)
             })
 
+    last_rec_date = actual_month_data['last_recorded_date'] if recorded_days > 0 else datetime(year, month, 1)
+    fc_start_date = last_rec_date + timedelta(days=1) if recorded_days > 0 else datetime(year, month, 1)
+
     return {
         "year": year,
         "month": month,
         "days_in_month": days_in_month,
         "recorded_days": recorded_days,
         "remaining_days": remaining_days,
+        "last_recorded_date": last_rec_date,
+        "last_recorded_str": last_rec_date.strftime('%d/%m/%Y'),
+        "forecast_start_date": fc_start_date,
+        "forecast_start_str": fc_start_date.strftime('%d/%m/%Y'),
+        "end_month_str": f"{days_in_month:02d}/{month:02d}/{year}",
         "recent_avg_irr": round(recent_avg_irr, 1),
         "recent_avg_mwh": round(recent_avg_mwh, 2),
         "total_actual_mwh": round(total_actual_mwh, 3),
@@ -567,6 +575,7 @@ def forecast_end_of_month(
         "df_full_month": pd.DataFrame(combined_daily_rows),
         "ai_enabled": enable_ai
     }
+
 
 
 
