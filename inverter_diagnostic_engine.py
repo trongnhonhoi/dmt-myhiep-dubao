@@ -272,16 +272,20 @@ def load_day_inverter_summary_fast(day_dir: str, date_str: str = "") -> Dict[str
         loss_kwh = max(0.0, st_med - e_val)
         loss_kwh_list.append(round(loss_kwh, 2))
 
-        # Phân loại bất thường
+        # Phân loại bất thường cho Inverter Huawei SUN2000-175KTL-H0 (9 MPPT / 18 Strings DC Fuseless)
+        est_active_str = max(0, min(18, int(round((ratio_st / 100.0) * 18))))
+        est_dead_str = 18 - est_active_str
+        est_dead_mppt = max(0, int(round(est_dead_str / 2.0)))
+
         if st_med > 50.0 and e_val < 5.0:
             status = 'CRITICAL'
-            anom = '🔴 Mất Điện / Ngắt CB / Offline Hoàn Toàn'
+            anom = '🔴 Mất Điện / Ngắt CB AC 800V / Offline'
             alerts.append({
                 'level': 'CRITICAL',
                 'inverter': row['Inverter_ID'],
                 'station': row['Station'],
                 'date': date_str,
-                'message': f"Inverter {row['Inverter_ID']} ({row['Station']}) OFFLINE hoàn toàn (Sản lượng: {e_val:.1f} kWh vs TB trạm {st_med:.1f} kWh). Mất ~{loss_kwh:.1f} kWh.",
+                'message': f"Inverter Huawei {row['Inverter_ID']} ({row['Station']}) OFFLINE hoàn toàn (Sản lượng: {e_val:.1f} kWh vs TB trạm {st_med:.1f} kWh). Mất ~{loss_kwh:.1f} kWh.",
                 'energy_kwh': e_val,
                 'st_median_kwh': st_med,
                 'loss_kwh': loss_kwh,
@@ -289,13 +293,13 @@ def load_day_inverter_summary_fast(day_dir: str, date_str: str = "") -> Dict[str
             })
         elif ratio_st < 75.0:
             status = 'MAJOR'
-            anom = '🟠 Suy Giảm Nặng / Đứt Chuỗi String DC'
+            anom = f'🟠 Hở Mạch ~{est_dead_str}/18 Chuỗi Pin DC (Mất ~{est_dead_mppt} MPPT)'
             alerts.append({
                 'level': 'MAJOR',
                 'inverter': row['Inverter_ID'],
                 'station': row['Station'],
                 'date': date_str,
-                'message': f"Inverter {row['Inverter_ID']} suy giảm {100-ratio_st:.1f}% công suất so với đồng cấp ({e_val:.1f} kWh vs {st_med:.1f} kWh). Cần kiểm tra chuỗi pin/cầu chì.",
+                'message': f"Inverter Huawei {row['Inverter_ID']} suy giảm {100-ratio_st:.1f}% công suất ({e_val:.1f} kWh vs {st_med:.1f} kWh). Nghi ngờ hở mạch/lỏng giắc MC4 ~{est_dead_str}/18 chuỗi String DC.",
                 'energy_kwh': e_val,
                 'st_median_kwh': st_med,
                 'loss_kwh': loss_kwh,
@@ -303,13 +307,13 @@ def load_day_inverter_summary_fast(day_dir: str, date_str: str = "") -> Dict[str
             })
         elif ratio_st < 90.0:
             status = 'MINOR'
-            anom = '🟡 Suy Giảm Nhẹ / Quá Nhiệt Derating'
+            anom = f'🟡 Quá Nhiệt Derating / Lệch ~{est_dead_str} Chuỗi DC' if est_dead_str <= 2 else '🟡 Suy Giảm Nhẹ / Quá Nhiệt Derating'
             alerts.append({
                 'level': 'MINOR',
                 'inverter': row['Inverter_ID'],
                 'station': row['Station'],
                 'date': date_str,
-                'message': f"Inverter {row['Inverter_ID']} lệch {100-ratio_st:.1f}% (Đạt {e_val:.1f} kWh vs {st_med:.1f} kWh). Kiểm tra tản nhiệt/bụi bẩn.",
+                'message': f"Inverter Huawei {row['Inverter_ID']} lệch {100-ratio_st:.1f}% (Đạt {e_val:.1f} kWh vs {st_med:.1f} kWh). Kiểm tra quạt làm mát Inverter/tản nhiệt hoặc bề mặt pin.",
                 'energy_kwh': e_val,
                 'st_median_kwh': st_med,
                 'loss_kwh': loss_kwh,
@@ -317,7 +321,7 @@ def load_day_inverter_summary_fast(day_dir: str, date_str: str = "") -> Dict[str
             })
         else:
             status = 'NORMAL'
-            anom = '🟢 Hoạt Động Bình Thường'
+            anom = '🟢 Hoạt Động Tốt (18/18 Strings DC)'
 
         health_status.append(status)
         anomaly_type_list.append(anom)
@@ -923,23 +927,27 @@ class InverterAnomalyManager:
         if is_tripping:
             trip_events.append(f"{t_start} - {timestamps[-1]}")
 
-        # Đánh giá trạng thái & chẩn đoán kỹ thuật
+        # Đánh giá trạng thái & chẩn đoán kỹ thuật cho Inverter Huawei SUN2000-175KTL-H0 (18 Strings DC)
+        est_active_str = max(0, min(18, int(round((ratio_pct / 100.0) * 18))))
+        est_dead_str = 18 - est_active_str
+        est_dead_mppt = max(0, int(round(est_dead_str / 2.0)))
+
         if daily_energy < 5.0 or ratio_pct < 10.0:
             status = 'CRITICAL'
-            diagnosis = "🔴 Mất Điện / Ngắt CB / Offline Hoàn Toàn Suốt Cả Ngày"
-            rec = "Kiểm tra khẩn cấp: CB AC phía tủ gom, tín hiệu truyền thông RS485/Modbus, trạng thái đèn cảnh báo trên Inverter."
+            diagnosis = f"🔴 Mất Điện / Ngắt CB AC 800V / Inverter Huawei 175KTL-H0 Offline Hoàn Toàn Suốt Cả Ngày"
+            rec = "Kiểm tra khẩn cấp: CB AC 800V phía tủ gom trạm biến áp, công tắc DC Switch trên Inverter Huawei, cáp truyền thông RS485 kết nối SmartLogger."
         elif ratio_pct < 75.0:
             status = 'MAJOR'
             ratio_deficit = 100.0 - ratio_pct
-            diagnosis = f"🟠 Suy Giảm Nặng (~{ratio_deficit:.1f}% công suất vs trạm) - Nghi ngờ đứt chuỗi String DC / Hỏng cầu chì quang điện"
-            rec = f"Kiểm tra các chuỗi String DC tại tủ Combiner Box / Đầu vào DC Inverter, đo dòng từng chuỗi bằng Ampe kìm DC."
+            diagnosis = f"🟠 Hở Mạch Chuỗi Pin DC: Ước tính mất ~{est_dead_str}/18 Chuỗi String DC (tương đương mất ~{est_dead_mppt}/9 kênh MPPT). Inverter chỉ đạt {ratio_pct:.1f}% công suất so với trạm."
+            rec = f"Dùng Ampe kìm DC đo dòng điện trực tiếp tại 18 đầu vào giắc MC4 dưới đáy Inverter Huawei 175KTL-H0 để xác định chính xác {est_dead_str} chuỗi bị mất dòng (I = 0A). Kiểm tra giắc nối MC4, cáp DC 1500V tại giàn pin."
         elif ratio_pct < 90.0:
             status = 'MINOR'
-            diagnosis = f"🟡 Suy Giảm Nhẹ / Quá Nhiệt Derating (Đạt {ratio_pct:.1f}% TB trạm)"
-            rec = "Kiểm tra bụi bẩn bám trên tản nhiệt Inverter, quạt làm mát Inverter, kiểm tra độ bẩn bề mặt chuỗi pin (Soiling)."
+            diagnosis = f"🟡 Suy Giảm Nhẹ / Quá Nhiệt Tản Nhiệt (Đạt {ratio_pct:.1f}% TB trạm, nghi ngờ lệch ~{est_dead_str} chuỗi DC hoặc Derating nhiệt độ cao)"
+            rec = "Kiểm tra quạt làm mát ngoài (External Cooling Fan) của Huawei 175KTL-H0, vệ sinh cánh tản nhiệt nhôm phía sau Inverter, kiểm tra độ bụi bẩn bề mặt chuỗi pin (Soiling Loss)."
         else:
             status = 'NORMAL'
-            diagnosis = f"🟢 Hoạt Động Rất Tốt (Đạt {ratio_pct:.1f}% TB trạm, P_max = {peak_kw:.1f} kW)"
+            diagnosis = f"🟢 Inverter Huawei 175KTL-H0 Hoạt Động Rất Tốt (Đủ 18/18 Chuỗi String DC, đạt {ratio_pct:.1f}% TB trạm, P_max = {peak_kw:.1f} kW)"
             rec = "Inverter vận hành bình thường, hiệu suất đồng đều với toàn trạm."
 
         return {
@@ -954,6 +962,9 @@ class InverterAnomalyManager:
                 'station_median_energy_kwh': round(st_med_energy, 2),
                 'ratio_station_pct': round(ratio_pct, 1),
                 'est_loss_kwh': round(est_loss_kwh, 2),
+                'est_active_strings': est_active_str,
+                'est_dead_strings': est_dead_str,
+                'est_dead_mppts': est_dead_mppt,
                 'peak_power_kw': round(peak_kw, 2),
                 'peak_time': peak_time,
                 'station_peak_kw': round(st_peak_kw, 2),

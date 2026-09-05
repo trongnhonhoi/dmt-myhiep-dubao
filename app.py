@@ -2494,7 +2494,7 @@ elif selected_menu == NAV_OPTIONS[6]:
             🚨 HỆ THỐNG PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN SỰ CỐ INVERTER (S1 - S7)
         </div>
         <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-            Tự động quét và phân tích dữ liệu 1 phút của <b>229 Inverter thực tế</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA (Đã loại trừ 4 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18, INV 2.2.18); phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
+            Tự động quét và phân tích dữ liệu 1 phút của <b>229 Inverter Huawei SUN2000-175KTL-H0</b> (Kiến trúc Fuseless - 18 Strings DC cắm trực tiếp vào Inverter, không tủ Combiner Box) thuộc <b>7 Trạm biến áp</b> (S1..S7) từ máy chủ SCADA (Đã loại trừ 4 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18, INV 2.2.18); phát hiện mất điện / ngắt CB AC 800V, hở mạch/lỏng giắc MC4 chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -2807,18 +2807,20 @@ elif selected_menu == NAV_OPTIONS[6]:
             else:
                 st.success(f"**Chẩn Đoán:** {d_met['diagnosis']}\n\n👉 **Khuyến Nghị O&M:** {d_met['recommendation']}")
 
-            # 5 Thẻ thông số chi tiết của Inverter
-            dk1, dk2, dk3, dk4, dk5 = st.columns(5)
+            # 6 Thẻ thông số chi tiết của Inverter Huawei 175KTL-H0
+            dk1, dk2, dk3, dk4, dk5, dk6 = st.columns(6)
             with dk1:
                 st.metric("⚡ Sản Lượng Ngày", f"{d_met['daily_energy_kwh']:,.1f} kWh", delta=f"{d_met['ratio_station_pct']:.1f}% TB Trạm ({d_met['station_median_energy_kwh']:,.1f} kWh)")
             with dk2:
-                st.metric("📈 Công Suất Đỉnh Pmax", f"{d_met['peak_power_kw']:.1f} kW", delta=f"@ {d_met['peak_time']}")
+                st.metric("🎯 Chuỗi Pin DC", f"{d_met.get('est_active_strings', 18)}/18 Strings", delta=f"Mất ~{d_met.get('est_dead_strings', 0)} Strings (~{d_met.get('est_dead_mppts', 0)} MPPT)" if d_met.get('est_dead_strings', 0) > 0 else "Đủ 18/18 Strings tốt", delta_color="inverse" if d_met.get('est_dead_strings', 0) > 0 else "normal")
             with dk3:
-                st.metric("⏱️ Khung Giờ Phát Điện", f"{d_met['start_time']} - {d_met['end_time']}", delta=f"{d_met['operating_hours']:.1f} giờ làm việc")
+                st.metric("📈 Công Suất Đỉnh Pmax", f"{d_met['peak_power_kw']:.1f} kW", delta=f"@ {d_met['peak_time']}")
             with dk4:
-                st.metric("📉 Tổn Thất Ước Tính", f"~{d_met['est_loss_kwh']:,.1f} kWh", delta=f"Trạng thái: {d_met['health_status']}", delta_color="inverse" if d_met['est_loss_kwh'] > 0 else "normal")
+                st.metric("⏱️ Khung Giờ Phát", f"{d_met['start_time']} - {d_met['end_time']}", delta=f"{d_met['operating_hours']:.1f} giờ làm việc")
             with dk5:
-                st.metric("⚡ Đỉnh Trạm Biến Áp", f"{d_met['station_peak_kw']:.1f} kW", delta=f"{deep_res['station_name']}")
+                st.metric("📉 Tổn Thất Ước Tính", f"~{d_met['est_loss_kwh']:,.1f} kWh", delta=f"Trạng thái: {d_met['health_status']}", delta_color="inverse" if d_met['est_loss_kwh'] > 0 else "normal")
+            with dk6:
+                st.metric("🏢 Đỉnh Trạm Biến Áp", f"{d_met['station_peak_kw']:.1f} kW", delta=f"{deep_res['station_name']}")
 
             # Lọc khung giờ nắng nếu chọn zoom
             df_plot = df_prof.copy()
