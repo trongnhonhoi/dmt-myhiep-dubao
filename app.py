@@ -20,6 +20,7 @@ import weather_forecast_engine
 import exporter
 import historical_data_manager
 import performance_report_engine
+import inverter_diagnostic_engine
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -27,10 +28,17 @@ importlib.reload(weather_forecast_engine)
 importlib.reload(exporter)
 importlib.reload(historical_data_manager)
 importlib.reload(performance_report_engine)
+importlib.reload(inverter_diagnostic_engine)
 
 from performance_report_engine import (
     generate_performance_kpi_table,
     export_performance_report_to_excel_bytes
+)
+
+from inverter_diagnostic_engine import (
+    InverterAnomalyManager,
+    export_inverter_diagnostics_to_excel_bytes,
+    STATION_CONFIG
 )
 
 from solar_engine import (
@@ -407,7 +415,8 @@ NAV_OPTIONS = [
     "⚖️ 3. So Sánh & Đánh Giá Sai Số (Thực Tế vs Dự Báo)",
     "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
     "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
-    "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)"
+    "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)",
+    "🚨 7. Chẩn Đoán Bất Thường Inverter (S1 - S7 SCADA)"
 ]
 
 # --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
@@ -2473,5 +2482,279 @@ elif selected_menu == NAV_OPTIONS[5]:
         st.dataframe(display_df, width='stretch', height=450, hide_index=True)
     else:
         st.warning("⚠️ Không tìm thấy dữ liệu cho khoảng thời gian đã chọn.")
+
+
+# -------------------------------------------------------------------------
+# PHẦN 7: CHẨN ĐOÁN CÔNG SUẤT BẤT THƯỜNG INVERTER (S1 - S7 SCADA)
+# -------------------------------------------------------------------------
+elif selected_menu == NAV_OPTIONS[6]:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
+        <div style="font-size: 1.35rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
+            🚨 HỆ THỐNG PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN SỰ CỐ INVERTER (S1 - S7)
+        </div>
+        <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
+            Tự động quét và phân tích dữ liệu 1 phút của <b>233 Inverter</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA; phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    @st.cache_resource
+    def get_inv_anomaly_manager():
+        return InverterAnomalyManager(harvester)
+
+    inv_mgr = get_inv_anomaly_manager()
+
+    # Bộ điều khiển chọn khung thời gian (D-1..D-7, W-1..W-4, M-1..M-3)
+    col_tf1, col_tf2, col_tf3 = st.columns([1.5, 2.0, 1.5])
+    with col_tf1:
+        group_mode = st.radio(
+            "📌 Chọn nhóm khung thời gian:",
+            ["📅 Theo Ngày Đơn Lẻ (D-1 .. D-7)", "🗓️ Theo Tuần (W-1 .. W-4)", "📊 Theo Tháng (M-1 .. M-3)"],
+            index=0,
+            key="inv_group_mode_radio"
+        )
+    with col_tf2:
+        if "Theo Ngày Đơn Lẻ" in group_mode:
+            tf_selected = st.selectbox(
+                "Chọn ngày chẩn đoán:",
+                [
+                    "D-1 (Hôm qua / Ngày SCADA mới nhất)",
+                    "D-2 (Trước 2 ngày)",
+                    "D-3 (Trước 3 ngày)",
+                    "D-4 (Trước 4 ngày)",
+                    "D-5 (Trước 5 ngày)",
+                    "D-6 (Trước 6 ngày)",
+                    "D-7 (Trước 7 ngày)"
+                ],
+                index=0,
+                key="tf_sel_d"
+            )
+            tf_code = tf_selected.split(' ')[0]
+        elif "Theo Tuần" in group_mode:
+            tf_selected = st.selectbox(
+                "Chọn tuần chẩn đoán:",
+                [
+                    "W-1 (Tuần gần nhất - 7 ngày qua)",
+                    "W-2 (Tuần trước đó - 14 ngày qua)",
+                    "W-3 (Tuần cách 3 tuần)",
+                    "W-4 (Tuần cách 4 tuần)"
+                ],
+                index=0,
+                key="tf_sel_w"
+            )
+            tf_code = tf_selected.split(' ')[0]
+        else:
+            tf_selected = st.selectbox(
+                "Chọn tháng chẩn đoán:",
+                [
+                    "M-1 (Tháng gần nhất / MTD)",
+                    "M-2 (Tháng trước đó)",
+                    "M-3 (Cách 2 tháng trước)"
+                ],
+                index=0,
+                key="tf_sel_m"
+            )
+            tf_code = tf_selected.split(' ')[0]
+
+    with col_tf3:
+        st.write("")
+        st.write("")
+        btn_run_diag = st.button("🚀 Chạy Phân Tích & Chẩn Đoán", type="primary", use_container_width=True, key="btn_run_inv_diag")
+
+    with st.spinner(f"Đang quét file S1..S7 và phân tích 233 Inverter cho khung thời gian {tf_code}..."):
+        diag_res = inv_mgr.analyze_timeframe(tf_code)
+
+    if diag_res.get('status') == 'SUCCESS':
+        kpis = diag_res['kpis']
+        df_inv = diag_res['inverter_table']
+        alerts = diag_res['alerts']
+        date_range = diag_res.get('date_range_str', '')
+
+        st.markdown(f"#### 📊 Báo Cáo Chẩn Đoán: **{tf_code}** ({date_range})")
+
+        # 1. 6 Thẻ KPI tổng quan
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        with m1:
+            st.metric("⚡ Sản Lượng Phát", f"{kpis['total_energy_mwh']:,.2f} MWh", delta=f"{kpis.get('num_days', 1)} ngày")
+        with m2:
+            st.metric("📉 Tổn Thất Do Lỗi", f"{kpis['total_loss_mwh']:,.2f} MWh", delta=f"~{kpis['total_loss_kwh']:,.0f} kWh", delta_color="inverse")
+        with m3:
+            st.metric("🔴 Nguy Cấp / Offline", f"{kpis['critical_count']} Inverter", delta="Mất điện / Ngắt CB", delta_color="inverse" if kpis['critical_count'] > 0 else "normal")
+        with m4:
+            st.metric("🟠 Suy Giảm Nặng", f"{kpis['major_count']} Inverter", delta="Lệch > 25% công suất", delta_color="inverse" if kpis['major_count'] > 0 else "normal")
+        with m5:
+            st.metric("🟡 Cảnh Báo Nhẹ", f"{kpis['minor_count']} Inverter", delta="Derating / Tản nhiệt")
+        with m6:
+            st.metric("🎯 Độ Sẵn Sàng Thiết Bị", f"{kpis['plant_availability_pct']:.1f}%", delta=f"{kpis['normal_count']}/{kpis['total_inverters']} Inverter tốt")
+
+        # 2. BẢNG CẢNH BÁO NÓNG (ACTIONABLE ALERTS)
+        faulty_inverters = df_inv[df_inv['Health_Status'] != 'NORMAL']
+        if not faulty_inverters.empty:
+            st.markdown(f"##### ⚠️ Danh Sách {len(faulty_inverters)} Inverter Có Dấu Hiệu Bất Thường Cần Kiểm Tra:")
+            
+            # Highlight card alerts
+            alert_items_html = ""
+            for _, r in faulty_inverters.head(8).iterrows():
+                badge_color = "bg-danger" if r['Health_Status'] == 'CRITICAL' else ("bg-warning text-dark" if r['Health_Status'] == 'MAJOR' else "bg-info text-dark")
+                alert_items_html += f"""
+                <div class="col-md-6 mb-2">
+                    <div class="card p-2 border-start border-4 {'border-danger' if r['Health_Status'] == 'CRITICAL' else 'border-warning'} shadow-sm h-100">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> {r['Inverter_ID']} ({r['Station']})</span>
+                            <span class="badge {badge_color}">{r['Health_Status']}</span>
+                        </div>
+                        <div class="text-muted small mt-1">
+                            • <b>Hiện trạng:</b> {r['Anomaly_Type']}<br>
+                            • <b>Sản lượng:</b> <code>{r['Energy_kWh']:.1f} kWh/ng</code> | Đạt: <code>{r['Ratio_Station_Pct']:.1f}%</code> TB trạm | Mất: <code>~{r['Est_Loss_kWh']:.1f} kWh</code>
+                        </div>
+                    </div>
+                </div>
+                """
+            st.markdown(f'<div class="row g-2 mb-3">{alert_items_html}</div>', unsafe_allow_html=True)
+        else:
+            st.success("✅ Toàn bộ 233 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
+
+        # 3. BIỂU ĐỒ TRỰC QUAN HÓA
+        tab_chart1, tab_chart2, tab_chart3 = st.tabs([
+            "📊 1. So Sánh Sản Lượng & Tổn Thất 7 Trạm (S1 - S7)",
+            "🗺️ 2. Ma Trận Trạng Thái 233 Inverter (Health Grid)",
+            "📉 3. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất"
+        ])
+
+        with tab_chart1:
+            st_sums = diag_res.get('station_summaries', {})
+            if st_sums:
+                fig_st = go.Figure()
+                fig_st.add_trace(go.Bar(
+                    x=[f"{k} ({v['station_name']})" for k, v in st_sums.items()],
+                    y=[v['total_energy_mwh'] for v in st_sums.values()],
+                    name='⚡ Sản Lượng Phát (MWh)',
+                    marker_color='#0284C7',
+                    text=[f"{v['total_energy_mwh']:.1f} MWh" for v in st_sums.values()],
+                    textposition='auto'
+                ))
+                fig_st.add_trace(go.Bar(
+                    x=[f"{k} ({v['station_name']})" for k, v in st_sums.items()],
+                    y=[v['total_loss_mwh'] for v in st_sums.values()],
+                    name='📉 Tổn Thất Do Lỗi (MWh)',
+                    marker_color='#EF4444',
+                    text=[f"{v['total_loss_mwh']:.2f} MWh" if v['total_loss_mwh'] > 0.05 else "" for v in st_sums.values()],
+                    textposition='auto'
+                ))
+                fig_st.update_layout(
+                    title="<b>TỔNG HỢP SẢN LƯỢNG PHÁT & TỔN THẤT THEO 7 TRẠM BIẾN ÁP (S1 - S7)</b>",
+                    barmode='group',
+                    template='plotly_white',
+                    height=420,
+                    xaxis_title="Trạm Biến Áp",
+                    yaxis_title="Sản Lượng (MWh)"
+                )
+                st.plotly_chart(fig_st, use_container_width=True)
+
+        with tab_chart2:
+            fig_matrix = go.Figure()
+            color_map = {'CRITICAL': '#EF4444', 'MAJOR': '#F59E0B', 'MINOR': '#FBBF24', 'NORMAL': '#10B981'}
+            
+            for status_key, color_val in color_map.items():
+                sub_df = df_inv[df_inv['Health_Status'] == status_key]
+                if not sub_df.empty:
+                    fig_matrix.add_trace(go.Scatter(
+                        x=sub_df['Station_Tag'],
+                        y=sub_df['Inverter_ID'],
+                        mode='markers',
+                        name=f"{status_key} ({len(sub_df)})",
+                        marker=dict(size=10, color=color_val),
+                        text=sub_df.apply(lambda r: f"{r['Inverter_ID']}<br>Sản lượng: {r['Energy_kWh']:.1f} kWh<br>Tỉ lệ: {r['Ratio_Station_Pct']:.1f}%<br>Tổn thất: {r['Est_Loss_kWh']:.1f} kWh", axis=1),
+                        hoverinfo='text'
+                    ))
+            fig_matrix.update_layout(
+                title="<b>MA TRẬN ĐÁNH GIÁ SỨC KHỎE 233 INVERTER THEO 7 TRẠM (S1 - S7)</b>",
+                xaxis_title="Trạm Biến Áp",
+                yaxis_title="Mã Inverter",
+                template='plotly_white',
+                height=550
+            )
+            st.plotly_chart(fig_matrix, use_container_width=True)
+
+        with tab_chart3:
+            top_worst = df_inv.sort_values(by='Est_Loss_kWh', ascending=False).head(15)
+            fig_worst = go.Figure()
+            fig_worst.add_trace(go.Bar(
+                x=top_worst['Est_Loss_kWh'],
+                y=top_worst['Inverter_ID'] + ' (' + top_worst['Station_Tag'] + ')',
+                orientation='h',
+                marker_color=np.where(top_worst['Health_Status'] == 'CRITICAL', '#EF4444', '#F59E0B'),
+                text=[f"-{v:.1f} kWh" for v in top_worst['Est_Loss_kWh']],
+                textposition='auto'
+            ))
+            fig_worst.update_layout(
+                title="<b>TOP 15 INVERTER CÓ MỨC TỔN THẤT NĂNG LƯỢNG CAO NHẤT</b>",
+                xaxis_title="Năng Lượng Tổn Thất Ước Tính (kWh)",
+                yaxis_title="Mã Inverter",
+                yaxis=dict(autorange="reversed"),
+                template='plotly_white',
+                height=450
+            )
+            st.plotly_chart(fig_worst, use_container_width=True)
+
+        # 4. NÚT XUẤT BÁO CÁO EXCEL & CSV
+        st.markdown("---")
+        c_ex1, c_ex2, c_ex3 = st.columns([2.5, 2.0, 2.5])
+        with c_ex1:
+            excel_diag_bytes = export_inverter_diagnostics_to_excel_bytes(df_inv, kpis)
+            st.download_button(
+                "📊 TẢI BÁO CÁO CHẨN ĐOÁN EXCEL (.xlsx)",
+                data=excel_diag_bytes,
+                file_name=f"Bao_Cao_Chan_Doan_Inverter_MyHiep_{tf_code}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
+        with c_ex2:
+            csv_diag_bytes = df_inv.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button(
+                "📄 Tải Bảng CSV (.csv)",
+                data=csv_diag_bytes,
+                file_name=f"Bao_Cao_Chan_Doan_Inverter_MyHiep_{tf_code}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        with c_ex3:
+            st.caption(f"Tổng hợp: **{len(df_inv)} Inverter** | Khung thời gian: **{tf_code}** ({date_range})")
+
+        # 5. BẢNG CHI TIẾT 233 INVERTER (CÓ BỘ LỌC)
+        st.markdown("##### 📑 Bảng Chi Tiết Toàn Bộ 233 Inverter (Hỗ Trợ Lọc Trạm & Trạng Thái):")
+        f_col1, f_col2, _ = st.columns([2, 2, 3])
+        with f_col1:
+            filter_st = st.selectbox("Lọc theo trạm:", ["Tất Cả (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"], index=0)
+        with f_col2:
+            filter_status = st.selectbox("Lọc theo trạng thái:", ["Tất Cả Trạng Thái", "Chỉ Inverter Bất Thường (Lỗi / Cảnh Báo)", "Chỉ Inverter Offline (Critical)", "Chỉ Inverter Bình Thường (Normal)"], index=0)
+
+        df_display = df_inv.copy()
+        if "Tất Cả" not in filter_st:
+            st_key = filter_st.split(' ')[0]
+            df_display = df_display[df_display['Station_Tag'] == st_key]
+
+        if "Chỉ Inverter Bất Thường" in filter_status:
+            df_display = df_display[df_display['Health_Status'] != 'NORMAL']
+        elif "Chỉ Inverter Offline" in filter_status:
+            df_display = df_display[df_display['Health_Status'] == 'CRITICAL']
+        elif "Chỉ Inverter Bình Thường" in filter_status:
+            df_display = df_display[df_display['Health_Status'] == 'NORMAL']
+
+        view_cols = [
+            'Inverter_ID', 'Station', 'Health_Status', 'Anomaly_Type',
+            'Energy_kWh', 'Peak_kW', 'Ratio_Station_Pct', 'Est_Loss_kWh'
+        ]
+        df_show = df_display[[c for c in view_cols if c in df_display.columns]].copy()
+        df_show.columns = [
+            'Mã Inverter', 'Trạm Biến Áp', 'Trạng Thái', 'Chẩn Đoán Bất Thường',
+            'Sản Lượng (kWh/ng)', 'P Đỉnh (kW)', 'Tỉ Lệ vs TB Trạm (%)', 'Tổn Thất Ước Tính (kWh)'
+        ]
+        st.dataframe(df_show, use_container_width=True, height=450, hide_index=True)
+
+    else:
+        st.warning("⚠️ Không tìm thấy dữ liệu file S1..S7 cho khung thời gian đã chọn.")
 
 
