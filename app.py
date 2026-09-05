@@ -2494,7 +2494,7 @@ elif selected_menu == NAV_OPTIONS[6]:
             🚨 HỆ THỐNG PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN SỰ CỐ INVERTER (S1 - S7)
         </div>
         <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-            Tự động quét và phân tích dữ liệu 1 phút của <b>233 Inverter</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA; phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
+            Tự động quét và phân tích dữ liệu 1 phút của <b>230 Inverter thực tế</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA (Đã loại trừ 3 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18); phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
         </div>
     </div>
     """, unsafe_allow_html=True)

@@ -14,16 +14,39 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Tuple, Optional
 
-# Cấu hình danh mục 7 Trạm Inverter tại Nhà Máy ĐMT Mỹ Hiệp
+# Cấu hình danh mục 7 Trạm Inverter tại Nhà Máy ĐMT Mỹ Hiệp (Tổng cộng 230 Inverter thực tế)
 STATION_CONFIG = {
-    'S1': {'name': 'STATION-01', 'capacity_mw': 5.76, 'inverters': 36},
+    'S1': {'name': 'STATION-01', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-1-2-18 (không tồn tại)
     'S2': {'name': 'STATION-02', 'capacity_mw': 5.76, 'inverters': 36},
     'S3': {'name': 'STATION-03', 'capacity_mw': 5.60, 'inverters': 35},
-    'S4': {'name': 'STATION-04', 'capacity_mw': 5.76, 'inverters': 36},
-    'S5': {'name': 'STATION-05', 'capacity_mw': 5.76, 'inverters': 36},
+    'S4': {'name': 'STATION-04', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-4-1-18 (không tồn tại)
+    'S5': {'name': 'STATION-05', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-5-1-18 (không tồn tại)
     'S6': {'name': 'STATION-06', 'capacity_mw': 5.76, 'inverters': 36},
     'S7': {'name': 'STATION-07', 'capacity_mw': 2.88, 'inverters': 18},
 }
+
+# Danh sách các Inverter không tồn tại trên thực tế tại ĐMT Mỹ Hiệp (Dummy SCADA placeholder slots)
+EXCLUDED_INVERTERS = {
+    'INV-5-1-18', 'INV-5.1.18', 'INV 5.1.18', 'INV5.1.18',
+    'INV-4-1-18', 'INV-4.1.18', 'INV 4.1.18', 'INV4.1.18',
+    'INV-1-2-18', 'INV-1.2.18', 'INV 1.2.18', 'INV1.2.18'
+}
+
+def is_excluded_inverter(inv_name: str) -> bool:
+    """Kiểm tra Inverter có thuộc danh sách không tồn tại cần loại bỏ không"""
+    if not inv_name:
+        return True
+    cleaned = inv_name.strip().upper().replace('.', '-').replace(' ', '-')
+    for ex in EXCLUDED_INVERTERS:
+        if ex.upper().replace('.', '-').replace(' ', '-') in cleaned or cleaned in ex.upper().replace('.', '-').replace(' ', '-'):
+            return True
+    if re.search(r'INV[-_\.\s]*5[-_\.\s]*1[-_\.\s]*18', inv_name, re.IGNORECASE):
+        return True
+    if re.search(r'INV[-_\.\s]*4[-_\.\s]*1[-_\.\s]*18', inv_name, re.IGNORECASE):
+        return True
+    if re.search(r'INV[-_\.\s]*1[-_\.\s]*2[-_\.\s]*18', inv_name, re.IGNORECASE):
+        return True
+    return False
 
 def decode_scada_bytes(raw_bytes: bytes) -> str:
     """Giải mã file SCADA S1..S7 hỗ trợ đa dạng định dạng (UTF-16, UTF-8-sig, latin1)"""
@@ -69,13 +92,15 @@ def parse_station_fast(filepath_or_bytes: Any) -> Tuple[Optional[str], Optional[
     h1 = lines[0].split(';')
     st_name = h1[0].strip()
 
-    # Tìm các cột Inverter P(kW)
+    # Tìm các cột Inverter P(kW) - Tự động loại bỏ các Inverter không tồn tại
     inv_names = []
     inv_indices = []
     for i in range(3, len(h1), 2):
         if i < len(h1) and h1[i].strip():
-            inv_names.append(h1[i].strip())
-            inv_indices.append(i)
+            candidate_name = h1[i].strip()
+            if not is_excluded_inverter(candidate_name):
+                inv_names.append(candidate_name)
+                inv_indices.append(i)
 
     data_rows = []
     tot_station_p = []
@@ -131,7 +156,7 @@ def parse_station_full(filepath_or_bytes: Any) -> Tuple[Optional[str], Optional[
     h1 = lines[0].split(';')
     st_name = h1[0].strip()
 
-    inv_cols = [(h1[i].strip(), i) for i in range(3, len(h1), 2) if i < len(h1) and h1[i].strip()]
+    inv_cols = [(h1[i].strip(), i) for i in range(3, len(h1), 2) if i < len(h1) and h1[i].strip() and not is_excluded_inverter(h1[i].strip())]
     records = {inv[0]: [] for inv in inv_cols}
     timestamps = []
     tot_p_mw = []
