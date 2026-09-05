@@ -753,6 +753,221 @@ class InverterAnomalyManager:
             'daily_results': daily_results
         }
 
+    def get_inverter_deepdive_profile(self, target_date: Any, inverter_id: str) -> Dict[str, Any]:
+        """
+        Lấy dữ liệu chuỗi thời gian 1 phút (1,440 phút) của 1 Inverter cụ thể
+        và so sánh với đường cong trung vị của Trạm biến áp và Bức xạ mặt trời.
+        """
+        # 1. Xác định trạm biến áp từ inverter_id (INV-1-... -> S1, INV-2-... -> S2,...)
+        inv_clean = inverter_id.strip().upper()
+        s_match = re.search(r'INV[-_\.\s]*([1-7])', inv_clean)
+        if not s_match:
+            return {'status': 'ERROR', 'message': f'Không xác định được trạm từ mã Inverter {inverter_id}'}
+        
+        st_num = int(s_match.group(1))
+        st_tag = f"S{st_num}"
+
+        # 2. Tìm thư mục ngày
+        day_entries = self.resolve_timeframe_dates(target_date)
+        if not day_entries:
+            return {'status': 'NO_DATA', 'message': f'Không tìm thấy dữ liệu cho ngày {target_date}'}
+        
+        day_entry = day_entries[-1]
+        day_dir = day_entry['path']
+        date_str = day_entry['date_str']
+
+        # 3. Tìm file trạm S1..S7
+        st_file = None
+        for cand in [f"{st_tag}.txt", f"{st_tag}.TXT", f"0{st_tag}.txt", f"*{st_tag}*.txt"]:
+            matches = glob.glob(os.path.join(day_dir, cand))
+            if matches:
+                st_file = matches[0]
+                break
+        
+        if not st_file or not os.path.exists(st_file):
+            return {'status': 'NO_DATA', 'message': f'Không tìm thấy file {st_tag}.txt trong {day_dir}'}
+
+        # 4. Phân tích chi tiết file trạm
+        st_name, df_st_inv, meta = parse_station_full(st_file)
+        if df_st_inv is None or df_st_inv.empty:
+            return {'status': 'NO_DATA', 'message': f'Không thể đọc dữ liệu từ {st_file}'}
+
+        # 5. Tìm cột khớp với Inverter ID
+        matched_col = None
+        for col in meta['inverter_list']:
+            col_norm = re.sub(r'[-_\.\s]+', '-', col.upper())
+            inv_norm = re.sub(r'[-_\.\s]+', '-', inv_clean)
+            if col_norm == inv_norm or col == inverter_id or inv_clean in col.upper():
+                matched_col = col
+                break
+        
+        if not matched_col:
+            candidates = [c for c in meta['inverter_list'] if inv_clean in c.upper()]
+            matched_col = candidates[0] if candidates else meta['inverter_list'][0]
+
+        # 6. Tính toán đường đặc tính
+        inv_power = df_st_inv[matched_col].values.astype(np.float32)
+        all_inv_cols = meta['inverter_list']
+        all_powers = df_st_inv[all_inv_cols].values.astype(np.float32)
+
+        st_median_power = np.median(all_powers, axis=1)
+        st_mean_power = np.mean(all_powers, axis=1)
+        st_max_power = np.max(all_powers, axis=1)
+        timestamps = df_st_inv['Timestamp'].tolist()
+
+        # 7. Đọc dữ liệu bức xạ thời tiết W.txt nếu có
+        w_file = None
+        for cand in ['W.txt', 'W.TXT', '*W*.txt']:
+            matches = glob.glob(os.path.join(day_dir, cand))
+            if matches:
+                w_file = matches[0]
+                break
+
+        poa_arr = np.zeros(len(timestamps), dtype=np.float32)
+        temp_arr = np.zeros(len(timestamps), dtype=np.float32)
+
+        if w_file and os.path.exists(w_file):
+            try:
+                with open(w_file, 'rb') as f:
+                    w_raw = f.read()
+                w_text = decode_scada_bytes(w_raw)
+                w_lines = [l.strip() for l in w_text.splitlines() if l.strip()]
+                if len(w_lines) >= 3:
+                    w_h1 = w_lines[1].split(';')
+                    ghi_cols = [idx for idx, col in enumerate(w_h1) if 'IRRADIANCE' in col.upper() or 'GHI' in col.upper() or 'POA' in col.upper()]
+                    temp_cols = [idx for idx, col in enumerate(w_h1) if 'PV TEMPERATURE' in col.upper() or 'MODULE' in col.upper()]
+                    
+                    poa_vals = []
+                    temp_vals = []
+                    for wl in w_lines[2:]:
+                        w_parts = wl.split(';')
+                        val_poa = 0.0
+                        if ghi_cols:
+                            for gc in ghi_cols:
+                                if gc < len(w_parts) and w_parts[gc]:
+                                    try:
+                                        p_f = float(w_parts[gc])
+                                        if p_f > val_poa:
+                                            val_poa = p_f
+                                    except Exception:
+                                        pass
+                        poa_vals.append(val_poa)
+                        val_temp = 0.0
+                        if temp_cols:
+                            for tc in temp_cols:
+                                if tc < len(w_parts) and w_parts[tc]:
+                                    try:
+                                        t_f = float(w_parts[tc])
+                                        if 0 < t_f < 90:
+                                            val_temp = t_f
+                                            break
+                                    except Exception:
+                                        pass
+                        temp_vals.append(val_temp)
+
+                    if len(poa_vals) >= len(timestamps):
+                        poa_arr = np.array(poa_vals[:len(timestamps)], dtype=np.float32)
+                    if len(temp_vals) >= len(timestamps):
+                        temp_arr = np.array(temp_vals[:len(timestamps)], dtype=np.float32)
+            except Exception:
+                pass
+
+        # 8. Tạo DataFrame 1-minute profile
+        df_profile = pd.DataFrame({
+            'Timestamp': timestamps,
+            'Inv_Power_kW': np.round(inv_power, 2),
+            'Station_Median_kW': np.round(st_median_power, 2),
+            'Station_Mean_kW': np.round(st_mean_power, 2),
+            'Station_Max_kW': np.round(st_max_power, 2),
+            'Power_Deviation_kW': np.round(inv_power - st_median_power, 2),
+            'POA_Wm2': np.round(poa_arr, 1),
+            'PV_Temp_C': np.round(temp_arr, 1)
+        })
+
+        # 9. Tính toán các chỉ số chẩn đoán Deep-Dive
+        daily_energy = float(inv_power.sum() / 60.0)
+        st_med_energy = float(st_median_power.sum() / 60.0)
+        peak_kw = float(inv_power.max())
+        st_peak_kw = float(st_median_power.max())
+        peak_idx = int(np.argmax(inv_power))
+        peak_time = timestamps[peak_idx] if peak_idx < len(timestamps) else "12:00"
+        
+        ratio_pct = float(daily_energy / st_med_energy * 100.0) if st_med_energy > 0 else 0.0
+        est_loss_kwh = max(0.0, st_med_energy - daily_energy)
+
+        # Giờ phát điện
+        active_indices = np.where(inv_power >= 1.0)[0]
+        if len(active_indices) > 0:
+            start_time = timestamps[active_indices[0]]
+            end_time = timestamps[active_indices[-1]]
+            operating_mins = len(active_indices)
+        else:
+            start_time = "--:--"
+            end_time = "--:--"
+            operating_mins = 0
+
+        # Phát hiện sự kiện ngắt / trip
+        trip_events = []
+        is_tripping = False
+        t_start = ""
+        for i, (p_inv, p_med) in enumerate(zip(inv_power, st_median_power)):
+            if p_med >= 10.0 and p_inv < 1.0:
+                if not is_tripping:
+                    is_tripping = True
+                    t_start = timestamps[i]
+            else:
+                if is_tripping:
+                    is_tripping = False
+                    t_end = timestamps[i-1]
+                    trip_events.append(f"{t_start} - {t_end}")
+        if is_tripping:
+            trip_events.append(f"{t_start} - {timestamps[-1]}")
+
+        # Đánh giá trạng thái & chẩn đoán kỹ thuật
+        if daily_energy < 5.0 or ratio_pct < 10.0:
+            status = 'CRITICAL'
+            diagnosis = "🔴 Mất Điện / Ngắt CB / Offline Hoàn Toàn Suốt Cả Ngày"
+            rec = "Kiểm tra khẩn cấp: CB AC phía tủ gom, tín hiệu truyền thông RS485/Modbus, trạng thái đèn cảnh báo trên Inverter."
+        elif ratio_pct < 75.0:
+            status = 'MAJOR'
+            ratio_deficit = 100.0 - ratio_pct
+            diagnosis = f"🟠 Suy Giảm Nặng (~{ratio_deficit:.1f}% công suất vs trạm) - Nghi ngờ đứt chuỗi String DC / Hỏng cầu chì quang điện"
+            rec = f"Kiểm tra các chuỗi String DC tại tủ Combiner Box / Đầu vào DC Inverter, đo dòng từng chuỗi bằng Ampe kìm DC."
+        elif ratio_pct < 90.0:
+            status = 'MINOR'
+            diagnosis = f"🟡 Suy Giảm Nhẹ / Quá Nhiệt Derating (Đạt {ratio_pct:.1f}% TB trạm)"
+            rec = "Kiểm tra bụi bẩn bám trên tản nhiệt Inverter, quạt làm mát Inverter, kiểm tra độ bẩn bề mặt chuỗi pin (Soiling)."
+        else:
+            status = 'NORMAL'
+            diagnosis = f"🟢 Hoạt Động Rất Tốt (Đạt {ratio_pct:.1f}% TB trạm, P_max = {peak_kw:.1f} kW)"
+            rec = "Inverter vận hành bình thường, hiệu suất đồng đều với toàn trạm."
+
+        return {
+            'status': 'SUCCESS',
+            'inverter_id': matched_col,
+            'station_tag': st_tag,
+            'station_name': st_name,
+            'date_str': date_str,
+            'df_profile': df_profile,
+            'metrics': {
+                'daily_energy_kwh': round(daily_energy, 2),
+                'station_median_energy_kwh': round(st_med_energy, 2),
+                'ratio_station_pct': round(ratio_pct, 1),
+                'est_loss_kwh': round(est_loss_kwh, 2),
+                'peak_power_kw': round(peak_kw, 2),
+                'peak_time': peak_time,
+                'station_peak_kw': round(st_peak_kw, 2),
+                'start_time': start_time,
+                'end_time': end_time,
+                'operating_hours': round(operating_mins / 60.0, 2),
+                'trip_events_count': len(trip_events),
+                'trip_events': trip_events,
+                'health_status': status,
+                'diagnosis': diagnosis,
+                'recommendation': rec
+            }
+        }
+
 
 def export_inverter_diagnostics_to_excel_bytes(df_inverters: pd.DataFrame, kpis: Dict[str, Any]) -> bytes:
     """Xuất báo cáo chẩn đoán Inverter chuẩn Excel (.xlsx) với định dạng số và highlight lỗi"""

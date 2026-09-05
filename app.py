@@ -2739,7 +2739,149 @@ elif selected_menu == NAV_OPTIONS[6]:
             )
             st.plotly_chart(fig_worst, use_container_width=True)
 
-        # 4. NÚT XUẤT BÁO CÁO EXCEL & CSV
+        # -------------------------------------------------------------
+        # 4. CHỨC NĂNG SOI CHI TIẾT ĐƯỜNG CONG 1 PHÚT TỪNG INVERTER (DEEP-DIVE)
+        # -------------------------------------------------------------
+        st.markdown("---")
+        st.markdown("""
+        <div style="background: #1E293B; border-radius: 10px; padding: 12px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
+            <div style="font-weight: 700; font-size: 1.1rem; color: #38BDF8;">
+                🔍 SOI CHI TIẾT ĐƯỜNG CONG 1 PHÚT & CHẨN ĐOÁN TỪNG INVERTER (INVERTER DEEP-DIVE)
+            </div>
+            <div style="font-size: 0.84rem; color: #94A3B8;">
+                So sánh đường cong công suất thực tế 1 phút (1,440 điểm đo) của Inverter với đường trung vị Trạm biến áp và Bức xạ mặt trời POA/GHI để tìm chính xác thời điểm nhảy CB, đứt chuỗi String DC hoặc tụt công suất do quá nhiệt.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_dd1, col_dd2, col_dd3 = st.columns([1.5, 2.5, 2.0])
+        with col_dd1:
+            dd_station_filter = st.selectbox(
+                "Lọc Inverter theo trạm:",
+                ["Tất Cả Trạm (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                index=0,
+                key="dd_st_filter"
+            )
+
+        df_dd_pool = df_inv.copy()
+        if "Tất Cả" not in dd_station_filter:
+            st_f_tag = dd_station_filter.split(' ')[0]
+            df_dd_pool = df_dd_pool[df_dd_pool['Station_Tag'] == st_f_tag]
+
+        # Sắp xếp Inverter theo mức độ lỗi (Lỗi lên đầu để tiện kiểm tra)
+        inv_options = []
+        for _, r in df_dd_pool.iterrows():
+            badge = "🔴" if r['Health_Status'] == 'CRITICAL' else ("🟠" if r['Health_Status'] == 'MAJOR' else ("🟡" if r['Health_Status'] == 'MINOR' else "🟢"))
+            label = f"{r['Inverter_ID']} ({r['Station_Tag']}) | {badge} {r['Health_Status']} - {r['Energy_kWh']:.1f} kWh"
+            inv_options.append((label, r['Inverter_ID']))
+
+        with col_dd2:
+            if inv_options:
+                selected_label = st.selectbox(
+                    "Chọn Inverter cần phân tích chi tiết 1 phút:",
+                    options=[opt[0] for opt in inv_options],
+                    index=0,
+                    key="dd_inv_select"
+                )
+                selected_inv_id = [opt[1] for opt in inv_options if opt[0] == selected_label][0]
+            else:
+                selected_inv_id = "INV-1-1-1"
+
+        with col_dd3:
+            show_poa = st.checkbox("☀️ Hiển thị Bức xạ POA/GHI (W/m²)", value=True, key="dd_show_poa")
+            zoom_sun = st.checkbox("🔍 Chỉ phóng to giờ nắng (05:30 - 18:00)", value=True, key="dd_zoom_sun")
+
+        # Nạp dữ liệu Deep-Dive
+        deep_res = inv_mgr.get_inverter_deepdive_profile(tf_code, selected_inv_id)
+
+        if deep_res.get('status') == 'SUCCESS':
+            d_met = deep_res['metrics']
+            df_prof = deep_res['df_profile']
+
+            # Hộp thông báo chẩn đoán kỹ thuật
+            status_alert_type = "error" if d_met['health_status'] == 'CRITICAL' else ("warning" if d_met['health_status'] in ['MAJOR', 'MINOR'] else "success")
+            if status_alert_type == "error":
+                st.error(f"**Chẩn Đoán:** {d_met['diagnosis']}\n\n👉 **Khuyến Nghị O&M:** {d_met['recommendation']}")
+            elif status_alert_type == "warning":
+                st.warning(f"**Chẩn Đoán:** {d_met['diagnosis']}\n\n👉 **Khuyến Nghị O&M:** {d_met['recommendation']}")
+            else:
+                st.success(f"**Chẩn Đoán:** {d_met['diagnosis']}\n\n👉 **Khuyến Nghị O&M:** {d_met['recommendation']}")
+
+            # 5 Thẻ thông số chi tiết của Inverter
+            dk1, dk2, dk3, dk4, dk5 = st.columns(5)
+            with dk1:
+                st.metric("⚡ Sản Lượng Ngày", f"{d_met['daily_energy_kwh']:,.1f} kWh", delta=f"{d_met['ratio_station_pct']:.1f}% TB Trạm ({d_met['station_median_energy_kwh']:,.1f} kWh)")
+            with dk2:
+                st.metric("📈 Công Suất Đỉnh Pmax", f"{d_met['peak_power_kw']:.1f} kW", delta=f"@ {d_met['peak_time']}")
+            with dk3:
+                st.metric("⏱️ Khung Giờ Phát Điện", f"{d_met['start_time']} - {d_met['end_time']}", delta=f"{d_met['operating_hours']:.1f} giờ làm việc")
+            with dk4:
+                st.metric("📉 Tổn Thất Ước Tính", f"~{d_met['est_loss_kwh']:,.1f} kWh", delta=f"Trạng thái: {d_met['health_status']}", delta_color="inverse" if d_met['est_loss_kwh'] > 0 else "normal")
+            with dk5:
+                st.metric("⚡ Đỉnh Trạm Biến Áp", f"{d_met['station_peak_kw']:.1f} kW", delta=f"{deep_res['station_name']}")
+
+            # Lọc khung giờ nắng nếu chọn zoom
+            df_plot = df_prof.copy()
+            if zoom_sun:
+                df_plot = df_plot[(df_plot['Timestamp'] >= '05:30') & (df_plot['Timestamp'] <= '18:00')]
+
+            # Vẽ biểu đồ chuỗi thời gian Plotly
+            from plotly.subplots import make_subplots
+            fig_dd = make_subplots(specs=[[{"secondary_y": True}]])
+
+            # Đường 1: Bức xạ POA (nếu bật)
+            if show_poa and 'POA_Wm2' in df_plot.columns and df_plot['POA_Wm2'].max() > 0:
+                fig_dd.add_trace(
+                    go.Scatter(
+                        x=df_plot['Timestamp'],
+                        y=df_plot['POA_Wm2'],
+                        name='☀️ Bức Xạ POA / GHI (W/m²)',
+                        line=dict(color='#F59E0B', width=1.5, dash='dot'),
+                        fill='tozeroy',
+                        fillcolor='rgba(245, 158, 11, 0.08)',
+                        hovertemplate='Thời gian: %{x}<br>Bức xạ: <b>%{y:.1f} W/m²</b><extra></extra>'
+                    ),
+                    secondary_y=True
+                )
+
+            # Đường 2: Trung vị Trạm P(kW)
+            fig_dd.add_trace(
+                go.Scatter(
+                    x=df_plot['Timestamp'],
+                    y=df_plot['Station_Median_kW'],
+                    name=f'🏢 Trung Vị Trạm {deep_res["station_tag"]} (kW)',
+                    line=dict(color='#0284C7', width=2, dash='dash'),
+                    hovertemplate='Thời gian: %{x}<br>TB Trạm: <b>%{y:.1f} kW</b><extra></extra>'
+                ),
+                secondary_y=False
+            )
+
+            # Đường 3: Inverter được chọn P(kW)
+            inv_color = '#EF4444' if d_met['health_status'] == 'CRITICAL' else ('#F59E0B' if d_met['health_status'] == 'MAJOR' else ('#EAB308' if d_met['health_status'] == 'MINOR' else '#10B981'))
+            fig_dd.add_trace(
+                go.Scatter(
+                    x=df_plot['Timestamp'],
+                    y=df_plot['Inv_Power_kW'],
+                    name=f'⚡ {selected_inv_id} (kW)',
+                    line=dict(color=inv_color, width=3),
+                    hovertemplate='Thời gian: %{x}<br>Công suất Inverter: <b>%{y:.1f} kW</b><extra></extra>'
+                ),
+                secondary_y=False
+            )
+
+            fig_dd.update_layout(
+                title=f"<b>ĐƯỜNG CONG CÔNG SUẤT 1 PHÚT: {selected_inv_id} vs TRẠM {deep_res['station_name']} ({deep_res['date_str']})</b>",
+                template='plotly_white',
+                height=460,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                xaxis=dict(title="Thời Gian (1 Phút)", showgrid=True),
+                yaxis=dict(title="Công Suất Inverter P (kW)", showgrid=True),
+                yaxis2=dict(title="Bức Xạ POA / GHI (W/m²)", showgrid=False)
+            )
+
+            st.plotly_chart(fig_dd, use_container_width=True)
+
+        # 5. NÚT XUẤT BÁO CÁO EXCEL & CSV
         st.markdown("---")
         c_ex1, c_ex2, c_ex3 = st.columns([2.5, 2.0, 2.5])
         with c_ex1:
