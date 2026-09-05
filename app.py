@@ -222,6 +222,70 @@ st.markdown("""
         font-weight: 750 !important;
     }
 
+    /* Bootstrap 5 Vertical Navigation Menu in Sidebar */
+    .bs-sidebar-nav-header {
+        font-size: 0.80rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #0284C7;
+        margin-top: 0.75rem;
+        margin-bottom: 0.45rem;
+        padding-left: 0.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    [data-testid="stSidebar"] div[role="radiogroup"] {
+        gap: 0.4rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label {
+        background: #FFFFFF !important;
+        border: 1.5px solid #E2E8F0 !important;
+        border-radius: 0.65rem !important;
+        padding: 0.65rem 0.85rem !important;
+        margin-bottom: 0.15rem !important;
+        transition: all 0.2s ease-in-out !important;
+        cursor: pointer !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background: #F0F9FF !important;
+        border-color: #38BDF8 !important;
+        transform: translateX(4px) !important;
+        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        border-color: #0284C7 !important;
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
+        transform: translateX(4px) !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {
+        color: #FFFFFF !important;
+        font-weight: 750 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label p {
+        font-size: 0.86rem !important;
+        font-weight: 600 !important;
+        color: #334155 !important;
+        margin: 0 !important;
+        line-height: 1.35 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"] {
+        display: none !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] div[data-testid="stMarkdownContainer"] {
+        width: 100% !important;
+    }
+
     /* Bootstrap 5 Card Metrics */
     [data-testid="stMetric"] {
         background: #FFFFFF;
@@ -334,37 +398,64 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- SIDEBAR CẤU HÌNH THÔNG SỐ VẬN HÀNH (BOOTSTRAP THEME) ---
+# =========================================================================
+# DANH MỤC ĐIỀU HÀNH HỆ THỐNG (MENU HÀNG DỌC BOOTSTRAP 5)
+# =========================================================================
+NAV_OPTIONS = [
+    "📊 1. Dự Báo 96 Chu Kỳ Ngày (File Đang Chọn)",
+    "⚡ 2. Dự Báo 18 Chu Kỳ Cuốn Chiếu (4.5h)",
+    "⚖️ 3. So Sánh & Đánh Giá Sai Số (Thực Tế vs Dự Báo)",
+    "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
+    "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
+    "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)"
+]
+
+# --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
 with st.sidebar:
     if os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=190)
     else:
         st.markdown("<h4 class='text-primary fw-bold'><i class='bi bi-lightning-charge-fill text-warning'></i> ELECTRIC BIRD</h4>", unsafe_allow_html=True)
     
-    st.markdown("<h5 class='fw-bold mt-2'><i class='bi bi-sliders text-primary'></i> Cấu Hình Thông Số</h5>", unsafe_allow_html=True)
-    st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")
+    st.markdown("""
+    <div class="bs-sidebar-nav-header">
+        <i class="bi bi-compass-fill text-primary"></i> DANH MỤC ĐIỀU HÀNH HỆ THỐNG
+    </div>
+    """, unsafe_allow_html=True)
     
-    dc_capacity = st.number_input(
-        "⚡ Công suất DC tấm pin (MWp)", 
-        min_value=1.0, max_value=200.0, 
-        value=float(MyHiepSolarPlantConfig.DC_CAPACITY_MWP), 
-        step=1.0,
-        help="Tổng công suất lắp đặt các tấm pin DC của nhà máy Mỹ Hiệp."
+    selected_menu = st.radio(
+        "Menu Điều Hành Hệ Thống:",
+        NAV_OPTIONS,
+        index=0,
+        label_visibility="collapsed",
+        key="app_vertical_navigation"
     )
+    
+    st.markdown("<hr style='margin: 0.9rem 0; opacity: 0.15;'>", unsafe_allow_html=True)
+    
+    with st.expander("⚙️ Cấu Hình Thông Số Kỹ Thuật (50MWp / 40.075MW)", expanded=False):
+        st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")
+        
+        dc_capacity = st.number_input(
+            "⚡ Công suất DC tấm pin (MWp)", 
+            min_value=1.0, max_value=200.0, 
+            value=float(MyHiepSolarPlantConfig.DC_CAPACITY_MWP), 
+            step=1.0,
+            help="Tổng công suất lắp đặt các tấm pin DC của nhà máy Mỹ Hiệp."
+        )
 
-    ac_capacity = st.number_input(
-        "🔌 Giới hạn Inverter AC (MW)", 
-        min_value=1.0, max_value=200.0, 
-        value=float(MyHiepSolarPlantConfig.AC_CAPACITY_MW), 
-        step=0.025,
-        format="%.3f",
-        help="Tổng công suất định mức xoay chiều AC của hệ thống Inverter."
-    )
+        ac_capacity = st.number_input(
+            "🔌 Giới hạn Inverter AC (MW)", 
+            min_value=1.0, max_value=200.0, 
+            value=float(MyHiepSolarPlantConfig.AC_CAPACITY_MW), 
+            step=0.025,
+            format="%.3f",
+            help="Tổng công suất định mức xoay chiều AC của hệ thống Inverter."
+        )
 
-    st.markdown(f"<div class='p-2 bg-light rounded border text-muted small'><b>Tỉ số DC/AC:</b> <code>{dc_capacity / ac_capacity:.3f}</code> <span class='badge bg-warning text-dark'>Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='p-2 bg-light rounded border text-muted small my-2'><b>Tỉ số DC/AC:</b> <code>{dc_capacity / ac_capacity:.3f}</code> <span class='badge bg-warning text-dark'>Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%</span></div>", unsafe_allow_html=True)
 
-    with st.expander("🔧 Thông số Tấm Pin Sharp NU-440", expanded=False):
-        st.caption("Datasheet: Sharp NU-440 (NU-JD440) Monocrystalline")
+        st.markdown("<b>Tấm Pin Sharp NU-440:</b>", unsafe_allow_html=True)
         temp_coeff_pct = st.number_input(
             "Hệ số nhiệt độ Pmp (%/°C)", 
             value=-0.347, 
@@ -380,7 +471,7 @@ with st.sidebar:
             step=1.0
         )
 
-    with st.expander("📉 Các Hệ số Tổn thất Kỹ thuật (%)", expanded=False):
+        st.markdown("<b>Hệ số tổn thất (%):</b>", unsafe_allow_html=True)
         soiling_pct = st.slider("Tổn thất bụi bẩn (Soiling %)", 0.0, 10.0, MyHiepSolarPlantConfig.DEFAULT_SOILING_LOSS * 100.0, 0.1)
         dc_cable_pct = st.slider("Tổn thất cáp DC (%)", 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_DC_CABLE_LOSS * 100.0, 0.1)
         mismatch_pct = st.slider("Tổn thất Mismatch & LID (%)", 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_MISMATCH_LID_LOSS * 100.0, 0.1)
@@ -505,23 +596,13 @@ if current_day_data is None or current_day_data.get('forecast_15min') is None:
 
 
 # =========================================================================
-# 5 TAB ĐIỀU HÀNH & DỰ BÁO ĐA CHU KỲ & ĐỐI SOÁT LỊCH SỬ 4 CÔNG TƠ
+# KHUNG HIỂN THỊ NỘI DUNG THEO MENU HÀNG DỌC ĐANG CHỌN
 # =========================================================================
-tab_1day, tab_18c, tab_comp, tab_multi, tab_history, tab_performance = st.tabs([
-    "📊 1. Dự Báo 96 Chu Kỳ Ngày (File Đang Chọn)",
-    "⚡ 2. Dự Báo 18 Chu Kỳ Cuốn Chiếu (4.5h)",
-    "⚖️ 3. So Sánh & Đánh Giá Sai Số (Thực Tế vs Dự Báo)",
-    "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
-    "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
-    "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)"
-])
-
-
 
 # -------------------------------------------------------------------------
-# TAB 1: DỰ BÁO 96 CHU KỲ NGÀY & CẬP NHẬT DỮ LIỆU P / W TÙY BIẾN
+# PHẦN 1: DỰ BÁO 96 CHU KỲ NGÀY & CẬP NHẬT DỮ LIỆU P / W TÙY BIẾN
 # -------------------------------------------------------------------------
-with tab_1day:
+if selected_menu == NAV_OPTIONS[0]:
     # 1. Xác định dữ liệu 96 chu kỳ đang kích hoạt (Gốc hoặc Tùy chỉnh P & W)
     is_custom_pw = st.session_state.get('custom_pw_15min') is not None
     if is_custom_pw:
@@ -800,9 +881,9 @@ with tab_1day:
 
 
 # -------------------------------------------------------------------------
-# TAB 2: DỰ BÁO 18 CHU KỲ CUỐN CHIẾU THEO THỜI GIAN THỰC (TÍCH HỢP AI & UPDATE W/P)
+# PHẦN 2: DỰ BÁO 18 CHU KỲ CUỐN CHIẾU THEO THỜI GIAN THỰC (TÍCH HỢP AI & UPDATE W/P)
 # -------------------------------------------------------------------------
-with tab_18c:
+elif selected_menu == NAV_OPTIONS[1]:
     st.subheader("⚡ Dự Báo 18 Chu Kỳ Tiếp Theo Thời Gian Thực (Ultra-Short-Term Rolling Forecast)")
     st.caption("Dự báo cuốn chiếu 18 chu kỳ 15 phút (4.5 giờ tới) tích hợp AI tự động học sai số từ dữ liệu đo đếm W (Bức xạ) & P (Công suất) thực tế phục vụ đăng ký biểu đồ điều độ tức thời A0 / A3.")
     
@@ -1065,9 +1146,9 @@ with tab_18c:
 
 
 # -------------------------------------------------------------------------
-# TAB 3: SO SÁNH & ĐÁNH GIÁ SAI SỐ (THỰC TẾ VS DỰ BÁO)
+# PHẦN 3: SO SÁNH & ĐÁNH GIÁ SAI SỐ (THỰC TẾ VS DỰ BÁO)
 # -------------------------------------------------------------------------
-with tab_comp:
+elif selected_menu == NAV_OPTIONS[2]:
     comp_df = current_day_data.get('comparison_df')
     comp_kpi = current_day_data.get('comparison_kpis')
     
@@ -1101,9 +1182,9 @@ with tab_comp:
 
 
 # -------------------------------------------------------------------------
-# TAB 4: DỰ BÁO ĐA CHU KỲ & THUYẾT MINH THỜI TIẾT (PHÙ MỸ NAM)
+# PHẦN 4: DỰ BÁO ĐA CHU KỲ & THUYẾT MINH THỜI TIẾT (PHÙ MỸ NAM)
 # -------------------------------------------------------------------------
-with tab_multi:
+elif selected_menu == NAV_OPTIONS[3]:
     st.subheader("🔮 Hệ Thống Dự Báo Đa Khung Thời Gian & Khí Tượng Số (Phù Mỹ Nam)")
     st.caption("Mô hình AI kết hợp 3 yếu tố cốt lõi: Lịch sử sản lượng công tơ 171C (2.069 ngày) + Dự báo Thời tiết khu vực nhà máy (Phù Mỹ Nam) + Thuật toán AI Physics-Informed ML.")
 
@@ -1926,9 +2007,9 @@ with tab_multi:
 
 
 # -------------------------------------------------------------------------
-# TAB 5: PHÂN TÍCH & ĐỐI SOÁT LỊCH SỬ 4 CÔNG TƠ (2020 - 2026)
+# PHẦN 5: PHÂN TÍCH & ĐỐI SOÁT LỊCH SỬ 4 CÔNG TƠ (2020 - 2026)
 # -------------------------------------------------------------------------
-with tab_history:
+elif selected_menu == NAV_OPTIONS[4]:
     st.subheader("📈 Phân Tích & Đối Soát Cơ Sở Dữ Liệu Lịch Sử 4 Công Tơ (2020 - 2026)")
     st.caption("Kho dữ liệu đo đếm thực tế 2.069 ngày từ 01/12/2020 đến 31/07/2026 tại Nhà máy ĐMT Mỹ Hiệp (50MWp / 40.075MW)")
 
@@ -2206,9 +2287,9 @@ with tab_history:
 
 
 # -------------------------------------------------------------------------
-# TAB 6: BÁO CÁO VẬN HÀNH & CHỈ SỐ HIỆU SUẤT PR (IEC 61724 - 19 CỘT)
+# PHẦN 6: BÁO CÁO VẬN HÀNH & CHỈ SỐ HIỆU SUẤT PR (IEC 61724 - 19 CỘT)
 # -------------------------------------------------------------------------
-with tab_performance:
+elif selected_menu == NAV_OPTIONS[5]:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #10B981;">
         <div style="font-size: 1.35rem; font-weight: 750; color: #34D399; margin-bottom: 4px;">
