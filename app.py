@@ -2629,10 +2629,11 @@ elif selected_menu == NAV_OPTIONS[6]:
             st.success("✅ Toàn bộ 229 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
 
         # 3. BIỂU ĐỒ TRỰC QUAN HÓA
-        tab_chart1, tab_chart2, tab_chart3 = st.tabs([
+        tab_chart1, tab_chart2, tab_chart3, tab_chart4 = st.tabs([
             "📊 1. So Sánh Sản Lượng & Tổn Thất 7 Trạm (S1 - S7)",
             "🗺️ 2. Ma Trận Trạng Thái 229 Inverter (Health Grid)",
-            "📉 3. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất"
+            "🏆 3. Top 15 Inverter Phát Điện Tốt Nhất",
+            "📉 4. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất"
         ])
 
         with tab_chart1:
@@ -2682,7 +2683,7 @@ elif selected_menu == NAV_OPTIONS[6]:
                         hoverinfo='text'
                     ))
             fig_matrix.update_layout(
-                title="<b>MA TRẬN ĐÁNH GIÁ SỨC KHỎE 233 INVERTER THEO 7 TRẠM (S1 - S7)</b>",
+                title="<b>MA TRẬN ĐÁNH GIÁ SỨC KHỎE 229 INVERTER THEO 7 TRẠM (S1 - S7)</b>",
                 xaxis_title="Trạm Biến Áp",
                 yaxis_title="Mã Inverter",
                 template='plotly_white',
@@ -2691,6 +2692,33 @@ elif selected_menu == NAV_OPTIONS[6]:
             st.plotly_chart(fig_matrix, use_container_width=True)
 
         with tab_chart3:
+            top_best = df_inv.sort_values(by='Energy_kWh', ascending=False).head(15)
+            fig_best = go.Figure()
+            fig_best.add_trace(go.Bar(
+                x=top_best['Energy_kWh'],
+                y=top_best['Inverter_ID'] + ' (' + top_best['Station_Tag'] + ')',
+                orientation='h',
+                marker=dict(
+                    color=top_best['Energy_kWh'],
+                    colorscale='Viridis',
+                    showscale=True,
+                    colorbar=dict(title="Sản lượng (kWh)", thickness=12)
+                ),
+                text=[f"⚡ {v:,.1f} kWh | P: {p:.1f} kW" for v, p in zip(top_best['Energy_kWh'], top_best['Peak_kW'])],
+                textposition='auto',
+                hovertemplate="<b>%{y}</b><br>⚡ Sản lượng: <b>%{x:,.1f} kWh</b><extra></extra>"
+            ))
+            fig_best.update_layout(
+                title="<b>TOP 15 INVERTER PHÁT ĐIỆN TỐT NHẤT TOÀN NHÀ MÁY (SẢN LƯỢNG CAO NHẤT)</b>",
+                xaxis_title="Sản Lượng Phát (kWh)",
+                yaxis_title="Mã Inverter (Trạm)",
+                yaxis=dict(autorange="reversed"),
+                template='plotly_white',
+                height=480
+            )
+            st.plotly_chart(fig_best, use_container_width=True)
+
+        with tab_chart4:
             top_worst = df_inv.sort_values(by='Est_Loss_kWh', ascending=False).head(15)
             fig_worst = go.Figure()
             fig_worst.add_trace(go.Bar(
@@ -2707,7 +2735,7 @@ elif selected_menu == NAV_OPTIONS[6]:
                 yaxis_title="Mã Inverter",
                 yaxis=dict(autorange="reversed"),
                 template='plotly_white',
-                height=450
+                height=480
             )
             st.plotly_chart(fig_worst, use_container_width=True)
 
