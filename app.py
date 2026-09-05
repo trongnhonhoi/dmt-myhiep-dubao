@@ -2494,7 +2494,7 @@ elif selected_menu == NAV_OPTIONS[6]:
             🚨 HỆ THỐNG PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN SỰ CỐ INVERTER (S1 - S7)
         </div>
         <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-            Tự động quét và phân tích dữ liệu 1 phút của <b>230 Inverter thực tế</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA (Đã loại trừ 3 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18); phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
+            Tự động quét và phân tích dữ liệu 1 phút của <b>229 Inverter thực tế</b> thuộc <b>7 Trạm biến áp</b> (S1, S2, S3, S4, S5, S6, S7) từ máy chủ SCADA (Đã loại trừ 4 vị trí dự phòng không tồn tại INV 5.1.18, INV 4.1.18, INV 1.2.18, INV 2.2.18); phát hiện mất điện / ngắt CB (Offline), suy giảm chuỗi pin String DC, quá nhiệt Inverter Derating và định lượng chính xác năng lượng tổn thất.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -2562,7 +2562,7 @@ elif selected_menu == NAV_OPTIONS[6]:
         st.write("")
         btn_run_diag = st.button("🚀 Chạy Phân Tích & Chẩn Đoán", type="primary", use_container_width=True, key="btn_run_inv_diag")
 
-    with st.spinner(f"Đang quét file S1..S7 và phân tích 233 Inverter cho khung thời gian {tf_code}..."):
+    with st.spinner(f"Đang quét file S1..S7 và phân tích 229 Inverter cho khung thời gian {tf_code}..."):
         diag_res = inv_mgr.analyze_timeframe(tf_code)
 
     if diag_res.get('status') == 'SUCCESS':
@@ -2601,12 +2601,12 @@ elif selected_menu == NAV_OPTIONS[6]:
                 alert_items_html += f'<div class="col-md-6 mb-2"><div class="card p-2 border-start border-4 {border_color} shadow-sm h-100"><div class="d-flex justify-content-between align-items-center"><span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> {r["Inverter_ID"]} ({r["Station"]})</span><span class="badge {badge_color}">{r["Health_Status"]}</span></div><div class="text-muted small mt-1">• <b>Hiện trạng:</b> {r["Anomaly_Type"]}<br>• <b>Sản lượng:</b> <code>{r["Energy_kWh"]:.1f} kWh/ng</code> | Đạt: <code>{r["Ratio_Station_Pct"]:.1f}%</code> TB trạm | Mất: <code>~{r["Est_Loss_kWh"]:.1f} kWh</code></div></div></div>'
             st.markdown(f'<div class="row g-2 mb-3">{alert_items_html}</div>', unsafe_allow_html=True)
         else:
-            st.success("✅ Toàn bộ 233 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
+            st.success("✅ Toàn bộ 229 Inverter thuộc 7 Trạm biến áp đang hoạt động đồng đều và bình thường!")
 
         # 3. BIỂU ĐỒ TRỰC QUAN HÓA
         tab_chart1, tab_chart2, tab_chart3 = st.tabs([
             "📊 1. So Sánh Sản Lượng & Tổn Thất 7 Trạm (S1 - S7)",
-            "🗺️ 2. Ma Trận Trạng Thái 233 Inverter (Health Grid)",
+            "🗺️ 2. Ma Trận Trạng Thái 229 Inverter (Health Grid)",
             "📉 3. Top 15 Inverter Tổn Thất Năng Lượng Lớn Nhất"
         ])
 
@@ -2711,8 +2711,8 @@ elif selected_menu == NAV_OPTIONS[6]:
         with c_ex3:
             st.caption(f"Tổng hợp: **{len(df_inv)} Inverter** | Khung thời gian: **{tf_code}** ({date_range})")
 
-        # 5. BẢNG CHI TIẾT 233 INVERTER (CÓ BỘ LỌC)
-        st.markdown("##### 📑 Bảng Chi Tiết Toàn Bộ 233 Inverter (Hỗ Trợ Lọc Trạm & Trạng Thái):")
+        # 5. BẢNG CHI TIẾT 229 INVERTER (CÓ BỘ LỌC)
+        st.markdown("##### 📑 Bảng Chi Tiết Toàn Bộ 229 Inverter (Hỗ Trợ Lọc Trạm & Trạng Thái):")
         f_col1, f_col2, _ = st.columns([2, 2, 3])
         with f_col1:
             filter_st = st.selectbox("Lọc theo trạm:", ["Tất Cả (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"], index=0)

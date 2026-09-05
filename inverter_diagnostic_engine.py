@@ -1,6 +1,6 @@
 """
 MODULE PHÂN TÍCH CÔNG SUẤT BẤT THƯỜNG & CHẨN ĐOÁN INVERTER (S1 - S7)
-NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp / 40.075MW) - 233 INVERTER
+NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP (50MWp / 40.075MW) - 229 INVERTER
 Xử lý dữ liệu S1.txt, S2.txt, S3.txt, S4.txt, S5.txt, S6.txt, S7.txt
 Đa khung thời gian: D-1..D-7, W-1..W-4, M-1..M-3
 """
@@ -14,10 +14,10 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Tuple, Optional
 
-# Cấu hình danh mục 7 Trạm Inverter tại Nhà Máy ĐMT Mỹ Hiệp (Tổng cộng 230 Inverter thực tế)
+# Cấu hình danh mục 7 Trạm Inverter tại Nhà Máy ĐMT Mỹ Hiệp (Tổng cộng 229 Inverter thực tế)
 STATION_CONFIG = {
     'S1': {'name': 'STATION-01', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-1-2-18 (không tồn tại)
-    'S2': {'name': 'STATION-02', 'capacity_mw': 5.76, 'inverters': 36},
+    'S2': {'name': 'STATION-02', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-2-2-18 (không tồn tại)
     'S3': {'name': 'STATION-03', 'capacity_mw': 5.60, 'inverters': 35},
     'S4': {'name': 'STATION-04', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-4-1-18 (không tồn tại)
     'S5': {'name': 'STATION-05', 'capacity_mw': 5.60, 'inverters': 35}, # Loại trừ INV-5-1-18 (không tồn tại)
@@ -29,22 +29,32 @@ STATION_CONFIG = {
 EXCLUDED_INVERTERS = {
     'INV-5-1-18', 'INV-5.1.18', 'INV 5.1.18', 'INV5.1.18',
     'INV-4-1-18', 'INV-4.1.18', 'INV 4.1.18', 'INV4.1.18',
-    'INV-1-2-18', 'INV-1.2.18', 'INV 1.2.18', 'INV1.2.18'
+    'INV-1-2-18', 'INV-1.2.18', 'INV 1.2.18', 'INV1.2.18',
+    'INV-2-2-18', 'INV-2.2.18', 'INV 2.2.18', 'INV2.2.18',
 }
 
 def is_excluded_inverter(inv_name: str) -> bool:
-    """Kiểm tra Inverter có thuộc danh sách không tồn tại cần loại bỏ không"""
+    """Kiểm tra Inverter có thuộc danh sách không tồn tại cần loại bỏ không (INV 5.1.18, 4.1.18, 1.2.18, 2.2.18)"""
     if not inv_name:
         return True
-    cleaned = inv_name.strip().upper().replace('.', '-').replace(' ', '-')
-    for ex in EXCLUDED_INVERTERS:
-        if ex.upper().replace('.', '-').replace(' ', '-') in cleaned or cleaned in ex.upper().replace('.', '-').replace(' ', '-'):
-            return True
-    if re.search(r'INV[-_\.\s]*5[-_\.\s]*1[-_\.\s]*18', inv_name, re.IGNORECASE):
+    cleaned = re.sub(r'[-_\.\s]+', '-', inv_name.strip().upper())
+    
+    target_excluded = {
+        'INV-5-1-18',
+        'INV-4-1-18',
+        'INV-1-2-18',
+        'INV-2-2-18',
+    }
+    if cleaned in target_excluded:
         return True
-    if re.search(r'INV[-_\.\s]*4[-_\.\s]*1[-_\.\s]*18', inv_name, re.IGNORECASE):
+    
+    if re.search(r'^INV[-_\.\s]*5[-_\.\s]*1[-_\.\s]*18$', inv_name.strip(), re.IGNORECASE):
         return True
-    if re.search(r'INV[-_\.\s]*1[-_\.\s]*2[-_\.\s]*18', inv_name, re.IGNORECASE):
+    if re.search(r'^INV[-_\.\s]*4[-_\.\s]*1[-_\.\s]*18$', inv_name.strip(), re.IGNORECASE):
+        return True
+    if re.search(r'^INV[-_\.\s]*1[-_\.\s]*2[-_\.\s]*18$', inv_name.strip(), re.IGNORECASE):
+        return True
+    if re.search(r'^INV[-_\.\s]*2[-_\.\s]*2[-_\.\s]*18$', inv_name.strip(), re.IGNORECASE):
         return True
     return False
 
