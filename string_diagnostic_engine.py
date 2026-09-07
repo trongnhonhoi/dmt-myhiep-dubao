@@ -345,6 +345,17 @@ class StringDataManager:
                     'status': mppt_st
                 })
 
+            # Helper format PV list
+            def _format_pvs(pvs):
+                if not pvs: return ""
+                if isinstance(pvs, (list, tuple, set)):
+                    return ", ".join([f"PV{x}" for x in sorted(pvs)])
+                return f"PV{pvs}"
+
+            dead_pv_indices = open_circuit_strings if open_circuit_strings else zero_u_strings
+            dead_pv_txt = _format_pvs(dead_pv_indices)
+            low_pv_txt = _format_pvs(low_i_strings)
+
             # Root Cause & Priorities
             if 'DISCONNECT' in status.upper():
                 health_status = 'CRITICAL'
@@ -364,35 +375,42 @@ class StringDataManager:
                 health_status = 'MAJOR'
                 anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
                 if len(both_dead_mppts) >= 2:
-                    root_cause_summary = f'Đứt tuyến cáp tổng máng gom hoặc hỏng bo mạch MPPT (Mất cả cặp tại MPPT {both_dead_mppts}).'
+                    root_cause_summary = f'Đứt tuyến cáp tổng máng gom hoặc hỏng bo mạch MPPT (Mất cả cặp tại MPPT {both_dead_mppts} gồm các chuỗi {dead_pv_txt}).'
                     action_recommendation = f'Đo kiểm tra điện áp Voc tại đầu vào MPPT {both_dead_mppts}, rà soát tuyến cáp ngầm từ giàn pin.'
                 else:
-                    root_cause_summary = f'Hở mạch {dead_count} chuỗi riêng lẻ tại các giàn pin (Tuột giắc MC4 / Đứt cáp nhánh).'
-                    action_recommendation = f'Dùng Ampe kìm DC đo từng chuỗi PV{open_circuit_strings}, bấm lại giắc MC4 bị cháy/lỏng.'
+                    root_cause_summary = f'Hở mạch {dead_count} chuỗi riêng lẻ tại các giàn pin ({dead_pv_txt}: Tuột giắc MC4 / Đứt cáp nhánh).'
+                    action_recommendation = f'Dùng Ampe kìm DC đo từng chuỗi {dead_pv_txt}, bấm lại giắc MC4 bị cháy/lỏng.'
                 loss_kw = dead_count * benchmark_string_kw
                 priority_level = "Mức 1 (Khẩn Cấp)" if dead_count >= 5 else "Mức 2 (Trung Bình)"
             elif dead_count >= 1:
                 health_status = 'MINOR'
                 anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
-                root_cause_summary = f'Tuột/cháy giắc MC4 hoặc đứt cáp nhánh tại chuỗi PV{open_circuit_strings}.'
-                action_recommendation = f'Kiểm tra và bấm lại giắc nối MC4 chuỗi PV{open_circuit_strings} tại đầu Inverter và giàn pin.'
+                root_cause_summary = f'Tuột/cháy giắc MC4 hoặc đứt cáp nhánh tại chuỗi {dead_pv_txt}.'
+                action_recommendation = f'Kiểm tra và bấm lại giắc nối MC4 chuỗi {dead_pv_txt} tại đầu Inverter và giàn pin.'
                 loss_kw = dead_count * benchmark_string_kw
                 priority_level = "Mức 2 (Trung Bình)"
-            elif len(low_i_strings) > 0 or mppt_mismatch_max > 25.0:
+            elif len(low_i_strings) > 0:
                 health_status = 'WARNING'
-                anomaly_type = f'Lệch Dòng ({len(low_i_strings)} Chuỗi)' if len(low_i_strings) > 0 else f'Lệch MPPT ({mppt_mismatch_max}%)'
-                root_cause_summary = f'Bụi bẩn, che bóng cục bộ hoặc hỏng Diode Bypass tại chuỗi PV{low_i_strings if low_i_strings else "lệch MPPT"}.'
-                action_recommendation = 'Vệ sinh rửa bề mặt tấm pin, dùng Camera nhiệt FLIR quét tìm Hotspot và Diode hỏng.'
-                loss_kw = max(len(low_i_strings), 1) * (benchmark_string_kw * 0.35)
-                priority_level = "Mức 3 (Cần Theo Dõi / Vệ Sinh)"
+                anomaly_type = f'Suy Giảm Dòng ({len(low_i_strings)} Chuỗi)'
+                root_cause_summary = f'Bụi bẩn, che bóng cục bộ hoặc hỏng Diode Bypass tại chuỗi {low_pv_txt}.'
+                action_recommendation = f'Vệ sinh rửa bề mặt tấm pin các chuỗi {low_pv_txt}, dùng Camera nhiệt FLIR quét tìm Hotspot và Diode hỏng.'
+                loss_kw = len(low_i_strings) * (benchmark_string_kw * 0.35)
+                priority_level = "Mức 3 (Cần Vệ Sinh / Kiểm Tra)"
+            elif mppt_mismatch_max > 45.0:
+                health_status = 'WARNING'
+                anomaly_type = f'Lệch Cặp MPPT ({mppt_mismatch_max}%)'
+                root_cause_summary = f'Lệch dòng đáng kể giữa 2 chuỗi cùng cổng MPPT (chênh lệch {mppt_mismatch_max}%). Có thể do che bóng hoặc góc đón nắng giàn pin.'
+                action_recommendation = 'Kiểm tra đấu nối đầu vào MPPT, kiểm tra bề mặt tấm pin và độ đồng đều giàn pin.'
+                loss_kw = benchmark_string_kw * 0.25
+                priority_level = "Mức 3 (Theo Dõi Thêm)"
             else:
                 health_status = 'NORMAL'
                 if not has_pv18:
                     anomaly_type = 'Bình Thường (17/17 String)'
-                    root_cause_summary = 'Tất cả 17 chuỗi String DC hoạt động hoàn hảo (Chuỗi PV18 không đấu nối theo thiết kế).'
+                    root_cause_summary = 'Tất cả 17 chuỗi String DC hoạt động đồng đều, đạt công suất (Chuỗi PV18 không đấu nối theo thiết kế).'
                 else:
                     anomaly_type = 'Bình Thường (18/18 String)'
-                    root_cause_summary = 'Tất cả 18 chuỗi String DC hoạt động đồng đều, hiệu suất cao.'
+                    root_cause_summary = 'Tất cả 18 chuỗi String DC hoạt động đồng đều, đạt công suất tối ưu.'
                 action_recommendation = 'Tiếp tục theo dõi vận hành bình thường.'
                 loss_kw = 0.0
                 priority_level = "Mức 4 (Bình Thường)"
