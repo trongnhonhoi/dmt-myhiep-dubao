@@ -57,7 +57,8 @@ from string_diagnostic_engine import (
     StringDataManager,
     export_string_diagnostics_to_excel_bytes,
     DEFAULT_STRING_PATH,
-    LOGGER_MAPPING
+    LOGGER_MAPPING,
+    NO_PV18_INVERTERS
 )
 
 from solar_engine import (
@@ -3653,6 +3654,16 @@ elif selected_menu == NAV_OPTIONS[7]:
         with st.spinner("⏳ Đang giải nén và phân tích 4.040 chuỗi String DC từ SmartLogger..."):
             df_strings = string_mgr.load_string_data(target_dir=target_snap_dir)
 
+        if not df_strings.empty:
+            if 'Installed_Strings' not in df_strings.columns or 'Has_PV18' not in df_strings.columns:
+                df_strings = string_mgr.load_string_data(target_dir=target_snap_dir, force_reload=True)
+            if 'Installed_Strings' not in df_strings.columns:
+                df_strings['Installed_Strings'] = df_strings['Inverter_ID'].apply(lambda x: 17 if str(x).strip() in NO_PV18_INVERTERS else 18)
+            if 'Has_PV18' not in df_strings.columns:
+                df_strings['Has_PV18'] = df_strings['Installed_Strings'] == 18
+            if 'PV18_Note' not in df_strings.columns:
+                df_strings['PV18_Note'] = df_strings['Has_PV18'].apply(lambda x: 'Có PV18' if x else 'Không Đấu PV18 (Thiết kế)')
+
         if df_strings.empty:
             st.warning("⚠️ Không tìm thấy dữ liệu tệp nén SmartLogger (.tar.gz) hợp lệ trong thư mục đã chọn.")
         else:
@@ -3757,7 +3768,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 string_x_labels = [f"PV{i}" for i in range(1, 19)]
 
                 for _, r in df_hm_pool.iterrows():
-                    inv_lbl = f"{r['Inverter_ID']} ({r['Station_Tag']}) [{r['Installed_Strings']}S]"
+                    inv_lbl = f"{r['Inverter_ID']} ({r['Station_Tag']}) [{r.get('Installed_Strings', 18)}S]"
                     inv_y_labels.append(inv_lbl)
                     
                     if "Dòng Điện" in hm_metric:
@@ -3771,7 +3782,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                         unit = "V"
                     
                     # Nếu Inverter không có PV18, đặt None/NaN cho cột 18 để không tính nhầm
-                    if not r['Has_PV18']:
+                    if not r.get('Has_PV18', True):
                         row_vals[17] = None
                     
                     z_matrix.append(row_vals)
@@ -3779,7 +3790,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                     # Tạo hover text chi tiết
                     row_hover = []
                     for idx in range(18):
-                        if idx == 17 and not r['Has_PV18']:
+                        if idx == 17 and not r.get('Has_PV18', True):
                             txt = (f"<b>{r['Inverter_ID']}</b> ({r['Station_Tag']}) - <b>PV18</b><br>"
                                    f"<b>⚪ KHÔNG ĐẤU NỐI (Theo Thiết Kế)</b><br>"
                                    f"Inverter sử dụng cấu hình 17 chuỗi String.")
@@ -3939,7 +3950,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 dive_options = []
                 for _, r in df_dive_pool.iterrows():
                     badge = "🔴" if r['Health_Status'] == 'CRITICAL' else ("🟠" if r['Health_Status'] == 'MAJOR' else ("🟡" if r['Health_Status'] in ['MINOR', 'WARNING'] else "🟢"))
-                    str_note = f"[{r['Installed_Strings']}S]"
+                    str_note = f"[{r.get('Installed_Strings', 18)}S]"
                     lbl = f"{r['Inverter_ID']} ({r['Station_Tag']}) {str_note} | {badge} {r['Anomaly_Type']} - Pdc: {r['Total_Pdc_kW']:.1f} kW"
                     dive_options.append((lbl, r['Inverter_ID']))
 
@@ -3961,9 +3972,9 @@ elif selected_menu == NAV_OPTIONS[7]:
                 # Thẻ thông số chi tiết Inverter được chọn
                 ic1, ic2, ic3, ic4 = st.columns(4)
                 with ic1:
-                    st.metric("⚡ Trạng Thái Máy", target_inv_data['Device_Status'], delta=f"Cấu hình: {target_inv_data['Installed_Strings']} String ({target_inv_data['PV18_Note']})")
+                    st.metric("⚡ Trạng Thái Máy", target_inv_data['Device_Status'], delta=f"Cấu hình: {target_inv_data.get('Installed_Strings', 18)} String ({target_inv_data.get('PV18_Note', 'Đấu Nối')})")
                 with ic2:
-                    st.metric("🔌 Công Suất DC Tức Thời", f"{target_inv_data['Total_Pdc_kW']:.2f} kW", delta=f"{target_inv_data['Active_Strings']}/{target_inv_data['Installed_Strings']} String đang phát")
+                    st.metric("🔌 Công Suất DC Tức Thời", f"{target_inv_data['Total_Pdc_kW']:.2f} kW", delta=f"{target_inv_data['Active_Strings']}/{target_inv_data.get('Installed_Strings', 18)} String đang phát")
                 with ic3:
                     st.metric("✂️ Tổn Thất Ước Tính", f"{target_inv_data['Est_Loss_kW']:.2f} kW", delta=f"{target_inv_data['Dead_Strings_Count']} chuỗi hỏng")
                 with ic4:
@@ -3978,7 +3989,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 bar_colors = []
                 bar_texts = []
                 for idx, (i_val, u_val) in enumerate(zip(i_vals, u_vals)):
-                    if idx == 17 and not target_inv_data['Has_PV18']:
+                    if idx == 17 and not target_inv_data.get('Has_PV18', True):
                         bar_colors.append('#64748B') # Xám slate - không đấu nối theo thiết kế
                         bar_texts.append("KĐN")
                     elif i_val <= 0.05 and u_val > 300:
