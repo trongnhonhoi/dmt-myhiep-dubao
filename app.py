@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, time
 import os
 import io
+import re
 
 import base64
 import importlib
