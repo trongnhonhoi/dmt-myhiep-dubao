@@ -1,8 +1,8 @@
 r"""
-HỆ THỐNG GIÁM SÁT, TỔNG HỢP VÀ CHẨN ĐOÁN 4.040 CHUỖI STRING DC (HUAWEI SUN2000-175KTL-H0)
+HỆ THỐNG GIÁM SÁT, TỔNG HỢP VÀ CHẨN ĐOÁN 4.058 CHUỖI STRING DC (HUAWEI SUN2000-175KTL-H0)
 NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP - ĐƯỜNG DẪN SMARTLOGGER: D:\STRING_INV
-LƯU Ý THIẾT KẾ: 64 Inverter không có chuỗi PV18 (Tổng 4.040 String = 64 INV x 17 + 164 INV x 18)
-TÍCH HỢP TRỌN GÓI: CẤP CỨU O&M, SUY LUẬN NGUYÊN NHÂN GỐC, PHÂN TÍCH 9 CẶP MPPT, SO SÁNH SNAPSHOT DELTA & XUẤT PHIẾU GIAO VIỆC
+QUY MÔ TOÀN NHÀ MÁY: 229 INVERTER (64 INV x 17S + 165 INV x 18S = 4.058 STRINGS)
+TỰ ĐỘNG PHÁT HIỆN INVERTER THIẾU DỮ LIỆU SMARTLOGGER (VD: INV2.2.1 TẠI TRẠM S2)
 """
 
 import os
@@ -42,9 +42,39 @@ NO_PV18_INVERTERS = {
     'INV7.1.14', 'INV7.1.16', 'INV7.1.17', 'INV7.1.18'
 }
 
+# Danh mục gốc 229 Inverter toàn nhà máy Mỹ Hiệp
+PLANT_MASTER_INVERTERS_MAP = {}
+# S1: 35
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV1.1.{i}"] = {'station': 'S1 (STATION-01)', 'tag': 'S1', 'logger': '102070023339'}
+for i in range(1, 18): PLANT_MASTER_INVERTERS_MAP[f"INV1.2.{i}"] = {'station': 'S1 (STATION-01)', 'tag': 'S1', 'logger': '102070023339'}
+
+# S2: 35 (Gồm cả INV2.2.1 có 18 chuỗi)
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV2.1.{i}"] = {'station': 'S2 (STATION-02)', 'tag': 'S2', 'logger': '102070023322'}
+for i in range(1, 18): PLANT_MASTER_INVERTERS_MAP[f"INV2.2.{i}"] = {'station': 'S2 (STATION-02)', 'tag': 'S2', 'logger': '102070023322'}
+
+# S3: 35
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV3.1.{i}"] = {'station': 'S3 (STATION-03)', 'tag': 'S3', 'logger': '1020B0050070'}
+for i in range(1, 18): PLANT_MASTER_INVERTERS_MAP[f"INV3.2.{i}"] = {'station': 'S3 (STATION-03)', 'tag': 'S3', 'logger': '1020B0050070'}
+
+# S4: 35
+for i in range(1, 18): PLANT_MASTER_INVERTERS_MAP[f"INV4.1.{i}"] = {'station': 'S4 (STATION-04)', 'tag': 'S4', 'logger': '102070023337'}
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV4.2.{i}"] = {'station': 'S4 (STATION-04)', 'tag': 'S4', 'logger': '102070023337'}
+
+# S5: 35
+for i in range(1, 18): PLANT_MASTER_INVERTERS_MAP[f"INV5.1.{i}"] = {'station': 'S5 (STATION-05)', 'tag': 'S5', 'logger': '102070027475'}
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV5.2.{i}"] = {'station': 'S5 (STATION-05)', 'tag': 'S5', 'logger': '102070027475'}
+
+# S6: 36
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV6.1.{i}"] = {'station': 'S6 (STATION-06)', 'tag': 'S6', 'logger': '102070023324'}
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV6.2.{i}"] = {'station': 'S6 (STATION-06)', 'tag': 'S6', 'logger': '102070023324'}
+
+# S7: 18
+for i in range(1, 19): PLANT_MASTER_INVERTERS_MAP[f"INV7.1.{i}"] = {'station': 'S7 (STATION-07)', 'tag': 'S7', 'logger': '102070098529'}
+
+
 LOGGER_MAPPING = {
     '102070023339': {'name': 'S1 (STATION-01)', 'tag': 'S1', 'substation': 'TBA S1 Phù Mỹ Nam', 'inverter_qty': 35},
-    '102070023322': {'name': 'S2 (STATION-02)', 'tag': 'S2', 'substation': 'TBA S2 Phù Mỹ Nam', 'inverter_qty': 34},
+    '102070023322': {'name': 'S2 (STATION-02)', 'tag': 'S2', 'substation': 'TBA S2 Phù Mỹ Nam', 'inverter_qty': 35},
     '1020B0050070': {'name': 'S3 (STATION-03)', 'tag': 'S3', 'substation': 'TBA S3 Phù Mỹ Nam', 'inverter_qty': 35},
     '102070023337': {'name': 'S4 (STATION-04)', 'tag': 'S4', 'substation': 'TBA S4 Phù Mỹ Nam', 'inverter_qty': 35},
     '102070027475': {'name': 'S5 (STATION-05)', 'tag': 'S5', 'substation': 'TBA S5 Phù Mỹ Nam', 'inverter_qty': 35},
@@ -53,7 +83,7 @@ LOGGER_MAPPING = {
 }
 
 class StringDataManager:
-    """Quản lý và chẩn đoán dữ liệu chuỗi String DC từ SmartLogger (4.040 chuỗi thực tế)"""
+    """Quản lý và chẩn đoán dữ liệu 229 Inverter & 4.058 chuỗi String DC từ SmartLogger"""
     def __init__(self, base_path: str = DEFAULT_STRING_PATH):
         self.base_path = base_path
         self._cache_df: Optional[pd.DataFrame] = None
@@ -111,7 +141,7 @@ class StringDataManager:
         return snapshots
 
     def load_string_data(self, target_dir: Optional[str] = None, force_reload: bool = False) -> pd.DataFrame:
-        """Đọc và giải nén toàn bộ các file SmartLogger inv_run_pv_data.csv"""
+        """Đọc và giải nén toàn bộ các file SmartLogger inv_run_pv_data.csv kèm kiểm tra 229 Inverter"""
         if self._cache_df is not None and not force_reload and (target_dir is None or target_dir == self._cache_snap_path):
             return self._cache_df
 
@@ -121,7 +151,6 @@ class StringDataManager:
         search_path = target_dir if target_dir and os.path.exists(target_dir) else self.base_path
         tar_files = glob.glob(os.path.join(search_path, '**', '*.tar.gz'), recursive=True)
         
-        # If target_dir was not specified and there are multiple folders, pick the latest one
         if not target_dir and tar_files:
             snapshots = self.get_available_snapshots()
             if snapshots:
@@ -193,8 +222,11 @@ class StringDataManager:
         benchmark_string_kw = (benchmark_plant_u * benchmark_plant_i) / 1000.0
 
         records = []
+        found_inv_ids = set()
+
         for _, r in df_all.iterrows():
             inv_id = str(r['Inverter_ID']).strip()
+            found_inv_ids.add(inv_id)
             sn = str(r.get('SN', '')).strip()
             status = str(r.get('Device status', 'On-grid')).strip()
             logger_sn = str(r.get('Logger_SN', '')).strip()
@@ -202,16 +234,13 @@ class StringDataManager:
             rated_p = float(r.get('Rated power(kW)', 175.0))
             f_name = r.get('Source_File', '')
 
-            # Check if this Inverter has PV18 according to plant engineering design
             has_pv18 = (inv_id not in NO_PV18_INVERTERS)
             installed_strings = 17 if not has_pv18 else 18
 
-            # Station identification
             st_info = LOGGER_MAPPING.get(logger_sn, {})
             station_name = st_info.get('name', f'Trạm {logger_sn}')
             station_tag = st_info.get('tag', 'S?')
             
-            # Infer Station from Inverter ID if not in mapping
             if station_tag == 'S?' and 'INV' in inv_id.upper():
                 m_st = re.search(r'INV(\d+)', inv_id.upper())
                 if m_st:
@@ -221,7 +250,6 @@ class StringDataManager:
             u_arr = np.array([float(r[f'Upv{i}(V)']) for i in range(1, 19)], dtype=np.float64)
             i_arr = np.array([float(r[f'Ipv{i}(A)']) for i in range(1, 19)], dtype=np.float64)
 
-            # If PV18 is not installed, override PV18 values to 0.0 for clean metrics
             if not has_pv18:
                 u_arr[17] = 0.0
                 i_arr[17] = 0.0
@@ -229,7 +257,6 @@ class StringDataManager:
             p_arr_kw = np.round((u_arr * i_arr) / 1000.0, 3)
             tot_pdc_kw = float(np.sum(p_arr_kw))
 
-            # Filter active vs dead strings (ONLY on installed strings 1..installed_strings)
             active_mask = (i_arr[:installed_strings] > 0.3)
             active_count = int(np.sum(active_mask))
             dead_count = installed_strings - active_count
@@ -258,17 +285,13 @@ class StringDataManager:
                     if 0.05 < i_val < avg_i_inv * 0.70:
                         low_i_strings.append(idx + 1)
 
-            # Imbalance percentage
             imbalance_pct = round(((max_i_inv - min_i_inv) / avg_i_inv * 100.0), 1) if avg_i_inv > 0 else 0.0
 
-            # -------------------------------------------------------------
-            # MPPT PAIR ANALYSIS (9 MPPTs)
-            # -------------------------------------------------------------
+            # MPPT Analysis
             mppt_details = []
             mppt_faulty_count = 0
             mppt_mismatch_max = 0.0
             both_dead_mppts = []
-            single_dead_mppts = []
 
             for m in range(9):
                 idx_a = 2 * m
@@ -304,7 +327,6 @@ class StringDataManager:
                 elif ia <= 0.05 or ib <= 0.05:
                     h_name = f"PV{pv_a}" if ia <= 0.05 else f"PV{pv_b}"
                     mppt_st = f"HỞ 1 CHUỖI ({h_name})"
-                    single_dead_mppts.append(m + 1)
                     mppt_faulty_count += 1
                 elif pair_mismatch > 20.0:
                     mppt_st = f"LỆCH DÒNG ({pair_mismatch}%)"
@@ -323,13 +345,7 @@ class StringDataManager:
                     'status': mppt_st
                 })
 
-            # -------------------------------------------------------------
-            # ROOT CAUSE HEURISTICS & ACTION RECOMMENDATIONS
-            # -------------------------------------------------------------
-            root_cause_summary = ""
-            action_recommendation = ""
-            priority_level = "Mức 4 (Bình Thường)"
-
+            # Root Cause & Priorities
             if 'DISCONNECT' in status.upper():
                 health_status = 'CRITICAL'
                 anomaly_type = 'Mất Kết Nối (Disconnected)'
@@ -422,6 +438,64 @@ class StringDataManager:
                 'Source_File': f_name
             })
 
+        # AUTO-SYNTHESIZE MISSING INVERTERS FROM MASTER 229 REGISTRY (e.g. INV2.2.1)
+        for inv_id, meta in PLANT_MASTER_INVERTERS_MAP.items():
+            if inv_id not in found_inv_ids:
+                has_pv18 = (inv_id not in NO_PV18_INVERTERS)
+                installed_strings = 17 if not has_pv18 else 18
+                
+                # Synthetic MPPTs
+                syn_mppts = []
+                for m in range(9):
+                    syn_mppts.append({
+                        'mppt': m + 1,
+                        'pv_a': f"PV{2*m+1}",
+                        'pv_b': f"PV{2*m+2}" if not (m == 8 and not has_pv18) else "KĐN",
+                        'i_a': 0.0, 'u_a': 0.0, 'i_b': 0.0, 'u_b': 0.0,
+                        'diff_i': 0.0, 'mismatch_pct': 0.0, 'status': 'THIẾU DỮ LIỆU'
+                    })
+
+                records.append({
+                    'Inverter_ID': inv_id,
+                    'SN': '--',
+                    'Station': meta['station'],
+                    'Station_Tag': meta['tag'],
+                    'Logger_SN': meta['logger'],
+                    'Address': 0,
+                    'Device_Status': 'Chưa Add / Mất Dữ Liệu SmartLogger',
+                    'Health_Status': 'CRITICAL',
+                    'Anomaly_Type': 'Thiếu Dữ Liệu SmartLogger (18 Chuỗi)',
+                    'Priority_Level': 'Mức 1 (Khẩn Cấp)',
+                    'Installed_Strings': installed_strings,
+                    'Has_PV18': has_pv18,
+                    'PV18_Note': 'Có PV18 (18S)' if has_pv18 else 'Không Đấu PV18 (17S)',
+                    'Active_Strings': 0,
+                    'Dead_Strings_Count': installed_strings,
+                    'Open_Circuit_Strings': [],
+                    'Open_Circuit_Count': 0,
+                    'Zero_U_Strings': list(range(1, installed_strings + 1)),
+                    'Zero_U_Count': installed_strings,
+                    'Low_I_Strings': [],
+                    'Low_I_Count': 0,
+                    'Total_Pdc_kW': 0.0,
+                    'Est_Loss_kW': 175.0,
+                    'Avg_Voltage_V': 0.0,
+                    'Avg_Current_A': 0.0,
+                    'Min_Current_A': 0.0,
+                    'Max_Current_A': 0.0,
+                    'Imbalance_Pct': 0.0,
+                    'MPPT_Mismatch_Max': 0.0,
+                    'MPPT_Faulty_Count': 9,
+                    'MPPT_Details': syn_mppts,
+                    'Root_Cause': f'Inverter {inv_id} thiếu trong tệp dữ liệu SmartLogger {meta["tag"]} (Mất truyền thông RS485 / Chưa add thiết bị vào SmartLogger).',
+                    'Action_Recommendation': f'Kiểm tra địa chỉ Modbus RS485 của {inv_id}, quét dò lại thiết bị (Device Auto-Assign / Add Device) trên giao diện SmartLogger {meta["tag"]}.',
+                    'Diagnostic_Message': f'Inverter {inv_id} thiếu trong tệp dữ liệu SmartLogger {meta["tag"]}. Khuyến nghị: Quét add lại thiết bị trên SmartLogger {meta["tag"]}.',
+                    'Upv_List': [0.0] * 18,
+                    'Ipv_List': [0.0] * 18,
+                    'Pdc_List': [0.0] * 18,
+                    'Source_File': 'Thiếu trong SmartLogger'
+                })
+
         res_df = pd.DataFrame(records)
         res_df.sort_values(by=['Station_Tag', 'Inverter_ID'], inplace=True)
         self._cache_df = res_df
@@ -430,7 +504,7 @@ class StringDataManager:
         return res_df
 
     def get_summary_kpis(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Tính toán các thẻ KPIs tổng quan về tình trạng 4.040 chuỗi String thực tế"""
+        """Tính toán các thẻ KPIs tổng quan về tình trạng 229 Inverter & 4.058 chuỗi String"""
         if df.empty:
             return {}
 
@@ -526,7 +600,6 @@ class StringDataManager:
         if faulty_df.empty:
             return pd.DataFrame()
 
-        # Sắp xếp theo thứ tự ưu tiên: Mức 1 -> Mức 2 -> Mức 3 và Tổn thất giảm dần
         def sort_priority(p):
             if 'Mức 1' in str(p): return 1
             if 'Mức 2' in str(p): return 2
@@ -644,7 +717,6 @@ def export_om_work_order_excel(wo_df: pd.DataFrame, plant_kpis: Dict[str, Any], 
     """Xuất Phiếu Giao Việc O&M Hiện Trường Chuẩn Kỹ Thuật (Excel)"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Sheet 1: Phiếu Lệnh O&M
         wo_exp = wo_df[[
             'STT', 'Mức Độ Ưu Tiên', 'Mã Inverter', 'Trạm Biến Áp', 'Cấu Hình',
             'Chuỗi Bất Thường', 'Hiện Tượng Sự Cố', 'Tổn Thất Ước Tính (kW)',
@@ -652,7 +724,6 @@ def export_om_work_order_excel(wo_df: pd.DataFrame, plant_kpis: Dict[str, Any], 
         ]].copy()
         wo_exp.to_excel(writer, sheet_name='Phieu_Lenh_OM_Hien_Truong', index=False)
 
-        # Sheet 2: Bảng Ký Nhận & Nghiệm Thu Hiện Trường
         checklist = wo_df[['STT', 'Mã Inverter', 'Trạm Biến Áp', 'Chuỗi Bất Thường', 'Biện Pháp Xử Lý Kỹ Thuật']].copy()
         checklist['Kỹ Thuật Viên Thực Hiện'] = ""
         checklist['Thời Gian Bắt Đầu'] = ""
@@ -665,16 +736,15 @@ def export_om_work_order_excel(wo_df: pd.DataFrame, plant_kpis: Dict[str, Any], 
 
 
 def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, Any], date_label: str = "") -> bytes:
-    """Xuất báo cáo chi tiết 4.040 chuỗi String DC ra file Excel 5 sheets chuyên nghiệp"""
+    """Xuất báo cáo chi tiết 229 Inverter & 4.058 chuỗi String DC ra file Excel 5 sheets"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Sheet 1: Tổng Quan KPIs
         kpi_data = [
             {'Chỉ Số Giám Sát String': 'Thời Điểm Xuất Báo Cáo', 'Giá Trị': date_label},
-            {'Chỉ Số Giám Sát String': 'Tổng Số Inverter Giám Sát', 'Giá Trị': kpis.get('total_inverters', 0)},
+            {'Chỉ Số Giám Sát String': 'Tổng Số Inverter Toàn Nhà Máy', 'Giá Trị': f"{kpis.get('total_inverters', 229)} Inverter (S1..S5: 35, S6: 36, S7: 18)"},
             {'Chỉ Số Giám Sát String': 'Số Inverter Hòa Lưới (On-grid)', 'Giá Trị': kpis.get('on_grid_inverters', 0)},
-            {'Chỉ Số Giám Sát String': 'Số Inverter Nghỉ / Mất Kết Nối', 'Giá Trị': kpis.get('offline_inverters', 0)},
-            {'Chỉ Số Giám Sát String': 'Tổng Số Chuỗi String Thiết Kế Thực Tế', 'Giá Trị': f"{kpis.get('total_installed_strings', 4040)} Chuỗi (64 INV x 17 + 164 INV x 18)"},
+            {'Chỉ Số Giám Sát String': 'Số Inverter Nghỉ / Mất Kết Nối / Thiếu Dữ Liệu', 'Giá Trị': kpis.get('offline_inverters', 0)},
+            {'Chỉ Số Giám Sát String': 'Tổng Số Chuỗi String Thiết Kế Thực Tế', 'Giá Trị': f"{kpis.get('total_installed_strings', 4058)} Chuỗi (64 INV x 17S + 165 INV x 18S)"},
             {'Chỉ Số Giám Sát String': 'Số Inverter Không Đấu Nối PV18 (17 String)', 'Giá Trị': f"{kpis.get('unconnected_pv18_inv', 64)} Inverter"},
             {'Chỉ Số Giám Sát String': 'Số Chuỗi String Đang Phát Điện (I > 0.3A)', 'Giá Trị': kpis.get('active_strings', 0)},
             {'Chỉ Số Giám Sát String': 'Số Chuỗi String Bị Hở Mạch / Hỏng', 'Giá Trị': kpis.get('dead_strings', 0)},
@@ -686,7 +756,6 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
         ]
         pd.DataFrame(kpi_data).to_excel(writer, sheet_name='Tong_Quan_KPIs', index=False)
 
-        # Sheet 2: Danh Sách 228 Inverter
         df_inv_exp = df[[
             'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status', 'Priority_Level',
             'Installed_Strings', 'PV18_Note', 'Active_Strings', 'Dead_Strings_Count', 'Open_Circuit_Count', 'Low_I_Count',
@@ -697,9 +766,8 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
             'Số String Thiết Kế (17/18)', 'Ghi Chú PV18', 'String Đang Phát', 'String Hỏng', 'String Hở Mạch (I=0, U>300V)', 'String Lệch Dòng',
             'Công Suất DC (kW)', 'Tổn Thất Ước Tính (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Độ Lệch Dòng (%)', 'Chẩn Đoán Nguyên Nhân Gốc', 'Khuyến Nghị Xử Lý O&M'
         ]
-        df_inv_exp.to_excel(writer, sheet_name='Danh_Sach_228_Inverter', index=False)
+        df_inv_exp.to_excel(writer, sheet_name='Danh_Sach_229_Inverter', index=False)
 
-        # Sheet 3: Ma Trận Chuỗi String Dòng Điện I (A) & Điện Áp U (V)
         matrix_rows = []
         for _, r in df.iterrows():
             row_dict = {
@@ -718,9 +786,8 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
                     row_dict[f'I_PV{i+1} (A)'] = r['Ipv_List'][i]
                     row_dict[f'U_PV{i+1} (V)'] = r['Upv_List'][i]
             matrix_rows.append(row_dict)
-        pd.DataFrame(matrix_rows).to_excel(writer, sheet_name='Ma_Tran_4040_Strings', index=False)
+        pd.DataFrame(matrix_rows).to_excel(writer, sheet_name='Ma_Tran_4058_Strings', index=False)
 
-        # Sheet 4: Phân Tích Cân Bằng 9 Cặp MPPT
         mppt_rows = []
         for _, r in df.iterrows():
             for mp in r['MPPT_Details']:
@@ -739,7 +806,6 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
                 })
         pd.DataFrame(mppt_rows).to_excel(writer, sheet_name='Phan_Tich_9_MPPT', index=False)
 
-        # Sheet 5: Phiếu Lệnh O&M Hiện Trường
         mgr_tmp = StringDataManager()
         wo_df = mgr_tmp.get_om_work_orders(df)
         if not wo_df.empty:

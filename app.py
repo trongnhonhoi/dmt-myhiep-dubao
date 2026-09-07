@@ -438,7 +438,7 @@ NAV_OPTIONS = [
     "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
     "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)",
     "🚨 7. Chẩn Đoán Bất Thường Inverter (S1 - S7 SCADA)",
-    "🔌 8. Giám Sát & Chẩn Đoán 4.040 Chuỗi String DC (D:\\STRING_INV)"
+    "🔌 8. Giám Sát & Chẩn Đoán 4.058 Chuỗi String DC (D:\\STRING_INV)"
 ]
 
 # --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
@@ -3620,12 +3620,12 @@ elif selected_menu == NAV_OPTIONS[7]:
                     🔌 HỆ THỐNG GIÁM SÁT, CẤP CỨU & CHẨN ĐOÁN 4.040 CHUỖI STRING DC
                 </div>
                 <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-                    Trọn gói chẩn đoán <b>4.040 chuỗi String DC</b> (228 Inverter Huawei 175KTL-H0 thuộc 7 Trạm S1..S7). Tự động <b>Suy luận nguyên nhân gốc (Root Cause)</b>, <b>Phân tích cân bằng 9 cặp MPPT</b>, <b>So sánh biến động lỗi (Snapshot Delta)</b> và <b>Xuất Phiếu Lệnh O&M Hiện Trường</b> tức thì.
+                    Trọn gói chẩn đoán <b>4.058 chuỗi String DC</b> (229 Inverter Huawei 175KTL-H0 thuộc 7 Trạm S1..S7). Tự động <b>Suy luận nguyên nhân gốc (Root Cause)</b>, <b>Phân tích cân bằng 9 cặp MPPT</b>, <b>So sánh biến động lỗi (Snapshot Delta)</b> và <b>Xuất Phiếu Lệnh O&M Hiện Trường</b> tức thì.
                 </div>
             </div>
             <div style="margin-top: 8px;">
                 <span class="badge bg-warning text-dark px-3 py-2 fw-bold" style="font-size: 0.82rem;">
-                    ⚙️ 64 INV x 17S + 164 INV x 18S = 4.040 Strings
+                    ⚙️ 64 INV x 17S + 165 INV x 18S = 4.058 Strings
                 </span>
             </div>
         </div>
@@ -3661,7 +3661,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 st.success("Đã nạp mới dữ liệu chuỗi String thành công!")
                 st.rerun()
 
-        with st.spinner("⏳ Đang giải nén và phân tích 4.040 chuỗi String DC từ SmartLogger..."):
+        with st.spinner("⏳ Đang giải nén và phân tích 4.058 chuỗi String DC từ SmartLogger..."):
             df_strings = string_mgr.load_string_data(target_dir=target_snap_dir)
 
         if not df_strings.empty:
@@ -3684,7 +3684,7 @@ elif selected_menu == NAV_OPTIONS[7]:
             with sk1:
                 st.metric(
                     "⚡ Chuỗi Đang Phát", 
-                    f"{kpis_str.get('active_strings', 0):,} / {kpis_str.get('total_installed_strings', 4040):,}", 
+                    f"{kpis_str.get('active_strings', 0):,} / {kpis_str.get('total_installed_strings', 4058):,}", 
                     delta=f"{kpis_str.get('healthy_string_pct', 0.0)}% hoạt động (64 INV kđn PV18)"
                 )
             with sk2:
@@ -3728,7 +3728,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 "⚖️ 4. Cân Bằng 9 Cặp MPPT",
                 "🕒 5. So Sánh Xu Hướng Biến Động (Delta)",
                 "🔍 6. Soi Chi Tiết Từng Inverter",
-                "📋 7. Bảng Kê 228 INV & Xuất Báo Cáo"
+                "📋 7. Bảng Kê 229 INV & Xuất Báo Cáo"
             ])
 
             # =========================================================================
@@ -3825,7 +3825,7 @@ elif selected_menu == NAV_OPTIONS[7]:
             # SUBTAB 2: BẢN ĐỒ MẶT BẰNG 7 TRẠM BIẾN ÁP (SUBSTATION TOPOLOGY MAP)
             # =========================================================================
             with t_topo:
-                st.markdown("##### 🗺️ Bản Đồ Mặt Bằng Trạng Thái 228 Inverter Thuộc 7 Trạm Biến Áp (S1 .. S7):")
+                st.markdown("##### 🗺️ Bản Đồ Mặt Bằng Trạng Thái 229 Inverter Thuộc 7 Trạm Biến Áp (S1 .. S7):")
                 st.caption("Click vào bất kỳ Inverter nào để xem phân tích nhanh. Màu sắc: 🔴 Khẩn Cấp / Offline | 🟠 Hỏng 1-2 chuỗi | 🟡 Lệch dòng | 🟢 Bình Thường.")
 
                 for st_tag in ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']:
@@ -3886,7 +3886,7 @@ elif selected_menu == NAV_OPTIONS[7]:
             # SUBTAB 3: BẢN ĐỒ NHIỆT MA TRẬN CHUỖI STRING (HEATMAP)
             # =========================================================================
             with t_heat:
-                st.markdown("##### 📊 Bản Đồ Nhiệt Toàn Diện 4.040 Chuỗi String DC (Phát Hiện Ngay Chuỗi Hỏng & Lệch Dòng):")
+                st.markdown("##### 📊 Bản Đồ Nhiệt Toàn Diện 4.058 Chuỗi String DC (Phát Hiện Ngay Chuỗi Hỏng & Lệch Dòng):")
                 
                 col_hm_c1, col_hm_c2, col_hm_c3 = st.columns([1.5, 1.8, 1.7])
                 with col_hm_c1:
@@ -4004,7 +4004,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 st.markdown("##### ⚖️ Phân Tích Cân Bằng Dòng & Áp Trên 9 Cặp Cổng MPPT (Huawei 175KTL-H0):")
                 st.caption("Huawei 175KTL có 9 MPPT, mỗi MPPT nhận 2 chuỗi song song. Độ lệch dòng $\\Delta I = |I_1 - I_2| > 15\\%$ gây suy hao điểm cực đại MPP.")
 
-                # Gom toàn bộ dữ liệu MPPT của 228 Inverter
+                # Gom toàn bộ dữ liệu MPPT của 229 Inverter
                 all_mppt_rows = []
                 for _, r in df_strings.iterrows():
                     for mp in r.get('MPPT_Details', []):
@@ -4254,10 +4254,10 @@ elif selected_menu == NAV_OPTIONS[7]:
                     st.success(f"✅ {msg_box}")
 
             # =========================================================================
-            # SUBTAB 7: BẢNG KÊ TOÀN DIỆN 228 INVERTER & XUẤT BÁO CÁO EXCEL TỔNG THỂ
+            # SUBTAB 7: BẢNG KÊ TOÀN DIỆN 229 INVERTER & XUẤT BÁO CÁO EXCEL TỔNG THỂ
             # =========================================================================
             with t_tbl:
-                st.markdown("##### 📋 Bảng Kê Toàn Diện Tình Trạng 228 Inverter & 4.040 Chuỗi String DC:")
+                st.markdown("##### 📋 Bảng Kê Toàn Diện Tình Trạng 229 Inverter & 4.058 Chuỗi String DC:")
                 
                 fb_c1, fb_c2, _ = st.columns([2, 2.5, 2.5])
                 with fb_c1:
@@ -4266,9 +4266,9 @@ elif selected_menu == NAV_OPTIONS[7]:
                     tbl_status_f = st.selectbox(
                         "Lọc theo phân loại & sức khỏe:", 
                         [
-                            "Tất Cả Inverter (228 Máy)", 
+                            "Tất Cả Inverter (229 Máy)", 
                             "Chỉ Inverter 17 String (64 Máy KĐN PV18)",
-                            "Chỉ Inverter 18 String (164 Máy Đủ)",
+                            "Chỉ Inverter 18 String (165 Máy Đủ)",
                             "Chỉ Inverter Bị Hỏng String / Lỗi", 
                             "Chỉ Inverter Offline / Dừng", 
                             "Chỉ Inverter Hoạt Động Tốt (Normal)"
@@ -4299,7 +4299,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                     st.download_button(
                         "📥 TẢI BÁO CÁO TOÀN DIỆN EXCEL (5 SHEETS)",
                         data=excel_str_bytes,
-                        file_name=f"Bao_Cao_Tong_The_4040_String_DC_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        file_name=f"Bao_Cao_Tong_The_4058_String_DC_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary",
                         use_container_width=True
@@ -4315,7 +4315,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                         use_container_width=True
                     )
                 with c_str_dl3:
-                    st.caption(f"Tổng hợp: **{len(df_table_pool)} / {len(df_strings)} Inverter** | 4.040 Chuỗi DC | Thư mục: `D:\\STRING_INV`")
+                    st.caption(f"Tổng hợp: **{len(df_table_pool)} / {len(df_strings)} Inverter** | 4.058 Chuỗi DC | Thư mục: `D:\\STRING_INV`")
 
                 df_tbl_display = df_table_pool[[
                     'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status', 'Priority_Level',
