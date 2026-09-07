@@ -3742,71 +3742,191 @@ elif selected_menu == NAV_OPTIONS[7]:
             ])
 
             # =========================================================================
-            # SUBTAB 1: SƠ ĐỒ SCADA HMI 229 INVERTER (DIGITAL TWIN THEO OVERVIEW229.PDF)
+            # SUBTAB 1: MA TRẬN PHÂN KHU 7 TRẠM BIẾN ÁP (SCADA STATION GRID MATRIX)
             # =========================================================================
             with t_map:
                 st.markdown(r"""
-                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 14px 20px; color: white; margin-bottom: 12px; border-left: 5px solid #38BDF8;">
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 22px; color: white; margin-bottom: 15px; border-left: 5px solid #0284C7;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                         <div>
-                            <div style="font-weight: 750; font-size: 1.15rem; color: #38BDF8;">
-                                🗺️ SƠ ĐỒ BỐ TRÍ MẶT BẰNG 229 INVERTER (SCADA HMI OVERVIEW DIGITAL TWIN)
+                            <div style="font-weight: 750; font-size: 1.2rem; color: #38BDF8; margin-bottom: 4px;">
+                                🗺️ MA TRẬN PHÂN KHU 7 TRẠM BIẾN ÁP & TUYẾN LỘ CÁP (SCADA STATION MATRIX)
                             </div>
-                            <div style="font-size: 0.84rem; color: #CBD5E1;">
-                                Mô phỏng chính xác sơ đồ tổng thể SCADA HMI điều hành 229 Inverter (7 Trạm S1..S7) từ tài liệu <b>OVERVIEW229.pdf</b>. Màu sắc thể hiện trạng thái tức thời của từng Inverter. Rê chuột để soi chi tiết công suất & nguyên nhân sự cố.
+                            <div style="font-size: 0.85rem; color: #CBD5E1;">
+                                Giám sát, định vị và chẩn đoán toàn diện <b>229 Inverter</b> theo từng Trạm biến áp <b>S1 đến S7</b> và từng Tuyến lộ cáp (Tuyến <b>.1</b> và Tuyến <b>.2</b>). Tự động nhận diện cấu hình 17S/18S và phát hiện tức thì các Inverter bị hỏng chuỗi hoặc thiếu dữ liệu.
                             </div>
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                col_sm1, col_sm2 = st.columns([2.2, 2.8])
-                with col_sm1:
-                    scada_st_filter = st.selectbox(
-                        "🔍 Chọn phạm vi hiển thị / Phóng to trạm:",
-                        [
-                            "Tất Cả 7 Trạm (Toàn Nhà Máy - 229 INV)",
-                            "S1 (STATION-01: 35 INV)",
-                            "S2 (STATION-02: 35 INV)",
-                            "S3 (STATION-03: 35 INV)",
-                            "S4 (STATION-04: 35 INV)",
-                            "S5 (STATION-05: 35 INV)",
-                            "S6 (STATION-06: 36 INV)",
-                            "S7 (STATION-07: 18 INV)"
-                        ],
-                        index=0,
-                        key="scada_map_st_filter"
-                    )
+                st_tabs_matrix = st.tabs([
+                    "🏢 S1 (STATION-01: 35 INV)",
+                    "🏢 S2 (STATION-02: 35 INV)",
+                    "🏢 S3 (STATION-03: 35 INV)",
+                    "🏢 S4 (STATION-04: 35 INV)",
+                    "🏢 S5 (STATION-05: 35 INV)",
+                    "🏢 S6 (STATION-06: 36 INV)",
+                    "🏢 S7 (STATION-07: 18 INV)",
+                    "🌐 Toàn Nhà Máy (229 INV)"
+                ])
 
-                with col_sm2:
-                    st.markdown("""
-                    <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 24px; font-size: 0.82rem; font-weight: 600;">
-                        <span style="color: #10B981;">🟢 Bình Thường</span>
-                        <span style="color: #F59E0B;">🟡 Lệch Dòng / Vệ Sinh</span>
-                        <span style="color: #EA580C;">🟠 Hở 1-2 Chuỗi</span>
-                        <span style="color: #EF4444;">🔴 Khẩn Cấp / Dừng / Lỗi</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                station_tags_matrix = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
 
-                # Vẽ bản đồ SCADA Plotly
-                fig_scada = create_scada_overview_figure(df_strings, scada_st_filter)
-                st.plotly_chart(fig_scada, use_container_width=True)
+                for idx_st, s_tag in enumerate(station_tags_matrix):
+                    with st_tabs_matrix[idx_st]:
+                        st_df = df_strings[df_strings['Station_Tag'] == s_tag].copy()
+                        if st_df.empty:
+                            st.warning(f"Không có dữ liệu cho trạm {s_tag}")
+                            continue
 
-                # Nút tải ảnh SCADA độ phân giải cao 1080p kèm đánh dấu sự cố
-                col_dl_s1, col_dl_s2 = st.columns([3.5, 1.5])
-                with col_dl_s1:
-                    st.caption("💡 **Hướng dẫn:** Rê chuột lên các ô Inverter để xem thông số chi tiết tức thời. Quý ca trực có thể dùng chuột cuộn để phóng to/thu nhỏ (Zoom) hoặc kéo di chuyển (Pan).")
-                with col_dl_s2:
-                    ann_pil_img = generate_annotated_scada_image(df_strings, scada_st_filter)
-                    buf_img = io.BytesIO()
-                    ann_pil_img.save(buf_img, format="PNG")
-                    st.download_button(
-                        "📥 TẢI ẢNH SƠ ĐỒ SCADA (.PNG)",
-                        data=buf_img.getvalue(),
-                        file_name=f"So_Do_SCADA_229_Inverter_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
-                        mime="image/png",
-                        use_container_width=True
-                    )
+                        tot_inv = len(st_df)
+                        tot_s = int(st_df['Installed_Strings'].sum())
+                        act_s = int(st_df['Active_Strings'].sum())
+                        loss_kw = float(st_df['Est_Loss_kW'].sum())
+                        pdc_mw = float(st_df['Total_Pdc_kW'].sum()) / 1000.0
+                        faulty_inv = len(st_df[st_df['Health_Status'] != 'NORMAL'])
+                        inv17_cnt = len(st_df[st_df['Installed_Strings'] == 17])
+                        inv18_cnt = len(st_df[st_df['Installed_Strings'] == 18])
+
+                        # 4 Thẻ KPI Trạm
+                        k1, k2, k3, k4 = st.columns(4)
+                        with k1:
+                            st.metric("🏢 Quy Mô Trạm", f"{tot_inv} Inverter", delta=f"{inv17_cnt} máy 17S + {inv18_cnt} máy 18S")
+                        with k2:
+                            st.metric("⚡ Chuỗi Hoạt Động", f"{act_s:,} / {tot_s:,}", delta=f"{act_s/tot_s*100:.1f}% phát điện")
+                        with k3:
+                            st.metric("🔋 Công Suất DC", f"{pdc_mw:.2f} MW", delta=f"Pdc tức thời")
+                        with k4:
+                            st.metric("✂️ Tổn Thất Ước Tính", f"{loss_kw:.1f} kW", delta=f"{faulty_inv} Inverter cần O&M", delta_color="inverse")
+
+                        # Tách 2 tuyến lộ cáp L1 (.1) và L2 (.2)
+                        l1_df = st_df[st_df['Inverter_ID'].str.contains(r'INV\d+\.1\.', regex=True)].copy()
+                        l2_df = st_df[st_df['Inverter_ID'].str.contains(r'INV\d+\.2\.', regex=True)].copy()
+
+                        def sort_inverters(df_in):
+                            if df_in.empty: return df_in
+                            df_in['sort_key'] = df_in['Inverter_ID'].apply(lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(x))])
+                            return df_in.sort_values(by='sort_key')
+
+                        l1_df = sort_inverters(l1_df)
+                        l2_df = sort_inverters(l2_df)
+
+                        def render_line_cards(line_title, line_data):
+                            if line_data.empty: return
+                            st.markdown(f"""
+                            <div style="font-weight: 700; color: #FBBF24; font-size: 1rem; margin-top: 14px; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 5px;">
+                                🔌 {line_title} ({len(line_data)} Inverter - {line_data['Installed_Strings'].sum()} Strings)
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            inv_list = line_data.to_dict('records')
+                            cols_per_row = 6
+                            for row_idx in range(0, len(inv_list), cols_per_row):
+                                chunk = inv_list[row_idx:row_idx+cols_per_row]
+                                cols = st.columns(len(chunk))
+                                for c_ui, inv_item in zip(cols, chunk):
+                                    with c_ui:
+                                        h_st = inv_item['Health_Status']
+                                        iid = inv_item['Inverter_ID']
+                                        pdc = inv_item['Total_Pdc_kW']
+                                        act = inv_item['Active_Strings']
+                                        inst = inv_item.get('Installed_Strings', 18)
+                                        anom = inv_item.get('Anomaly_Type', 'Bình Thường')
+                                        
+                                        if h_st == 'CRITICAL':
+                                            card_bg = "#7F1D1D"
+                                            card_border = "#EF4444"
+                                            led_icon = "🔴"
+                                            tag_txt = "LỖI NẶNG / DỪNG"
+                                        elif h_st == 'MAJOR':
+                                            card_bg = "#7C2D12"
+                                            card_border = "#EA580C"
+                                            led_icon = "🟠"
+                                            tag_txt = f"HỎNG {inst - act}S"
+                                        elif h_st in ['MINOR', 'WARNING']:
+                                            card_bg = "#78350F"
+                                            card_border = "#F59E0B"
+                                            led_icon = "🟡"
+                                            tag_txt = "CẢNH BÁO"
+                                        else:
+                                            card_bg = "#064E3B"
+                                            card_border = "#10B981"
+                                            led_icon = "🟢"
+                                            tag_txt = "TỐT"
+
+                                        st.markdown(f"""
+                                        <div style="background: {card_bg}; border: 1.5px solid {card_border}; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                                <span style="font-weight: 800; font-size: 0.88rem; color: #FFFFFF;">{iid}</span>
+                                                <span style="font-size: 0.75rem;">{led_icon}</span>
+                                            </div>
+                                            <div style="font-size: 0.72rem; color: #E2E8F0; opacity: 0.9;">{act}/{inst}S • <b>{pdc:.0f} kW</b></div>
+                                            <div style="font-size: 0.68rem; font-weight: 700; color: #F8FAFC; margin-top: 3px; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 1px 4px;">{tag_txt}</div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+
+                        if not l1_df.empty:
+                            render_line_cards(f"Tuyến Lộ Cáp L1 ({s_tag}.1)", l1_df)
+                        if not l2_df.empty:
+                            render_line_cards(f"Tuyến Lộ Cáp L2 ({s_tag}.2)", l2_df)
+
+                        # Bảng chi tiết trạm
+                        with st.expander(f"📋 Xem Bảng Dữ Liệu Chi Tiết Trạm {s_tag} ({len(st_df)} Inverter)", expanded=False):
+                            st_display_cols = ['Inverter_ID', 'Device_Status', 'Health_Status', 'Installed_Strings', 'Active_Strings', 'Total_Pdc_kW', 'Est_Loss_kW', 'Root_Cause', 'Action_Recommendation']
+                            df_st_tbl = st_df[[c for c in st_display_cols if c in st_df.columns]].copy()
+                            df_st_tbl.columns = ['Mã Inverter', 'Trạng Thái Máy', 'Sức Khỏe', 'Số Chuỗi Lắp', 'Số Chuỗi Phát', 'Công Suất (kW)', 'Tổn Thất (kW)', 'Chẩn Đoán Sự Cố', 'Khuyến Nghị O&M']
+                            st.dataframe(df_st_tbl, use_container_width=True, hide_index=True)
+
+                # Tab Toàn Nhà Máy (229 INV)
+                with st_tabs_matrix[7]:
+                    st.markdown("##### 🌐 Bảng Tổng Hợp Phân Bổ 229 Inverter Toàn Bộ 7 Trạm Biến Áp:")
+                    
+                    st_summary_rows = []
+                    for st_tag_sum in station_tags_matrix:
+                        sub_df = df_strings[df_strings['Station_Tag'] == st_tag_sum]
+                        if not sub_df.empty:
+                            st_summary_rows.append({
+                                'Trạm Biến Áp': sub_df['Station'].iloc[0],
+                                'Tổng Inverter': len(sub_df),
+                                'Số Máy 17S': len(sub_df[sub_df['Installed_Strings'] == 17]),
+                                'Số Máy 18S': len(sub_df[sub_df['Installed_Strings'] == 18]),
+                                'Tổng Chuỗi Đấu Nối': sub_df['Installed_Strings'].sum(),
+                                'Chuỗi Đang Phát': sub_df['Active_Strings'].sum(),
+                                'Tỷ Lệ Chuỗi Hoạt Động (%)': round(sub_df['Active_Strings'].sum() / sub_df['Installed_Strings'].sum() * 100, 1),
+                                'Công Suất DC (MW)': round(sub_df['Total_Pdc_kW'].sum() / 1000.0, 2),
+                                'Tổn Thất Ước Tính (kW)': round(sub_df['Est_Loss_kW'].sum(), 1),
+                                'Số Máy Sự Cố / Cần O&M': len(sub_df[sub_df['Health_Status'] != 'NORMAL'])
+                            })
+                    df_plant_sum = pd.DataFrame(st_summary_rows)
+                    st.dataframe(df_plant_sum, use_container_width=True, hide_index=True)
+
+                    # Biểu đồ phân bổ công suất DC và tổn thất giữa 7 trạm
+                    c_sum1, c_sum2 = st.columns(2)
+                    with c_sum1:
+                        fig_bar_pdc = px.bar(
+                            df_plant_sum,
+                            x='Trạm Biến Áp',
+                            y='Công Suất DC (MW)',
+                            text='Công Suất DC (MW)',
+                            title="<b>CÔNG SUẤT DC PHÁT THEO TỪNG TRẠM BIẾN ÁP (MW)</b>",
+                            color='Công Suất DC (MW)',
+                            color_continuous_scale='Viridis'
+                        )
+                        fig_bar_pdc.update_layout(template="plotly_white", height=350)
+                        st.plotly_chart(fig_bar_pdc, use_container_width=True)
+                    with c_sum2:
+                        fig_bar_loss = px.bar(
+                            df_plant_sum,
+                            x='Trạm Biến Áp',
+                            y='Tổn Thất Ước Tính (kW)',
+                            text='Tổn Thất Ước Tính (kW)',
+                            title="<b>TỔN THẤT CÔNG SUẤT DC THEO TRẠM (kW)</b>",
+                            color='Tổn Thất Ước Tính (kW)',
+                            color_continuous_scale='Reds'
+                        )
+                        fig_bar_loss.update_layout(template="plotly_white", height=350)
+                        st.plotly_chart(fig_bar_loss, use_container_width=True)
 
             # =========================================================================
             # SUBTAB 2: BẢNG ĐIỀU KHIỂN CẤP CỨU O&M & PHIẾU GIAO VIỆC HIỆN TRƯỜNG
