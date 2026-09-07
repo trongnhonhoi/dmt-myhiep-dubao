@@ -3827,67 +3827,112 @@ elif selected_menu == NAV_OPTIONS[7]:
             # =========================================================================
             # SUBTAB 2: BẢN ĐỒ MẶT BẰNG 7 TRẠM BIẾN ÁP (SUBSTATION TOPOLOGY MAP)
             # =========================================================================
+            # =========================================================================
+            # SUBTAB 2: BẢN ĐỒ MẶT BẰNG 7 TRẠM BIẾN ÁP (SUBSTATION TOPOLOGY MAP)
+            # =========================================================================
             with t_topo:
-                st.markdown("##### 🗺️ Bản Đồ Mặt Bằng Trạng Thái 229 Inverter Thuộc 7 Trạm Biến Áp (S1 .. S7):")
-                st.caption("Click vào bất kỳ Inverter nào để xem phân tích nhanh. Màu sắc: 🔴 Khẩn Cấp / Offline | 🟠 Hỏng 1-2 chuỗi | 🟡 Lệch dòng | 🟢 Bình Thường.")
-
-                for st_tag in ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']:
-                    st_df_grp = df_strings[df_strings['Station_Tag'] == st_tag]
-                    if st_df_grp.empty:
-                        continue
-                    
-                    st_name = st_df_grp['Station'].iloc[0]
-                    tot_s_grp = st_df_grp['Installed_Strings'].sum()
-                    act_s_grp = st_df_grp['Active_Strings'].sum()
-                    loss_s_grp = st_df_grp['Est_Loss_kW'].sum()
-                    
-                    st.markdown(f"""
-                    <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 10px; padding: 10px 15px; margin-top: 12px; margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-weight: 750; font-size: 1.05rem; color: #0284C7;">
-                                🏢 {st_name} ({len(st_df_grp)} Inverter - {tot_s_grp} Strings)
-                            </div>
-                            <div style="font-size: 0.85rem; font-weight: 600; color: #475569;">
-                                ⚡ Đang phát: <b style="color: #10B981;">{act_s_grp}/{tot_s_grp}</b> | Tổn thất: <b style="color: #EF4444;">{loss_s_grp:.1f} kW</b>
-                            </div>
-                        </div>
+                st.markdown(r"""
+                <div style="background: #0F172A; border-radius: 10px; padding: 14px 20px; color: white; margin-bottom: 15px; border-left: 5px solid #0284C7;">
+                    <div style="font-weight: 750; font-size: 1.15rem; color: #38BDF8;">
+                        🗺️ SƠ ĐỒ BỐ TRÍ MẶT BẰNG 229 INVERTER THEO 7 PHÂN KHU TRẠM (SCADA HMI TOPOLOGY)
                     </div>
-                    """, unsafe_allow_html=True)
+                    <div style="font-size: 0.84rem; color: #94A3B8;">
+                        Mô phỏng chính xác sơ đồ mạng SCADA HMI điều hành 229 Inverter theo từng tuyến lộ cáp (Tuyến <b>.1</b> và Tuyến <b>.2</b>) của 7 Trạm biến áp S1 đến S7. Màu sắc thể hiện tình trạng thời gian thực.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    st_df_grp = st_df_grp.copy()
-                    st_df_grp['Sort_Order'] = st_df_grp['Inverter_ID'].apply(lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(x))])
-                    st_df_grp.sort_values(by='Sort_Order', inplace=True)
+                st_tabs_list = st.tabs([
+                    "🏢 S1 (STATION-01: 35 INV)",
+                    "🏢 S2 (STATION-02: 35 INV)",
+                    "🏢 S3 (STATION-03: 35 INV)",
+                    "🏢 S4 (STATION-04: 35 INV)",
+                    "🏢 S5 (STATION-05: 35 INV)",
+                    "🏢 S6 (STATION-06: 36 INV)",
+                    "🏢 S7 (STATION-07: 18 INV)"
+                ])
 
-                    # Vẽ lưới badge Inverter
-                    inv_cards_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;'>"
-                    for _, r in st_df_grp.iterrows():
-                        inv_id = r['Inverter_ID']
-                        h_st = r['Health_Status']
-                        p_dc = r['Total_Pdc_kW']
-                        n_str = r.get('Installed_Strings', 18)
-                        act_str = r['Active_Strings']
-                        
-                        if h_st == 'CRITICAL':
-                            bg_c = "#EF4444" # Đỏ
-                            txt_c = "#FFFFFF"
-                        elif h_st == 'MAJOR':
-                            bg_c = "#EA580C" # Cam đậm
-                            txt_c = "#FFFFFF"
-                        elif h_st in ['MINOR', 'WARNING']:
-                            bg_c = "#F59E0B" # Vàng cam
-                            txt_c = "#000000"
-                        else:
-                            bg_c = "#10B981" # Xanh
-                            txt_c = "#FFFFFF"
+                station_tags_order = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
+                
+                for idx_st, (s_tag, s_tab_ui) in enumerate(zip(station_tags_order, st_tabs_list)):
+                    with s_tab_ui:
+                        st_df_grp = df_strings[df_strings['Station_Tag'] == s_tag].copy()
+                        if st_df_grp.empty:
+                            st.warning(f"Không có dữ liệu cho trạm {s_tag}")
+                            continue
 
-                        inv_cards_html += f"""
-                        <div style="background: {bg_c}; color: {txt_c}; border-radius: 6px; padding: 6px 10px; font-size: 0.78rem; font-weight: 700; min-width: 95px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="{inv_id}: {r['Anomaly_Type']} | Pdc={p_dc:.1f}kW ({act_str}/{n_str}S)">
-                            <div>{inv_id}</div>
-                            <div style="font-size: 0.70rem; opacity: 0.95;">{act_str}/{n_str}S | {p_dc:.0f}kW</div>
-                        </div>
-                        """
-                    inv_cards_html += "</div>"
-                    st.markdown(inv_cards_html, unsafe_allow_html=True)
+                        st_name = st_df_grp['Station'].iloc[0]
+                        tot_s_grp = st_df_grp['Installed_Strings'].sum()
+                        act_s_grp = st_df_grp['Active_Strings'].sum()
+                        loss_s_grp = st_df_grp['Est_Loss_kW'].sum()
+                        pdc_s_grp = st_df_grp['Total_Pdc_kW'].sum()
+
+                        # Thống kê nhanh trạm
+                        c_t1, c_t2, c_t3, c_t4 = st.columns(4)
+                        with c_t1:
+                            st.metric("🏢 Tổng Inverter", f"{len(st_df_grp)} INV", delta=f"{tot_s_grp} Strings")
+                        with c_t2:
+                            st.metric("⚡ Chuỗi Đang Phát", f"{act_s_grp} / {tot_s_grp}", delta=f"{act_s_grp/tot_s_grp*100:.1f}% hoạt động")
+                        with c_t3:
+                            st.metric("🔋 Công Suất DC", f"{pdc_s_grp/1000.0:.2f} MW", delta=f"Pdc tức thời")
+                        with c_t4:
+                            st.metric("✂️ Tổn Thất DC", f"{loss_s_grp:.1f} kW", delta=f"{tot_s_grp - act_s_grp} chuỗi hở/lỗi", delta_color="inverse")
+
+                        # Tách theo Tuyến Lộ Cáp 1 (.1) và Tuyến Lộ Cáp 2 (.2)
+                        line1_df = st_df_grp[st_df_grp['Inverter_ID'].str.contains(r'INV\d+\.1\.', regex=True)].copy()
+                        line2_df = st_df_grp[st_df_grp['Inverter_ID'].str.contains(r'INV\d+\.2\.', regex=True)].copy()
+
+                        # Hàm sắp xếp tự nhiên
+                        def sort_nat(df_in):
+                            if df_in.empty: return df_in
+                            df_in['Sort_Order'] = df_in['Inverter_ID'].apply(lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(x))])
+                            return df_in.sort_values(by='Sort_Order')
+
+                        line1_df = sort_nat(line1_df)
+                        line2_df = sort_nat(line2_df)
+
+                        def render_line_html(line_title, line_data):
+                            if line_data.empty: return ""
+                            html = f"""
+                            <div style="background: #1E293B; border-radius: 8px; padding: 12px 16px; margin-top: 10px; margin-bottom: 12px;">
+                                <div style="font-weight: 700; color: #FBBF24; font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 5px;">
+                                    🔌 {line_title} ({len(line_data)} Inverter - {line_data['Installed_Strings'].sum()} Strings)
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            """
+                            for _, r in line_data.iterrows():
+                                inv_id = r['Inverter_ID']
+                                h_st = r['Health_Status']
+                                p_dc = r['Total_Pdc_kW']
+                                n_str = r.get('Installed_Strings', 18)
+                                act_str = r['Active_Strings']
+                                
+                                if h_st == 'CRITICAL':
+                                    bg_c = "#EF4444"
+                                    txt_c = "#FFFFFF"
+                                elif h_st == 'MAJOR':
+                                    bg_c = "#EA580C"
+                                    txt_c = "#FFFFFF"
+                                elif h_st in ['MINOR', 'WARNING']:
+                                    bg_c = "#F59E0B"
+                                    txt_c = "#000000"
+                                else:
+                                    bg_c = "#10B981"
+                                    txt_c = "#FFFFFF"
+
+                                html += f"""
+                                <div style="background: {bg_c}; color: {txt_c}; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; min-width: 105px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" title="{inv_id}: {r['Anomaly_Type']} | Pdc={p_dc:.1f}kW ({act_str}/{n_str}S) | {r.get('Root_Cause', '')}">
+                                    <div>{inv_id}</div>
+                                    <div style="font-size: 0.72rem; opacity: 0.95; margin-top: 2px;">{act_str}/{n_str}S | {p_dc:.0f}kW</div>
+                                </div>
+                                """
+                            html += "</div></div>"
+                            return html
+
+                        if not line1_df.empty:
+                            st.markdown(render_line_html(f"Tuyến Lộ L1 ({s_tag}.1)", line1_df), unsafe_allow_html=True)
+                        if not line2_df.empty:
+                            st.markdown(render_line_html(f"Tuyến Lộ L2 ({s_tag}.2)", line2_df), unsafe_allow_html=True)
 
             # =========================================================================
             # SUBTAB 3: BẢN ĐỒ NHIỆT MA TRẬN CHUỖI STRING (HEATMAP)
