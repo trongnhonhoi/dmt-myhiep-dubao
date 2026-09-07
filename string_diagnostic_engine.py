@@ -1,6 +1,7 @@
 r"""
-HỆ THỐNG GIÁM SÁT, TỔNG HỢP VÀ CHẨN ĐOÁN 4.104 CHUỖI STRING DC (HUAWEI SUN2000-175KTL-H0)
+HỆ THỐNG GIÁM SÁT, TỔNG HỢP VÀ CHẨN ĐOÁN 4.040 CHUỖI STRING DC (HUAWEI SUN2000-175KTL-H0)
 NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP - ĐƯỜNG DẪN SMARTLOGGER: D:\STRING_INV
+LƯU Ý THIẾT KẾ: 64 Inverter không có chuỗi PV18 (Tổng 4.040 String = 64 INV x 17 + 164 INV x 18)
 """
 
 import os
@@ -16,6 +17,30 @@ from typing import Dict, List, Tuple, Optional, Any
 
 DEFAULT_STRING_PATH = r'D:\STRING_INV'
 
+# Danh sách 64 Inverter không đấu nối chuỗi String 18 theo hồ sơ thiết kế công trình
+NO_PV18_INVERTERS = {
+    # Trạm S1 (9 Inverter)
+    'INV1.1.12', 'INV1.1.13', 'INV1.1.14', 'INV1.1.15', 'INV1.1.16', 'INV1.1.17',
+    'INV1.2.14', 'INV1.2.15', 'INV1.2.16',
+    # Trạm S2 (11 Inverter)
+    'INV2.1.1', 'INV2.1.2', 'INV2.1.3', 'INV2.1.4', 'INV2.1.5', 'INV2.1.6', 'INV2.1.7',
+    'INV2.2.3', 'INV2.2.4', 'INV2.2.16', 'INV2.2.17',
+    # Trạm S3 (9 Inverter)
+    'INV3.1.1', 'INV3.1.2', 'INV3.1.3',
+    'INV3.2.1', 'INV3.2.2', 'INV3.2.3', 'INV3.2.4', 'INV3.2.5', 'INV3.2.6',
+    # Trạm S4 (11 Inverter)
+    'INV4.1.1', 'INV4.1.2', 'INV4.1.3', 'INV4.1.4', 'INV4.1.5',
+    'INV4.2.2', 'INV4.2.3', 'INV4.2.8', 'INV4.2.9', 'INV4.2.17', 'INV4.2.18',
+    # Trạm S5 (10 Inverter)
+    'INV5.1.13', 'INV5.1.14', 'INV5.1.15', 'INV5.1.17',
+    'INV5.2.13', 'INV5.2.14', 'INV5.2.15', 'INV5.2.16', 'INV5.2.17', 'INV5.2.18',
+    # Trạm S6 (10 Inverter)
+    'INV6.1.14', 'INV6.1.15', 'INV6.1.17', 'INV6.1.18',
+    'INV6.2.13', 'INV6.2.14', 'INV6.2.15', 'INV6.2.16', 'INV6.2.17', 'INV6.2.18',
+    # Trạm S7 (4 Inverter)
+    'INV7.1.14', 'INV7.1.16', 'INV7.1.17', 'INV7.1.18'
+}
+
 LOGGER_MAPPING = {
     '102070023339': {'name': 'S1 (STATION-01)', 'tag': 'S1', 'substation': 'TBA S1 Phù Mỹ Nam', 'inverter_qty': 35},
     '102070023322': {'name': 'S2 (STATION-02)', 'tag': 'S2', 'substation': 'TBA S2 Phù Mỹ Nam', 'inverter_qty': 34},
@@ -27,7 +52,7 @@ LOGGER_MAPPING = {
 }
 
 class StringDataManager:
-    """Quản lý và chẩn đoán dữ liệu 4.104 chuỗi String DC từ SmartLogger"""
+    """Quản lý và chẩn đoán dữ liệu chuỗi String DC từ SmartLogger (4.040 chuỗi thực tế)"""
     def __init__(self, base_path: str = DEFAULT_STRING_PATH):
         self.base_path = base_path
         self._cache_df: Optional[pd.DataFrame] = None
@@ -155,8 +180,10 @@ class StringDataManager:
         # Calculate Plant-wide benchmarks
         active_currents = []
         for _, r in df_all.iterrows():
-            for i_col in i_cols:
-                val = float(r[i_col])
+            inv_id_chk = str(r['Inverter_ID']).strip()
+            chk_range = 17 if inv_id_chk in NO_PV18_INVERTERS else 18
+            for idx in range(chk_range):
+                val = float(r[f'Ipv{idx+1}(A)'])
                 if val > 0.5:
                     active_currents.append(val)
         benchmark_plant_i = float(np.median(active_currents)) if active_currents else 3.55
@@ -173,6 +200,10 @@ class StringDataManager:
             rated_p = float(r.get('Rated power(kW)', 175.0))
             f_name = r.get('Source_File', '')
 
+            # Check if this Inverter has PV18 according to plant engineering design
+            has_pv18 = (inv_id not in NO_PV18_INVERTERS)
+            installed_strings = 17 if not has_pv18 else 18
+
             # Station identification
             st_info = LOGGER_MAPPING.get(logger_sn, {})
             station_name = st_info.get('name', f'Trạm {logger_sn}')
@@ -187,19 +218,25 @@ class StringDataManager:
 
             u_arr = np.array([float(r[f'Upv{i}(V)']) for i in range(1, 19)], dtype=np.float64)
             i_arr = np.array([float(r[f'Ipv{i}(A)']) for i in range(1, 19)], dtype=np.float64)
+
+            # If PV18 is not installed, override PV18 values to 0.0 for clean metrics
+            if not has_pv18:
+                u_arr[17] = 0.0
+                i_arr[17] = 0.0
+
             p_arr_kw = np.round((u_arr * i_arr) / 1000.0, 3)
             tot_pdc_kw = float(np.sum(p_arr_kw))
 
-            # Filter active vs dead strings
-            active_mask = (i_arr > 0.3)
+            # Filter active vs dead strings (ONLY on installed strings 1..installed_strings)
+            active_mask = (i_arr[:installed_strings] > 0.3)
             active_count = int(np.sum(active_mask))
-            dead_count = 18 - active_count
+            dead_count = installed_strings - active_count
 
             open_circuit_strings = []
             zero_u_strings = []
             low_i_strings = []
 
-            for idx in range(18):
+            for idx in range(installed_strings):
                 u_val = u_arr[idx]
                 i_val = i_arr[idx]
                 if u_val > 300.0 and i_val <= 0.05:
@@ -207,13 +244,14 @@ class StringDataManager:
                 elif u_val <= 50.0 and i_val <= 0.05:
                     zero_u_strings.append(idx + 1)
 
-            avg_i_inv = float(np.mean(i_arr[active_mask])) if active_count > 0 else 0.0
-            avg_u_inv = float(np.mean(u_arr[u_arr > 300.0])) if np.any(u_arr > 300.0) else 0.0
-            min_i_inv = float(np.min(i_arr[active_mask])) if active_count > 0 else 0.0
-            max_i_inv = float(np.max(i_arr)) if active_count > 0 else 0.0
+            avg_i_inv = float(np.mean(i_arr[:installed_strings][active_mask])) if active_count > 0 else 0.0
+            valid_u = u_arr[:installed_strings][u_arr[:installed_strings] > 300.0]
+            avg_u_inv = float(np.mean(valid_u)) if len(valid_u) > 0 else 0.0
+            min_i_inv = float(np.min(i_arr[:installed_strings][active_mask])) if active_count > 0 else 0.0
+            max_i_inv = float(np.max(i_arr[:installed_strings])) if active_count > 0 else 0.0
 
             if active_count > 0 and avg_i_inv > 0.5:
-                for idx in range(18):
+                for idx in range(installed_strings):
                     i_val = i_arr[idx]
                     if 0.05 < i_val < avg_i_inv * 0.70:
                         low_i_strings.append(idx + 1)
@@ -231,17 +269,17 @@ class StringDataManager:
             elif 'IDLE' in status.upper() or 'NO IRRADIATION' in status.upper() or active_count == 0:
                 health_status = 'CRITICAL'
                 anomaly_type = 'Dừng Nghỉ (Idle / P=0)'
-                diag_msgs.append('Inverter ở trạng thái Idle, toàn bộ 18 chuỗi String không phát điện.')
+                diag_msgs.append(f'Inverter ở trạng thái Idle, toàn bộ {installed_strings} chuỗi String không phát điện.')
                 loss_kw = rated_p
             elif dead_count >= 3:
                 health_status = 'MAJOR'
-                anomaly_type = f'Hỏng {dead_count} Chuỗi String DC'
-                diag_msgs.append(f'Hỏng {dead_count}/18 chuỗi String DC. Các chuỗi hở mạch: {open_circuit_strings}')
+                anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
+                diag_msgs.append(f'Hỏng {dead_count}/{installed_strings} chuỗi String DC. Các chuỗi hở mạch: PV{open_circuit_strings}')
                 loss_kw = dead_count * benchmark_string_kw
             elif dead_count >= 1:
                 health_status = 'MINOR'
-                anomaly_type = f'Hỏng {dead_count} Chuỗi String'
-                diag_msgs.append(f'Hỏng {dead_count} chuỗi String DC: PV{open_circuit_strings}')
+                anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
+                diag_msgs.append(f'Hỏng {dead_count}/{installed_strings} chuỗi String DC: PV{open_circuit_strings}')
                 loss_kw = dead_count * benchmark_string_kw
             elif len(low_i_strings) > 0:
                 health_status = 'WARNING'
@@ -250,8 +288,12 @@ class StringDataManager:
                 loss_kw = len(low_i_strings) * (benchmark_string_kw * 0.4)
             else:
                 health_status = 'NORMAL'
-                anomaly_type = 'Bình Thường (18/18 String)'
-                diag_msgs.append('Tất cả 18 chuỗi String DC hoạt động đồng đều, hiệu suất cao.')
+                if not has_pv18:
+                    anomaly_type = 'Bình Thường (17/17 String)'
+                    diag_msgs.append('Tất cả 17 chuỗi String DC hoạt động bình thường (Chuỗi PV18 không đấu nối theo thiết kế).')
+                else:
+                    anomaly_type = 'Bình Thường (18/18 String)'
+                    diag_msgs.append('Tất cả 18 chuỗi String DC hoạt động bình thường, dòng áp đồng đều.')
                 loss_kw = 0.0
 
             records.append({
@@ -264,6 +306,9 @@ class StringDataManager:
                 'Device_Status': status,
                 'Health_Status': health_status,
                 'Anomaly_Type': anomaly_type,
+                'Installed_Strings': installed_strings,
+                'Has_PV18': has_pv18,
+                'PV18_Note': 'Có PV18' if has_pv18 else 'Không Đấu PV18 (Thiết kế)',
                 'Active_Strings': active_count,
                 'Dead_Strings_Count': dead_count,
                 'Open_Circuit_Strings': open_circuit_strings,
@@ -293,14 +338,16 @@ class StringDataManager:
         return res_df
 
     def get_summary_kpis(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Tính toán các thẻ KPIs tổng quan về tình trạng 4.104 chuỗi String"""
+        """Tính toán các thẻ KPIs tổng quan về tình trạng 4.040 chuỗi String thực tế"""
         if df.empty:
             return {}
 
         total_inv = len(df)
-        total_strings = total_inv * 18
+        total_installed_strings = int(df['Installed_Strings'].sum()) if 'Installed_Strings' in df.columns else total_inv * 18
+        unconnected_pv18_inv = int((df['Installed_Strings'] == 17).sum()) if 'Installed_Strings' in df.columns else 0
+        
         active_strings = int(df['Active_Strings'].sum())
-        dead_strings = total_strings - active_strings
+        dead_strings = total_installed_strings - active_strings
         open_circuit_strings = int(df['Open_Circuit_Count'].sum())
         
         on_grid_inv = int((df['Health_Status'].isin(['NORMAL', 'MINOR', 'MAJOR', 'WARNING'])).sum())
@@ -309,7 +356,7 @@ class StringDataManager:
         tot_pdc_mw = float(df['Total_Pdc_kW'].sum() / 1000.0)
         tot_loss_kw = float(df['Est_Loss_kW'].sum())
         
-        healthy_pct = round(active_strings / total_strings * 100.0, 1) if total_strings > 0 else 0.0
+        healthy_pct = round(active_strings / total_installed_strings * 100.0, 1) if total_installed_strings > 0 else 0.0
         avg_u = float(df[df['Avg_Voltage_V'] > 300]['Avg_Voltage_V'].mean()) if not df.empty else 0.0
         avg_i = float(df[df['Avg_Current_A'] > 0.3]['Avg_Current_A'].mean()) if not df.empty else 0.0
 
@@ -317,7 +364,8 @@ class StringDataManager:
             'total_inverters': total_inv,
             'on_grid_inverters': on_grid_inv,
             'offline_inverters': offline_inv,
-            'total_strings': total_strings,
+            'total_installed_strings': total_installed_strings,
+            'unconnected_pv18_inv': unconnected_pv18_inv,
             'active_strings': active_strings,
             'dead_strings': dead_strings,
             'open_circuit_strings': open_circuit_strings,
@@ -338,7 +386,8 @@ class StringDataManager:
         for st_tag, grp in df.groupby('Station_Tag'):
             st_name = grp['Station'].iloc[0]
             n_inv = len(grp)
-            tot_str = n_inv * 18
+            tot_str = int(grp['Installed_Strings'].sum()) if 'Installed_Strings' in grp.columns else n_inv * 18
+            n_no_pv18 = int((grp['Installed_Strings'] == 17).sum()) if 'Installed_Strings' in grp.columns else 0
             act_str = int(grp['Active_Strings'].sum())
             dead_str = tot_str - act_str
             open_str = int(grp['Open_Circuit_Count'].sum())
@@ -355,7 +404,8 @@ class StringDataManager:
                 'Mã Trạm': st_tag,
                 'Tên Trạm Biến Áp': st_name,
                 'Số Inverter': n_inv,
-                'Tổng String': tot_str,
+                'Tổng String Thiết Kế': tot_str,
+                'Số INV 17 String (KĐN PV18)': n_no_pv18,
                 'String Đang Phát': act_str,
                 'String Hỏng / Hở': dead_str,
                 'Tỷ Lệ Phát (%)': pct_act,
@@ -373,7 +423,7 @@ class StringDataManager:
 
 
 def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, Any], date_label: str = "") -> bytes:
-    """Xuất báo cáo chi tiết 4.104 chuỗi String DC ra file Excel 4 sheets"""
+    """Xuất báo cáo chi tiết 4.040 chuỗi String DC ra file Excel 4 sheets"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Sheet 1: Tổng Quan KPIs
@@ -382,7 +432,8 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
             {'Chỉ Số Giám Sát String': 'Tổng Số Inverter Giám Sát', 'Giá Trị': kpis.get('total_inverters', 0)},
             {'Chỉ Số Giám Sát String': 'Số Inverter Hòa Lưới (On-grid)', 'Giá Trị': kpis.get('on_grid_inverters', 0)},
             {'Chỉ Số Giám Sát String': 'Số Inverter Nghỉ / Mất Kết Nối', 'Giá Trị': kpis.get('offline_inverters', 0)},
-            {'Chỉ Số Giám Sát String': 'Tổng Số Chuỗi String DC Thiết Kế', 'Giá Trị': kpis.get('total_strings', 0)},
+            {'Chỉ Số Giám Sát String': 'Tổng Số Chuỗi String Thiết Kế Thực Tế', 'Giá Trị': f"{kpis.get('total_installed_strings', 4040)} Chuỗi (64 INV x 17 + 164 INV x 18)"},
+            {'Chỉ Số Giám Sát String': 'Số Inverter Không Đấu Nối PV18 (17 String)', 'Giá Trị': f"{kpis.get('unconnected_pv18_inv', 64)} Inverter"},
             {'Chỉ Số Giám Sát String': 'Số Chuỗi String Đang Phát Điện (I > 0.3A)', 'Giá Trị': kpis.get('active_strings', 0)},
             {'Chỉ Số Giám Sát String': 'Số Chuỗi String Bị Hở Mạch / Hỏng', 'Giá Trị': kpis.get('dead_strings', 0)},
             {'Chỉ Số Giám Sát String': 'Tỷ Lệ Chuỗi String Hoạt Động Tốt (%)', 'Giá Trị': f"{kpis.get('healthy_string_pct', 0.0)}%"},
@@ -396,41 +447,47 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
         # Sheet 2: Danh Sách 228 Inverter
         df_inv_exp = df[[
             'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status',
-            'Active_Strings', 'Dead_Strings_Count', 'Open_Circuit_Count', 'Low_I_Count',
+            'Installed_Strings', 'PV18_Note', 'Active_Strings', 'Dead_Strings_Count', 'Open_Circuit_Count', 'Low_I_Count',
             'Total_Pdc_kW', 'Est_Loss_kW', 'Avg_Voltage_V', 'Avg_Current_A', 'Imbalance_Pct', 'Diagnostic_Message'
         ]].copy()
         df_inv_exp.columns = [
             'Mã Inverter', 'Trạm Biến Áp', 'Serial Number', 'Trạng Thái Máy', 'Đánh Giá Sức Khỏe',
-            'String Đang Phát (trên 18)', 'String Hỏng', 'String Hở Mạch (I=0, U>300V)', 'String Lệch Dòng',
+            'Số String Thiết Kế (17/18)', 'Ghi Chú PV18', 'String Đang Phát', 'String Hỏng', 'String Hở Mạch (I=0, U>300V)', 'String Lệch Dòng',
             'Công Suất DC (kW)', 'Tổn Thất Ước Tính (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Độ Lệch Dòng (%)', 'Chẩn Đoán Kỹ Thuật O&M'
         ]
         df_inv_exp.to_excel(writer, sheet_name='Danh_Sach_228_Inverter', index=False)
 
-        # Sheet 3: Ma Trận 18 Chuỗi String Dòng Điện I (A) & Điện Áp U (V)
+        # Sheet 3: Ma Trận Chuỗi String Dòng Điện I (A) & Điện Áp U (V)
         matrix_rows = []
         for _, r in df.iterrows():
             row_dict = {
                 'Mã Inverter': r['Inverter_ID'],
                 'Trạm': r['Station_Tag'],
+                'Số String Thiết Kế': r['Installed_Strings'],
+                'Ghi Chú PV18': r['PV18_Note'],
                 'Trạng Thái': r['Health_Status'],
                 'Pdc (kW)': r['Total_Pdc_kW']
             }
             for i in range(18):
-                row_dict[f'I_PV{i+1} (A)'] = r['Ipv_List'][i]
-                row_dict[f'U_PV{i+1} (V)'] = r['Upv_List'][i]
+                if i == 17 and not r['Has_PV18']:
+                    row_dict[f'I_PV{i+1} (A)'] = "KĐN"
+                    row_dict[f'U_PV{i+1} (V)'] = "KĐN"
+                else:
+                    row_dict[f'I_PV{i+1} (A)'] = r['Ipv_List'][i]
+                    row_dict[f'U_PV{i+1} (V)'] = r['Upv_List'][i]
             matrix_rows.append(row_dict)
-        pd.DataFrame(matrix_rows).to_excel(writer, sheet_name='Ma_Tran_4104_Strings', index=False)
+        pd.DataFrame(matrix_rows).to_excel(writer, sheet_name='Ma_Tran_4040_Strings', index=False)
 
         # Sheet 4: Danh Sách Cảnh Báo Sự Cố Cần Bảo Dưỡng O&M
         df_faults = df[df['Health_Status'] != 'NORMAL'].copy()
         if not df_faults.empty:
             df_faults_exp = df_faults[[
-                'Inverter_ID', 'Station', 'Health_Status', 'Anomaly_Type',
+                'Inverter_ID', 'Station', 'Health_Status', 'Anomaly_Type', 'Installed_Strings',
                 'Dead_Strings_Count', 'Open_Circuit_Strings', 'Low_I_Strings',
                 'Total_Pdc_kW', 'Est_Loss_kW', 'Diagnostic_Message'
             ]]
             df_faults_exp.columns = [
-                'Mã Inverter', 'Trạm Biến Áp', 'Mức Độ Cảnh Báo', 'Hiện Tượng Bất Thường',
+                'Mã Inverter', 'Trạm Biến Áp', 'Mức Độ Cảnh Báo', 'Hiện Tượng Bất Thường', 'Số String Thiết Kế',
                 'Số Chuỗi Hỏng', 'Danh Sách Chuỗi Hở Mạch', 'Danh Sách Chuỗi Lệch Dòng',
                 'Công Suất Hiện Tại (kW)', 'Tổn Thất (kW)', 'Khuyến Nghị O&M'
             ]
