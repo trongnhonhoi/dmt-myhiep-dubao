@@ -2594,15 +2594,20 @@ elif selected_menu == NAV_OPTIONS[4]:
                     with c_exp_m3:
                         st.caption(f"Tổng số bản ghi: **{len(df_view):,} dòng** | Máy chủ: `\\\\192.168.1.231\\csv`")
 
-                    df_show_table = df_view[[
-                        'Date_Str', 'Meter_Code', 'Meter_Name', 'Location',
+                    df_view_table = df_view.copy()
+                    df_view_table['Meter_Name'] = df_view_table['Meter_Code'].map(lambda c: METER_CONFIG.get(c, {}).get('name', f'Công tơ {c}'))
+                    df_view_table['Location'] = df_view_table['Meter_Code'].map(lambda c: METER_CONFIG.get(c, {}).get('location', ''))
+                    df_view_table['Voltage'] = df_view_table['Meter_Code'].map(lambda c: METER_CONFIG.get(c, {}).get('voltage', ''))
+
+                    df_show_table = df_view_table[[
+                        'Date_Str', 'Meter_Code', 'Meter_Name', 'Location', 'Voltage',
                         'MWh_Giao', 'MWh_Nhan', 'MWh_Net',
                         'T1_MWh_Giao', 'T2_MWh_Giao', 'T3_MWh_Giao',
                         'Pmax_MW', 'Pmax_Time', 'Cos_Phi'
                     ]].copy()
                     df_show_table.columns = [
-                        'Ngày', 'Mã CT', 'Tên Công Tơ', 'Vị Trí',
-                        'MWh Giao', 'MWh Nhận', 'MWh Thuần',
+                        'Ngày', 'Mã CT', 'Tên Công Tơ Đo Đếm', 'Vị Trí Đo Đếm Thực Tế', 'Cấp Điện Áp',
+                        'MWh Giao (Phát)', 'MWh Nhận (Tự Dùng)', 'MWh Thuần Net',
                         'T1 Bình Thường (MWh)', 'T2 Cao Điểm (MWh)', 'T3 Thấp Điểm (MWh)',
                         'Pmax (MW)', 'Giờ Pmax', 'Cos Phi'
                     ]

@@ -28,7 +28,7 @@ METER_CONFIG = {
     '171C': {
         'raw_code': '6101',
         'name': 'Công Tơ Đo Đếm Ranh Giới 110kV (Chính)',
-        'location': 'Ngăn Lộ 110kV / Xuất Tuyến 171',
+        'location': 'Phía 110kV Ngăn Lộ 171 TBA NMĐT Mỹ Hiệp (Chính)',
         'voltage': '110 kV',
         'type': 'Chính 110kV',
         'color': '#0284C7'
@@ -36,7 +36,7 @@ METER_CONFIG = {
     '431': {
         'raw_code': '6301',
         'name': 'Công Tơ Đo Đếm Đầu Cực MBA T1 22kV (Chính)',
-        'location': 'Phía 22kV Máy Biến Áp T1 / Ngăn 431',
+        'location': 'Phía 22kV Máy Biến Áp T1 / Ngăn 431 (Chính MBA)',
         'voltage': '22 kV',
         'type': 'Chính 22kV (Ngăn 431)',
         'color': '#10B981'
@@ -257,10 +257,9 @@ class MeterDataManager:
                 if res is not None:
                     records.append(res)
 
-        if not records:
-            return pd.DataFrame()
-
         df = pd.DataFrame(records)
+        for col, cfg_key in [('Meter_Name', 'name'), ('Location', 'location'), ('Voltage', 'voltage'), ('Meter_Type', 'type')]:
+            df[col] = df['Meter_Code'].map(lambda c: METER_CONFIG.get(c, {}).get(cfg_key, ''))
         df.sort_values(by=['Date', 'Meter_Code'], inplace=True)
         self._cache_df = df
         self._last_scan_time = time.time()
