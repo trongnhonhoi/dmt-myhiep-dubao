@@ -2,6 +2,7 @@ r"""
 HỆ THỐNG GIÁM SÁT, TỔNG HỢP VÀ CHẨN ĐOÁN 4.040 CHUỖI STRING DC (HUAWEI SUN2000-175KTL-H0)
 NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP - ĐƯỜNG DẪN SMARTLOGGER: D:\STRING_INV
 LƯU Ý THIẾT KẾ: 64 Inverter không có chuỗi PV18 (Tổng 4.040 String = 64 INV x 17 + 164 INV x 18)
+TÍCH HỢP TRỌN GÓI: CẤP CỨU O&M, SUY LUẬN NGUYÊN NHÂN GỐC, PHÂN TÍCH 9 CẶP MPPT, SO SÁNH SNAPSHOT DELTA & XUẤT PHIẾU GIAO VIỆC
 """
 
 import os
@@ -56,6 +57,7 @@ class StringDataManager:
     def __init__(self, base_path: str = DEFAULT_STRING_PATH):
         self.base_path = base_path
         self._cache_df: Optional[pd.DataFrame] = None
+        self._cache_snap_path: Optional[str] = None
         self._last_loaded_time: float = 0.0
 
     def check_connection(self) -> bool:
@@ -110,7 +112,7 @@ class StringDataManager:
 
     def load_string_data(self, target_dir: Optional[str] = None, force_reload: bool = False) -> pd.DataFrame:
         """Đọc và giải nén toàn bộ các file SmartLogger inv_run_pv_data.csv"""
-        if self._cache_df is not None and not force_reload and target_dir is None:
+        if self._cache_df is not None and not force_reload and (target_dir is None or target_dir == self._cache_snap_path):
             return self._cache_df
 
         if not self.check_connection():
@@ -259,42 +261,125 @@ class StringDataManager:
             # Imbalance percentage
             imbalance_pct = round(((max_i_inv - min_i_inv) / avg_i_inv * 100.0), 1) if avg_i_inv > 0 else 0.0
 
-            # Health classification
-            diag_msgs = []
+            # -------------------------------------------------------------
+            # MPPT PAIR ANALYSIS (9 MPPTs)
+            # -------------------------------------------------------------
+            mppt_details = []
+            mppt_faulty_count = 0
+            mppt_mismatch_max = 0.0
+            both_dead_mppts = []
+            single_dead_mppts = []
+
+            for m in range(9):
+                idx_a = 2 * m
+                idx_b = 2 * m + 1
+                pv_a = idx_a + 1
+                pv_b = idx_b + 1
+                
+                ia = i_arr[idx_a]
+                ua = u_arr[idx_a]
+                
+                if m == 8 and not has_pv18:
+                    ib = 0.0
+                    ub = 0.0
+                    is_single_configured = True
+                else:
+                    ib = i_arr[idx_b]
+                    ub = u_arr[idx_b]
+                    is_single_configured = False
+                
+                diff_i = abs(ia - ib)
+                avg_pair_i = (ia + ib) / 2.0 if (ia + ib) > 0 else 0.0
+                pair_mismatch = round((diff_i / avg_pair_i * 100.0), 1) if avg_pair_i > 0.5 and not is_single_configured else 0.0
+                if pair_mismatch > mppt_mismatch_max:
+                    mppt_mismatch_max = pair_mismatch
+
+                mppt_st = "TỐT"
+                if is_single_configured:
+                    mppt_st = "ĐƠN (17S - KĐN PV18)" if ia > 0.3 else ("HỞ MẠCH PV17" if ua > 300 else "MẤT DÒNG")
+                elif ia <= 0.05 and ib <= 0.05:
+                    mppt_st = "MẤT CẢ 2 CHUỖI" if (ua > 300 or ub > 300) else "DỪNG CẢ 2"
+                    both_dead_mppts.append(m + 1)
+                    mppt_faulty_count += 1
+                elif ia <= 0.05 or ib <= 0.05:
+                    h_name = f"PV{pv_a}" if ia <= 0.05 else f"PV{pv_b}"
+                    mppt_st = f"HỞ 1 CHUỖI ({h_name})"
+                    single_dead_mppts.append(m + 1)
+                    mppt_faulty_count += 1
+                elif pair_mismatch > 20.0:
+                    mppt_st = f"LỆCH DÒNG ({pair_mismatch}%)"
+                    mppt_faulty_count += 1
+
+                mppt_details.append({
+                    'mppt': m + 1,
+                    'pv_a': f"PV{pv_a}",
+                    'pv_b': f"PV{pv_b}" if not is_single_configured else "KĐN",
+                    'i_a': round(ia, 2),
+                    'u_a': round(ua, 1),
+                    'i_b': round(ib, 2),
+                    'u_b': round(ub, 1),
+                    'diff_i': round(diff_i, 2),
+                    'mismatch_pct': pair_mismatch,
+                    'status': mppt_st
+                })
+
+            # -------------------------------------------------------------
+            # ROOT CAUSE HEURISTICS & ACTION RECOMMENDATIONS
+            # -------------------------------------------------------------
+            root_cause_summary = ""
+            action_recommendation = ""
+            priority_level = "Mức 4 (Bình Thường)"
+
             if 'DISCONNECT' in status.upper():
                 health_status = 'CRITICAL'
                 anomaly_type = 'Mất Kết Nối (Disconnected)'
-                diag_msgs.append('Inverter mất kết nối truyền thông RS485 với SmartLogger.')
+                root_cause_summary = 'Mất tín hiệu truyền thông RS485 với SmartLogger hoặc mất nguồn AC tự dùng.'
+                action_recommendation = 'Kiểm tra cáp tín hiệu RS485 cổng COM1/COM2, kiểm tra cầu dao AC tự dùng của Inverter.'
                 loss_kw = rated_p
+                priority_level = "Mức 1 (Khẩn Cấp)"
             elif 'IDLE' in status.upper() or 'NO IRRADIATION' in status.upper() or active_count == 0:
                 health_status = 'CRITICAL'
                 anomaly_type = 'Dừng Nghỉ (Idle / P=0)'
-                diag_msgs.append(f'Inverter ở trạng thái Idle, toàn bộ {installed_strings} chuỗi String không phát điện.')
+                root_cause_summary = f'Inverter ở trạng thái Idle, toàn bộ {installed_strings} chuỗi String không phát điện.'
+                action_recommendation = 'Kiểm tra điện áp lưới AC, rơle bảo vệ tác động hoặc công tắc DC Switch đang OFF.'
                 loss_kw = rated_p
+                priority_level = "Mức 1 (Khẩn Cấp)"
             elif dead_count >= 3:
                 health_status = 'MAJOR'
                 anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
-                diag_msgs.append(f'Hỏng {dead_count}/{installed_strings} chuỗi String DC. Các chuỗi hở mạch: PV{open_circuit_strings}')
+                if len(both_dead_mppts) >= 2:
+                    root_cause_summary = f'Đứt tuyến cáp tổng máng gom hoặc hỏng bo mạch MPPT (Mất cả cặp tại MPPT {both_dead_mppts}).'
+                    action_recommendation = f'Đo kiểm tra điện áp Voc tại đầu vào MPPT {both_dead_mppts}, rà soát tuyến cáp ngầm từ giàn pin.'
+                else:
+                    root_cause_summary = f'Hở mạch {dead_count} chuỗi riêng lẻ tại các giàn pin (Tuột giắc MC4 / Đứt cáp nhánh).'
+                    action_recommendation = f'Dùng Ampe kìm DC đo từng chuỗi PV{open_circuit_strings}, bấm lại giắc MC4 bị cháy/lỏng.'
                 loss_kw = dead_count * benchmark_string_kw
+                priority_level = "Mức 1 (Khẩn Cấp)" if dead_count >= 5 else "Mức 2 (Trung Bình)"
             elif dead_count >= 1:
                 health_status = 'MINOR'
                 anomaly_type = f'Hỏng {dead_count}/{installed_strings} Chuỗi'
-                diag_msgs.append(f'Hỏng {dead_count}/{installed_strings} chuỗi String DC: PV{open_circuit_strings}')
+                root_cause_summary = f'Tuột/cháy giắc MC4 hoặc đứt cáp nhánh tại chuỗi PV{open_circuit_strings}.'
+                action_recommendation = f'Kiểm tra và bấm lại giắc nối MC4 chuỗi PV{open_circuit_strings} tại đầu Inverter và giàn pin.'
                 loss_kw = dead_count * benchmark_string_kw
-            elif len(low_i_strings) > 0:
+                priority_level = "Mức 2 (Trung Bình)"
+            elif len(low_i_strings) > 0 or mppt_mismatch_max > 25.0:
                 health_status = 'WARNING'
-                anomaly_type = f'Lệch Dòng {len(low_i_strings)} Chuỗi'
-                diag_msgs.append(f'Dòng điện chuỗi PV{low_i_strings} suy giảm > 30% so với trung bình.')
-                loss_kw = len(low_i_strings) * (benchmark_string_kw * 0.4)
+                anomaly_type = f'Lệch Dòng ({len(low_i_strings)} Chuỗi)' if len(low_i_strings) > 0 else f'Lệch MPPT ({mppt_mismatch_max}%)'
+                root_cause_summary = f'Bụi bẩn, che bóng cục bộ hoặc hỏng Diode Bypass tại chuỗi PV{low_i_strings if low_i_strings else "lệch MPPT"}.'
+                action_recommendation = 'Vệ sinh rửa bề mặt tấm pin, dùng Camera nhiệt FLIR quét tìm Hotspot và Diode hỏng.'
+                loss_kw = max(len(low_i_strings), 1) * (benchmark_string_kw * 0.35)
+                priority_level = "Mức 3 (Cần Theo Dõi / Vệ Sinh)"
             else:
                 health_status = 'NORMAL'
                 if not has_pv18:
                     anomaly_type = 'Bình Thường (17/17 String)'
-                    diag_msgs.append('Tất cả 17 chuỗi String DC hoạt động bình thường (Chuỗi PV18 không đấu nối theo thiết kế).')
+                    root_cause_summary = 'Tất cả 17 chuỗi String DC hoạt động hoàn hảo (Chuỗi PV18 không đấu nối theo thiết kế).'
                 else:
                     anomaly_type = 'Bình Thường (18/18 String)'
-                    diag_msgs.append('Tất cả 18 chuỗi String DC hoạt động bình thường, dòng áp đồng đều.')
+                    root_cause_summary = 'Tất cả 18 chuỗi String DC hoạt động đồng đều, hiệu suất cao.'
+                action_recommendation = 'Tiếp tục theo dõi vận hành bình thường.'
                 loss_kw = 0.0
+                priority_level = "Mức 4 (Bình Thường)"
 
             records.append({
                 'Inverter_ID': inv_id,
@@ -306,6 +391,7 @@ class StringDataManager:
                 'Device_Status': status,
                 'Health_Status': health_status,
                 'Anomaly_Type': anomaly_type,
+                'Priority_Level': priority_level,
                 'Installed_Strings': installed_strings,
                 'Has_PV18': has_pv18,
                 'PV18_Note': 'Có PV18' if has_pv18 else 'Không Đấu PV18 (Thiết kế)',
@@ -324,7 +410,12 @@ class StringDataManager:
                 'Min_Current_A': round(min_i_inv, 2),
                 'Max_Current_A': round(max_i_inv, 2),
                 'Imbalance_Pct': imbalance_pct,
-                'Diagnostic_Message': ' | '.join(diag_msgs),
+                'MPPT_Mismatch_Max': mppt_mismatch_max,
+                'MPPT_Faulty_Count': mppt_faulty_count,
+                'MPPT_Details': mppt_details,
+                'Root_Cause': root_cause_summary,
+                'Action_Recommendation': action_recommendation,
+                'Diagnostic_Message': f"{root_cause_summary} Khuyến nghị: {action_recommendation}",
                 'Upv_List': u_arr.tolist(),
                 'Ipv_List': i_arr.tolist(),
                 'Pdc_List': p_arr_kw.tolist(),
@@ -334,6 +425,7 @@ class StringDataManager:
         res_df = pd.DataFrame(records)
         res_df.sort_values(by=['Station_Tag', 'Inverter_ID'], inplace=True)
         self._cache_df = res_df
+        self._cache_snap_path = search_path
         self._last_loaded_time = time.time()
         return res_df
 
@@ -352,6 +444,7 @@ class StringDataManager:
         
         on_grid_inv = int((df['Health_Status'].isin(['NORMAL', 'MINOR', 'MAJOR', 'WARNING'])).sum())
         offline_inv = int((df['Health_Status'] == 'CRITICAL').sum())
+        urgent_inv = int((df['Priority_Level'] == 'Mức 1 (Khẩn Cấp)').sum()) if 'Priority_Level' in df.columns else 0
         
         tot_pdc_mw = float(df['Total_Pdc_kW'].sum() / 1000.0)
         tot_loss_kw = float(df['Est_Loss_kW'].sum())
@@ -364,6 +457,7 @@ class StringDataManager:
             'total_inverters': total_inv,
             'on_grid_inverters': on_grid_inv,
             'offline_inverters': offline_inv,
+            'urgent_inverters': urgent_inv,
             'total_installed_strings': total_installed_strings,
             'unconnected_pv18_inv': unconnected_pv18_inv,
             'active_strings': active_strings,
@@ -399,6 +493,7 @@ class StringDataManager:
             n_major = int((grp['Health_Status'] == 'MAJOR').sum())
             n_minor = int((grp['Health_Status'] == 'MINOR').sum())
             n_normal = int((grp['Health_Status'] == 'NORMAL').sum())
+            n_urgent = int((grp['Priority_Level'] == 'Mức 1 (Khẩn Cấp)').sum()) if 'Priority_Level' in grp.columns else 0
 
             rows.append({
                 'Mã Trạm': st_tag,
@@ -411,6 +506,7 @@ class StringDataManager:
                 'Tỷ Lệ Phát (%)': pct_act,
                 'Công Suất Pdc (MW)': pdc_mw,
                 'Tổn Thất Ước Tính (kW)': loss_kw,
+                'Số Lệnh Khẩn Cấp': n_urgent,
                 'Số INV Offline': n_critical,
                 'Số INV Lỗi Nặng': n_major,
                 'Số INV Lỗi Nhẹ': n_minor,
@@ -421,9 +517,155 @@ class StringDataManager:
         res.sort_values(by='Mã Trạm', inplace=True)
         return res
 
+    def get_om_work_orders(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Tự động tạo danh sách Phiếu Lệnh O&M Hiện Trường phân cấp ưu tiên"""
+        if df.empty:
+            return pd.DataFrame()
+
+        faulty_df = df[df['Health_Status'] != 'NORMAL'].copy()
+        if faulty_df.empty:
+            return pd.DataFrame()
+
+        # Sắp xếp theo thứ tự ưu tiên: Mức 1 -> Mức 2 -> Mức 3 và Tổn thất giảm dần
+        def sort_priority(p):
+            if 'Mức 1' in str(p): return 1
+            if 'Mức 2' in str(p): return 2
+            if 'Mức 3' in str(p): return 3
+            return 4
+
+        faulty_df['P_Rank'] = faulty_df['Priority_Level'].apply(sort_priority)
+        faulty_df.sort_values(by=['P_Rank', 'Est_Loss_kW'], ascending=[True, False], inplace=True)
+
+        wo_rows = []
+        for idx, (_, r) in enumerate(faulty_df.iterrows(), 1):
+            h_strings = f"PV{r['Open_Circuit_Strings']}" if r['Open_Circuit_Strings'] else ("Tất Cả" if r['Health_Status'] == 'CRITICAL' else "PV Lệch Dòng")
+            tools = "Ampe kìm DC, Kìm bấm MC4, Bộ giắc MC4, VOM 1500V"
+            if r['Health_Status'] == 'CRITICAL':
+                tools = "Đồng hồ VOM, Bộ đàm, Máy tính lập trình SmartLogger, Kìm điện"
+            elif 'Lệch Dòng' in r['Anomaly_Type']:
+                tools = "Camera nhiệt FLIR, Dụng cụ rửa pin, Ampe kìm DC"
+
+            wo_rows.append({
+                'STT': idx,
+                'Mức Độ Ưu Tiên': r['Priority_Level'],
+                'Mã Inverter': r['Inverter_ID'],
+                'Trạm Biến Áp': r['Station'],
+                'Cấu Hình': f"{r['Installed_Strings']} String ({r['PV18_Note']})",
+                'Chuỗi Bất Thường': h_strings,
+                'Hiện Tượng Sự Cố': r['Anomaly_Type'],
+                'Tổn Thất Ước Tính (kW)': r['Est_Loss_kW'],
+                'Chẩn Đoán Nguyên Nhân Gốc': r['Root_Cause'],
+                'Biện Pháp Xử Lý Kỹ Thuật': r['Action_Recommendation'],
+                'Dụng Cụ Cần Mang Theo': tools,
+                'Trạng Thái O&M': 'Chưa Xử Lý (Pending)'
+            })
+
+        return pd.DataFrame(wo_rows)
+
+    def compare_snapshots(self, snap_path_1: str, snap_path_2: str) -> Dict[str, Any]:
+        """So sánh biến động sự cố giữa 2 Snapshot thời gian (Snapshot Delta)"""
+        df1 = self.load_string_data(target_dir=snap_path_1, force_reload=True)
+        df2 = self.load_string_data(target_dir=snap_path_2, force_reload=True)
+
+        if df1.empty or df2.empty:
+            return {'status': 'error', 'message': 'Không thể đọc dữ liệu từ một trong hai snapshot'}
+
+        dict1 = {r['Inverter_ID']: r for _, r in df1.iterrows()}
+        dict2 = {r['Inverter_ID']: r for _, r in df2.iterrows()}
+
+        all_inv_ids = sorted(list(set(dict1.keys()) | set(dict2.keys())))
+
+        new_faults = []
+        recovered_strings = []
+        persistent_faults = []
+
+        for inv_id in all_inv_ids:
+            r1 = dict1.get(inv_id)
+            r2 = dict2.get(inv_id)
+            if not r1 or not r2:
+                continue
+
+            has_pv18 = r2.get('Has_PV18', True)
+            chk_len = 17 if not has_pv18 else 18
+
+            i_list1 = r1['Ipv_List']
+            i_list2 = r2['Ipv_List']
+
+            for pv_idx in range(chk_len):
+                pv_num = pv_idx + 1
+                i1 = float(i_list1[pv_idx])
+                i2 = float(i_list2[pv_idx])
+
+                is_dead1 = (i1 <= 0.05)
+                is_dead2 = (i2 <= 0.05)
+
+                if not is_dead1 and is_dead2:
+                    new_faults.append({
+                        'Inverter_ID': inv_id,
+                        'Station': r2['Station_Tag'],
+                        'String': f"PV{pv_num}",
+                        'I_Truoc (A)': round(i1, 2),
+                        'I_Sau (A)': round(i2, 2),
+                        'U_Sau (V)': round(r2['Upv_List'][pv_idx], 1),
+                        'Mo_Ta': 'Mới phát sinh mất dòng / hở mạch'
+                    })
+                elif is_dead1 and not is_dead2:
+                    recovered_strings.append({
+                        'Inverter_ID': inv_id,
+                        'Station': r2['Station_Tag'],
+                        'String': f"PV{pv_num}",
+                        'I_Truoc (A)': round(i1, 2),
+                        'I_Sau (A)': round(i2, 2),
+                        'U_Sau (V)': round(r2['Upv_List'][pv_idx], 1),
+                        'Mo_Ta': 'Đã được phục hồi phát điện'
+                    })
+                elif is_dead1 and is_dead2:
+                    persistent_faults.append({
+                        'Inverter_ID': inv_id,
+                        'Station': r2['Station_Tag'],
+                        'String': f"PV{pv_num}",
+                        'I_Sau (A)': round(i2, 2),
+                        'U_Sau (V)': round(r2['Upv_List'][pv_idx], 1),
+                        'Mo_Ta': 'Lỗi kinh niên (Chưa được sửa)'
+                    })
+
+        return {
+            'status': 'success',
+            'new_faults_count': len(new_faults),
+            'recovered_count': len(recovered_strings),
+            'persistent_count': len(persistent_faults),
+            'df_new_faults': pd.DataFrame(new_faults),
+            'df_recovered': pd.DataFrame(recovered_strings),
+            'df_persistent': pd.DataFrame(persistent_faults)
+        }
+
+
+def export_om_work_order_excel(wo_df: pd.DataFrame, plant_kpis: Dict[str, Any], snap_label: str = "") -> bytes:
+    """Xuất Phiếu Giao Việc O&M Hiện Trường Chuẩn Kỹ Thuật (Excel)"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Phiếu Lệnh O&M
+        wo_exp = wo_df[[
+            'STT', 'Mức Độ Ưu Tiên', 'Mã Inverter', 'Trạm Biến Áp', 'Cấu Hình',
+            'Chuỗi Bất Thường', 'Hiện Tượng Sự Cố', 'Tổn Thất Ước Tính (kW)',
+            'Chẩn Đoán Nguyên Nhân Gốc', 'Biện Pháp Xử Lý Kỹ Thuật', 'Dụng Cụ Cần Mang Theo', 'Trạng Thái O&M'
+        ]].copy()
+        wo_exp.to_excel(writer, sheet_name='Phieu_Lenh_OM_Hien_Truong', index=False)
+
+        # Sheet 2: Bảng Ký Nhận & Nghiệm Thu Hiện Trường
+        checklist = wo_df[['STT', 'Mã Inverter', 'Trạm Biến Áp', 'Chuỗi Bất Thường', 'Biện Pháp Xử Lý Kỹ Thuật']].copy()
+        checklist['Kỹ Thuật Viên Thực Hiện'] = ""
+        checklist['Thời Gian Bắt Đầu'] = ""
+        checklist['Thời Gian Hoàn Thành'] = ""
+        checklist['Dòng Đo Sau Xử Lý (A)'] = ""
+        checklist['Xác Nhận Trưởng Ca (Ký)'] = ""
+        checklist.to_excel(writer, sheet_name='Bien_Ban_Nghiem_Thu', index=False)
+
+    return output.getvalue()
+
 
 def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, Any], date_label: str = "") -> bytes:
-    """Xuất báo cáo chi tiết 4.040 chuỗi String DC ra file Excel 4 sheets"""
+    """Xuất báo cáo chi tiết 4.040 chuỗi String DC ra file Excel 5 sheets chuyên nghiệp"""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Sheet 1: Tổng Quan KPIs
@@ -446,14 +688,14 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
 
         # Sheet 2: Danh Sách 228 Inverter
         df_inv_exp = df[[
-            'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status',
+            'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status', 'Priority_Level',
             'Installed_Strings', 'PV18_Note', 'Active_Strings', 'Dead_Strings_Count', 'Open_Circuit_Count', 'Low_I_Count',
-            'Total_Pdc_kW', 'Est_Loss_kW', 'Avg_Voltage_V', 'Avg_Current_A', 'Imbalance_Pct', 'Diagnostic_Message'
+            'Total_Pdc_kW', 'Est_Loss_kW', 'Avg_Voltage_V', 'Avg_Current_A', 'Imbalance_Pct', 'Root_Cause', 'Action_Recommendation'
         ]].copy()
         df_inv_exp.columns = [
-            'Mã Inverter', 'Trạm Biến Áp', 'Serial Number', 'Trạng Thái Máy', 'Đánh Giá Sức Khỏe',
+            'Mã Inverter', 'Trạm Biến Áp', 'Serial Number', 'Trạng Thái Máy', 'Đánh Giá Sức Khỏe', 'Mức Độ Ưu Tiên O&M',
             'Số String Thiết Kế (17/18)', 'Ghi Chú PV18', 'String Đang Phát', 'String Hỏng', 'String Hở Mạch (I=0, U>300V)', 'String Lệch Dòng',
-            'Công Suất DC (kW)', 'Tổn Thất Ước Tính (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Độ Lệch Dòng (%)', 'Chẩn Đoán Kỹ Thuật O&M'
+            'Công Suất DC (kW)', 'Tổn Thất Ước Tính (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Độ Lệch Dòng (%)', 'Chẩn Đoán Nguyên Nhân Gốc', 'Khuyến Nghị Xử Lý O&M'
         ]
         df_inv_exp.to_excel(writer, sheet_name='Danh_Sach_228_Inverter', index=False)
 
@@ -478,19 +720,29 @@ def export_string_diagnostics_to_excel_bytes(df: pd.DataFrame, kpis: Dict[str, A
             matrix_rows.append(row_dict)
         pd.DataFrame(matrix_rows).to_excel(writer, sheet_name='Ma_Tran_4040_Strings', index=False)
 
-        # Sheet 4: Danh Sách Cảnh Báo Sự Cố Cần Bảo Dưỡng O&M
-        df_faults = df[df['Health_Status'] != 'NORMAL'].copy()
-        if not df_faults.empty:
-            df_faults_exp = df_faults[[
-                'Inverter_ID', 'Station', 'Health_Status', 'Anomaly_Type', 'Installed_Strings',
-                'Dead_Strings_Count', 'Open_Circuit_Strings', 'Low_I_Strings',
-                'Total_Pdc_kW', 'Est_Loss_kW', 'Diagnostic_Message'
-            ]]
-            df_faults_exp.columns = [
-                'Mã Inverter', 'Trạm Biến Áp', 'Mức Độ Cảnh Báo', 'Hiện Tượng Bất Thường', 'Số String Thiết Kế',
-                'Số Chuỗi Hỏng', 'Danh Sách Chuỗi Hở Mạch', 'Danh Sách Chuỗi Lệch Dòng',
-                'Công Suất Hiện Tại (kW)', 'Tổn Thất (kW)', 'Khuyến Nghị O&M'
-            ]
-            df_faults_exp.to_excel(writer, sheet_name='Canh_Bao_Su_Co_OM', index=False)
+        # Sheet 4: Phân Tích Cân Bằng 9 Cặp MPPT
+        mppt_rows = []
+        for _, r in df.iterrows():
+            for mp in r['MPPT_Details']:
+                mppt_rows.append({
+                    'Mã Inverter': r['Inverter_ID'],
+                    'Trạm': r['Station_Tag'],
+                    'MPPT': f"MPPT {mp['mppt']}",
+                    'Cặp Chuỗi': f"{mp['pv_a']} & {mp['pv_b']}",
+                    'Dòng I_A (A)': mp['i_a'],
+                    'Áp U_A (V)': mp['u_a'],
+                    'Dòng I_B (A)': mp['i_b'],
+                    'Áp U_B (V)': mp['u_b'],
+                    'Độ Lệch Dòng (A)': mp['diff_i'],
+                    'Lệch Cặp (%)': f"{mp['mismatch_pct']}%",
+                    'Đánh Giá MPPT': mp['status']
+                })
+        pd.DataFrame(mppt_rows).to_excel(writer, sheet_name='Phan_Tich_9_MPPT', index=False)
+
+        # Sheet 5: Phiếu Lệnh O&M Hiện Trường
+        mgr_tmp = StringDataManager()
+        wo_df = mgr_tmp.get_om_work_orders(df)
+        if not wo_df.empty:
+            wo_df.to_excel(writer, sheet_name='Phieu_Lenh_OM_Hien_Truong', index=False)
 
     return output.getvalue()
