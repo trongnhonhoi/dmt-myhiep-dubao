@@ -661,20 +661,20 @@ class StringDataManager:
         if df1.empty or df2.empty:
             return {'status': 'error', 'message': 'Không thể đọc dữ liệu từ một trong hai snapshot'}
 
-        dict1 = {r['Inverter_ID']: r for _, r in df1.iterrows()}
-        dict2 = {r['Inverter_ID']: r for _, r in df2.iterrows()}
+        records1 = df1.to_dict('records')
+        records2 = df2.to_dict('records')
+        dict1 = {r['Inverter_ID']: r for r in records1}
+        dict2 = {r['Inverter_ID']: r for r in records2}
 
-        all_inv_ids = sorted(list(set(dict1.keys()) | set(dict2.keys())))
+        all_inv_ids = sorted(list(set(dict1.keys()) & set(dict2.keys())))
 
         new_faults = []
         recovered_strings = []
         persistent_faults = []
 
         for inv_id in all_inv_ids:
-            r1 = dict1.get(inv_id)
-            r2 = dict2.get(inv_id)
-            if r1 is None or r2 is None:
-                continue
+            r1 = dict1[inv_id]
+            r2 = dict2[inv_id]
 
             has_pv18 = r2.get('Has_PV18', True)
             chk_len = 17 if not has_pv18 else 18
