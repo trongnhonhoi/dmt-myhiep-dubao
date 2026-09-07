@@ -26,6 +26,7 @@ import performance_report_engine
 import inverter_diagnostic_engine
 import meter_summary_engine
 import string_diagnostic_engine
+import scada_map_builder
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -36,6 +37,11 @@ importlib.reload(performance_report_engine)
 importlib.reload(inverter_diagnostic_engine)
 importlib.reload(meter_summary_engine)
 importlib.reload(string_diagnostic_engine)
+importlib.reload(scada_map_builder)
+
+from scada_map_builder import (
+    create_scada_overview_figure
+)
 
 from performance_report_engine import (
     generate_performance_kpi_table,
@@ -3723,18 +3729,70 @@ elif selected_menu == NAV_OPTIONS[7]:
 
             st.markdown("---")
 
-            # 6 Phân hệ Tab Chuyên Sâu
-            t_om, t_heat, t_mppt, t_delta, t_dive, t_tbl = st.tabs([
-                "🚨 1. Cấp Cứu O&M & Phiếu Giao Việc",
-                "📊 2. Bản Đồ Nhiệt Chuỗi Pin (Heatmap)",
-                "⚖️ 3. Cân Bằng 9 Cặp MPPT",
-                "🕒 4. So Sánh Xu Hướng Biến Động (Delta)",
-                "🔍 5. Soi Chi Tiết Từng Inverter",
-                "📋 6. Bảng Kê 229 INV & Xuất Báo Cáo"
+            # 7 Phân hệ Tab Chuyên Sâu
+            t_map, t_om, t_heat, t_mppt, t_delta, t_dive, t_tbl = st.tabs([
+                "🗺️ 1. Sơ Đồ SCADA 229 Inverter (HMI Digital Twin)",
+                "🚨 2. Cấp Cứu O&M & Phiếu Giao Việc",
+                "📊 3. Bản Đồ Nhiệt Chuỗi Pin (Heatmap)",
+                "⚖️ 4. Cân Bằng 9 Cặp MPPT",
+                "🕒 5. So Sánh Xu Hướng Biến Động (Delta)",
+                "🔍 6. Soi Chi Tiết Từng Inverter",
+                "📋 7. Bảng Kê 229 INV & Xuất Báo Cáo"
             ])
 
             # =========================================================================
-            # SUBTAB 1: BẢNG ĐIỀU KHIỂN CẤP CỨU O&M & PHIẾU GIAO VIỆC HIỆN TRƯỜNG
+            # SUBTAB 1: SƠ ĐỒ SCADA HMI 229 INVERTER (DIGITAL TWIN THEO OVERVIEW229.PDF)
+            # =========================================================================
+            with t_map:
+                st.markdown(r"""
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 14px 20px; color: white; margin-bottom: 12px; border-left: 5px solid #38BDF8;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <div style="font-weight: 750; font-size: 1.15rem; color: #38BDF8;">
+                                🗺️ SƠ ĐỒ BỐ TRÍ MẶT BẰNG 229 INVERTER (SCADA HMI OVERVIEW DIGITAL TWIN)
+                            </div>
+                            <div style="font-size: 0.84rem; color: #CBD5E1;">
+                                Mô phỏng chính xác sơ đồ tổng thể SCADA HMI điều hành 229 Inverter (7 Trạm S1..S7) từ tài liệu <b>OVERVIEW229.pdf</b>. Màu sắc thể hiện trạng thái tức thời của từng Inverter. Rê chuột để soi chi tiết công suất & nguyên nhân sự cố.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col_sm1, col_sm2 = st.columns([2.2, 2.8])
+                with col_sm1:
+                    scada_st_filter = st.selectbox(
+                        "🔍 Chọn phạm vi hiển thị / Phóng to trạm:",
+                        [
+                            "Tất Cả 7 Trạm (Toàn Nhà Máy - 229 INV)",
+                            "S1 (STATION-01: 35 INV)",
+                            "S2 (STATION-02: 35 INV)",
+                            "S3 (STATION-03: 35 INV)",
+                            "S4 (STATION-04: 35 INV)",
+                            "S5 (STATION-05: 35 INV)",
+                            "S6 (STATION-06: 36 INV)",
+                            "S7 (STATION-07: 18 INV)"
+                        ],
+                        index=0,
+                        key="scada_map_st_filter"
+                    )
+
+                with col_sm2:
+                    st.markdown("""
+                    <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 24px; font-size: 0.82rem; font-weight: 600;">
+                        <span style="color: #10B981;">🟢 Bình Thường</span>
+                        <span style="color: #F59E0B;">🟡 Lệch Dòng / Vệ Sinh</span>
+                        <span style="color: #EA580C;">🟠 Hở 1-2 Chuỗi</span>
+                        <span style="color: #EF4444;">🔴 Khẩn Cấp / Dừng / Lỗi</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # Vẽ bản đồ SCADA Plotly
+                fig_scada = create_scada_overview_figure(df_strings, scada_st_filter)
+                st.plotly_chart(fig_scada, use_container_width=True)
+
+            # =========================================================================
+            # SUBTAB 2: BẢNG ĐIỀU KHIỂN CẤP CỨU O&M & PHIẾU GIAO VIỆC HIỆN TRƯỜNG
             # =========================================================================
             with t_om:
                 st.markdown("##### 🚨 Bảng Điều Khiển Cấp Cứu O&M & Phân Cấp Xử Lý Sự Cố Hiện Trường:")
