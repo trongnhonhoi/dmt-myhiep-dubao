@@ -43,18 +43,18 @@ METER_CONFIG = {
     },
     '171 DP1': {
         'raw_code': '6302',
-        'name': 'Công Tơ Đo Đếm Đối Chứng 22kV (Dự Phòng 1)',
-        'location': 'Phía 22kV Máy Biến Áp T1 (Dự Phòng 1)',
-        'voltage': '22 kV',
-        'type': 'Dự Phòng 1',
+        'name': 'Công Tơ Đo Đếm Đối Chứng 110kV (Dự Phòng 1)',
+        'location': 'Phía 110kV TBA 220kV Phù Mỹ (Dự Phòng 1)',
+        'voltage': '110 kV',
+        'type': 'Dự Phòng 1 (TBA 220kV Phù Mỹ)',
         'color': '#F59E0B'
     },
     '171 DP2': {
         'raw_code': '6303',
-        'name': 'Công Tơ Đo Đếm Đối Chứng 22kV (Dự Phòng 2)',
-        'location': 'Phía 22kV Máy Biến Áp T1 (Dự Phòng 2)',
-        'voltage': '22 kV',
-        'type': 'Dự Phòng 2',
+        'name': 'Công Tơ Đo Đếm Đối Chứng 110kV (Dự Phòng 2)',
+        'location': 'Phía 110kV Máy Biến Áp T1 NMĐT Mỹ Hiệp (Dự Phòng 2)',
+        'voltage': '110 kV',
+        'type': 'Dự Phòng 2 (TBA Mỹ Hiệp)',
         'color': '#8B5CF6'
     }
 }

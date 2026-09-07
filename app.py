@@ -2222,9 +2222,9 @@ elif selected_menu == NAV_OPTIONS[4]:
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
                     <div style="font-weight: 700; color: #0F172A; margin-bottom: 8px;">🔌 Phân Cấp & Đặc Tính Kỹ Thuật 4 Công Tơ:</div>
                     • <b>MH_171C (Chính 110kV):</b> Công tơ đo đếm chính phát điện thương phẩm bán điện lên lưới EVN (Cấp CX 0.2S).<br>
-                    • <b>MH_171DP1 (Dự phòng 1):</b> Công tơ so sánh, dự phòng độc lập tại ngăn 171 (Cấp CX 0.2S, độ lệch TB: <b>+0.12%</b>).<br>
-                    • <b>MH_171DP2 (Dự phòng 2):</b> Công tơ so sánh thứ hai tại ngăn 171 (Cấp CX 0.2S, độ lệch TB: <b>+0.68%</b>).<br>
-                    • <b>MH_431 (Tự dùng / Tổng):</b> Đo đếm tổng phía 22kV / đầu cực MBA 431 (Đo sản lượng gộp trước tổn thất và tự dùng trạm, tỷ lệ: <b>+1.35%</b>).
+                    • <b>MH_171DP1 (Dự phòng 1 110kV):</b> Công tơ đo đếm đối chứng 110kV (Dự phòng 1) - Phía 110kV TBA 220kV Phù Mỹ (Cấp CX 0.2S, độ lệch TB: <b>+0.12%</b>).<br>
+                    • <b>MH_171DP2 (Dự phòng 2 110kV):</b> Công tơ đo đếm đối chứng 110kV (Dự phòng 2) - Phía 110kV MBA T1 NMĐT Mỹ Hiệp (Cấp CX 0.2S, độ lệch TB: <b>+0.68%</b>).<br>
+                    • <b>MH_431 (Tự dùng / Tổng 22kV):</b> Đo đếm tổng phía 22kV / đầu cực MBA 431 (Đo sản lượng gộp trước tổn thất MBA và tự dùng trạm, tỷ lệ: <b>+1.35%</b>).
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -2369,8 +2369,8 @@ elif selected_menu == NAV_OPTIONS[4]:
                                 "Tất Cả 4 Công Tơ (171C, 431, 171 DP1, 171 DP2)",
                                 "171C - Ranh Giới 110kV (Chính)",
                                 "431 - Đầu Cực MBA 22kV (Ngăn 431)",
-                                "171 DP1 - Đối Chứng 22kV (Dự Phòng 1)",
-                                "171 DP2 - Đối Chứng 22kV (Dự Phòng 2)"
+                                "171 DP1 - Đối Chứng 110kV (Dự Phòng 1 - TBA 220kV Phù Mỹ)",
+                                "171 DP2 - Đối Chứng 110kV (Dự Phòng 2 - TBA Mỹ Hiệp)"
                             ],
                             index=0,
                             key="meter_pick_code"
@@ -2524,7 +2524,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                                     x=df_err_plot['Date_Str'],
                                     y=df_err_plot['Err_431_171DP1_Pct'],
                                     mode='lines',
-                                    name='Lệch 431 vs 171 DP1 (Dự Phòng 1) (%)',
+                                    name='Lệch 431 vs 171 DP1 (TBA 220kV Phù Mỹ) (%)',
                                     line=dict(color='#10B981', width=1.5)
                                 ))
                             if 'Err_431_171DP2_Pct' in df_err_plot.columns:
@@ -2532,7 +2532,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                                     x=df_err_plot['Date_Str'],
                                     y=df_err_plot['Err_431_171DP2_Pct'],
                                     mode='lines',
-                                    name='Lệch 431 vs 171 DP2 (Dự Phòng 2) (%)',
+                                    name='Lệch 431 vs 171 DP2 (MBA T1 Mỹ Hiệp) (%)',
                                     line=dict(color='#8B5CF6', width=1.5)
                                 ))
                             if 'Err_171C_171DP1_Pct' in df_err_plot.columns:
@@ -2540,7 +2540,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                                     x=df_err_plot['Date_Str'],
                                     y=df_err_plot['Err_171C_171DP1_Pct'],
                                     mode='lines',
-                                    name='Lệch 171C vs 171 DP1 (%)',
+                                    name='Lệch 171C vs 171 DP1 (TBA 220kV Phù Mỹ) (%)',
                                     line=dict(color='#F59E0B', width=1.2, dash='dot')
                                 ))
                             if 'Err_171C_171DP2_Pct' in df_err_plot.columns:
@@ -2548,7 +2548,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                                     x=df_err_plot['Date_Str'],
                                     y=df_err_plot['Err_171C_171DP2_Pct'],
                                     mode='lines',
-                                    name='Lệch 171C vs 171 DP2 (%)',
+                                    name='Lệch 171C vs 171 DP2 (MBA T1 Mỹ Hiệp) (%)',
                                     line=dict(color='#EC4899', width=1.2, dash='dot')
                                 ))
 
