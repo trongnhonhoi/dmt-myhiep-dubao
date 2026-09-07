@@ -3853,6 +3853,10 @@ elif selected_menu == NAV_OPTIONS[7]:
                     </div>
                     """, unsafe_allow_html=True)
 
+                    st_df_grp = st_df_grp.copy()
+                    st_df_grp['Sort_Order'] = st_df_grp['Inverter_ID'].apply(lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(x))])
+                    st_df_grp.sort_values(by='Sort_Order', inplace=True)
+
                     # Vẽ lưới badge Inverter
                     inv_cards_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;'>"
                     for _, r in st_df_grp.iterrows():
