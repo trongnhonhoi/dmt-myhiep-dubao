@@ -2052,10 +2052,13 @@ elif selected_menu == NAV_OPTIONS[3]:
 # -------------------------------------------------------------------------
 elif selected_menu == NAV_OPTIONS[4]:
     st.subheader("📈 Phân Tích & Đối Soát Cơ Sở Dữ Liệu Lịch Sử 4 Công Tơ (2020 - 2026)")
-    st.caption("Kho dữ liệu đo đếm thực tế 2.069 ngày từ 01/12/2020 đến 31/07/2026 tại Nhà máy ĐMT Mỹ Hiệp (50MWp / 40.075MW)")
 
-    df_hist = get_historical_meter_data()
+    df_hist = get_historical_meter_data(auto_sync=True)
     corr_info = get_meter_correlation_analysis()
+
+    min_d_str = df_hist['Date'].min().strftime('%d/%m/%Y') if not df_hist.empty else "01/12/2020"
+    max_d_str = df_hist['Date'].max().strftime('%d/%m/%Y') if not df_hist.empty else "06/09/2026"
+    st.caption(f"Kho dữ liệu đo đếm thực tế **{len(df_hist):,} ngày** từ {min_d_str} đến {max_d_str} tại Nhà máy ĐMT Mỹ Hiệp (50MWp / 40.075MW) - 🟢 Tự động đồng bộ số liệu Công tơ 171C trực tiếp từ máy chủ.")
 
     if df_hist.empty:
         st.warning("⚠️ Chưa tải được tệp dữ liệu lịch sử `historical_meter_daily_energy.csv`.")
@@ -2067,7 +2070,7 @@ elif selected_menu == NAV_OPTIONS[4]:
         max_mwh = float(clean_recs['MH_171C_MWh'].max())
         
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("📅 Tổng Số Ngày Đo", f"{len(df_hist):,} ngày", "01/12/2020 - 31/07/2026")
+        c1.metric("📅 Tổng Số Ngày Đo", f"{len(df_hist):,} ngày", f"{min_d_str} - {max_d_str}")
         c2.metric("⚡ Tổng Sản Lượng 171C", f"{tot_mwh:,.0f} MWh", f"{tot_mwh/1000:,.2f} GWh")
         c3.metric("📊 Lệch DP1 vs Chính", f"{corr_info.get('diff_dp1_pct', 0.12):+.2f}%", "R² = 0.9999")
         c4.metric("📊 Lệch DP2 vs Chính", f"{corr_info.get('diff_dp2_pct', 0.68):+.2f}%", "R² = 0.9998")
@@ -2080,7 +2083,7 @@ elif selected_menu == NAV_OPTIONS[4]:
             "📊 1. Phân Bố Mùa Vụ & Chỉ Tiêu 12 Tháng (P10/P50/P90)",
             "🗓️ 2. Biểu Đồ Sản Lượng Theo Năm (2020 - 2026)",
             "⚖️ 3. Đối Soát Kỹ Thuật & Tương Quan 4 Công Tơ",
-            "📋 4. Bảng Kê Chi Tiết 2.069 Ngày & Xuất Báo Cáo",
+            f"📋 4. Bảng Kê Chi Tiết {len(df_hist):,} Ngày & Xuất Báo Cáo",
             "⚡ 5. Tổng Hợp Chỉ Số Công Tơ Thực Tế & Biểu Giá EVN (\\\\192.168.1.231\\csv)"
         ])
 
@@ -2171,15 +2174,27 @@ elif selected_menu == NAV_OPTIONS[4]:
         # --- SUBTAB 2: BIỂU ĐỒ SẢN LƯỢNG THEO NĂM ---
         with h_sub2:
             st.markdown("##### 🗓️ Diễn Biến Sản Lượng Phát Điện Hàng Ngày (2020 - 2026)")
+            st.success(f"🟢 **Tự động đồng bộ số liệu Công tơ 171C:** Hệ thống tự động cập nhật dữ liệu đo đếm từ Mục 5 (`\\\\192.168.1.231\\csv`). Dữ liệu phát thương phẩm 171C đã được cập nhật đến ngày **{max_d_str}** (Tổng cộng **{len(df_hist):,} ngày** ghi nhận).")
             
-            col_y1, col_y2 = st.columns([1.5, 3.5])
+            col_y1, col_y2, col_y3 = st.columns([1.5, 2.5, 1.2])
             with col_y1:
                 available_years = ["Tất Cả Các Năm"] + sorted([str(y) for y in df_hist['Year'].unique() if y >= 2020])
                 sel_year = st.selectbox("Chọn năm xem diễn biến:", available_years, index=0)
+            with col_y2:
+                pass
+            with col_y3:
+                st.write("")
+                if st.button("🔄 Đồng Bộ 171C Ngay", help="Quét lại toàn bộ file CSV công tơ 171C và cập nhật vào lịch sử", key="btn_sync_171c_sub2", use_container_width=True):
+                    from historical_data_manager import sync_meter_data_to_historical
+                    with st.spinner("⏳ Đang đồng bộ số liệu công tơ 171C..."):
+                        df_sync, count, l_d = sync_meter_data_to_historical(force_resync=True)
+                        st.cache_data.clear()
+                        st.success(f"Đã đồng bộ thành công {count} ngày mới (Đến ngày {l_d})!")
+                        st.rerun()
             
             if sel_year == "Tất Cả Các Năm":
                 df_view_y = df_hist
-                title_y = "TOÀN BỘ GIAI ĐOẠN 2020 - 2026"
+                title_y = f"TOÀN BỘ GIAI ĐOẠN 2020 - 2026 ({min_d_str} - {max_d_str})"
             else:
                 df_view_y = df_hist[df_hist['Year'] == int(sel_year)]
                 title_y = f"NĂM {sel_year}"
@@ -2231,7 +2246,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                         "Ngày Thấp Nhất (MWh)": round(float(g_c.min()), 2)
                     })
             df_y_comp = pd.DataFrame(y_comp)
-            st.markdown("###### 📊 Bảng Tổng Kết Sản Lượng Từng Năm:")
+            st.markdown("###### 📊 Bảng Tổng Kết Sản Lượng Từng Năm (2020 - 2026):")
             st.dataframe(df_y_comp, width='stretch', hide_index=True)
 
         # --- SUBTAB 3: ĐỐI SOÁT TƯƠNG QUAN 4 CÔNG TƠ ---
@@ -2297,7 +2312,7 @@ elif selected_menu == NAV_OPTIONS[4]:
 
         # --- SUBTAB 4: BẢNG KÊ CHI TIẾT & XUẤT FILE ---
         with h_sub4:
-            st.markdown("##### 📋 Bảng Kê Chi Tiết Toàn Bộ 2.069 Ngày Đo Đếm (2020 - 2026):")
+            st.markdown(f"##### 📋 Bảng Kê Chi Tiết Toàn Bộ {len(df_hist):,} Ngày Đo Đếm (2020 - 2026):")
             
             # Nút xuất file Excel & CSV
             col_exp1, col_exp2, col_exp3 = st.columns([2, 2, 2])
@@ -2322,7 +2337,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                     use_container_width=True
                 )
             with col_exp3:
-                st.caption(f"Tổng số bản ghi: **{len(df_hist):,} ngày** | Dung lượng: **~212 KB**")
+                st.caption(f"Tổng số bản ghi: **{len(df_hist):,} ngày** | Dữ liệu đến: **{max_d_str}**")
 
             st.write("")
             df_hist_show = df_hist.copy()
