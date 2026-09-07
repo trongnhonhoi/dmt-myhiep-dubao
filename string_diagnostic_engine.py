@@ -16,7 +16,27 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
 
-DEFAULT_STRING_PATH = r'D:\STRING_INV'
+def get_default_string_path() -> str:
+    """Tự động tìm kiếm thư mục dữ liệu STRING_INV trên máy cục bộ hoặc môi trường Cloud/Web/Mobile"""
+    # 1. Ổ đĩa D máy trạm cục bộ
+    if os.path.exists(r'D:\STRING_INV'):
+        return r'D:\STRING_INV'
+    
+    # 2. Thư mục data/STRING_INV đi kèm mã nguồn dự án (cho Streamlit Cloud, Docker, Linux, Mobile)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(current_dir, 'data', 'STRING_INV'),
+        os.path.join(os.getcwd(), 'data', 'STRING_INV'),
+        os.path.join(current_dir, 'sample_data', 'STRING_INV'),
+        os.path.join(os.getcwd(), 'sample_data', 'STRING_INV'),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+            
+    return r'D:\STRING_INV'
+
+DEFAULT_STRING_PATH = get_default_string_path()
 
 # Danh sách 64 Inverter không đấu nối chuỗi String 18 theo hồ sơ thiết kế công trình
 NO_PV18_INVERTERS = {
@@ -92,7 +112,13 @@ class StringDataManager:
 
     def check_connection(self) -> bool:
         try:
-            return os.path.exists(self.base_path)
+            if os.path.exists(self.base_path):
+                return True
+            fallback = get_default_string_path()
+            if os.path.exists(fallback):
+                self.base_path = fallback
+                return True
+            return False
         except Exception:
             return False
 
