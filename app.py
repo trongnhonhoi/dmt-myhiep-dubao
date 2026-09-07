@@ -3723,15 +3723,14 @@ elif selected_menu == NAV_OPTIONS[7]:
 
             st.markdown("---")
 
-            # 7 Phân hệ Tab Chuyên Sâu
-            t_om, t_topo, t_heat, t_mppt, t_delta, t_dive, t_tbl = st.tabs([
+            # 6 Phân hệ Tab Chuyên Sâu
+            t_om, t_heat, t_mppt, t_delta, t_dive, t_tbl = st.tabs([
                 "🚨 1. Cấp Cứu O&M & Phiếu Giao Việc",
-                "🗺️ 2. Bản Đồ Mặt Bằng 7 Trạm",
-                "📊 3. Bản Đồ Nhiệt Chuỗi Pin (Heatmap)",
-                "⚖️ 4. Cân Bằng 9 Cặp MPPT",
-                "🕒 5. So Sánh Xu Hướng Biến Động (Delta)",
-                "🔍 6. Soi Chi Tiết Từng Inverter",
-                "📋 7. Bảng Kê 229 INV & Xuất Báo Cáo"
+                "📊 2. Bản Đồ Nhiệt Chuỗi Pin (Heatmap)",
+                "⚖️ 3. Cân Bằng 9 Cặp MPPT",
+                "🕒 4. So Sánh Xu Hướng Biến Động (Delta)",
+                "🔍 5. Soi Chi Tiết Từng Inverter",
+                "📋 6. Bảng Kê 229 INV & Xuất Báo Cáo"
             ])
 
             # =========================================================================
@@ -3825,117 +3824,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                     )
 
             # =========================================================================
-            # SUBTAB 2: BẢN ĐỒ MẶT BẰNG 7 TRẠM BIẾN ÁP (SUBSTATION TOPOLOGY MAP)
-            # =========================================================================
-            # =========================================================================
-            # SUBTAB 2: BẢN ĐỒ MẶT BẰNG 7 TRẠM BIẾN ÁP (SUBSTATION TOPOLOGY MAP)
-            # =========================================================================
-            with t_topo:
-                st.markdown(r"""
-                <div style="background: #0F172A; border-radius: 10px; padding: 14px 20px; color: white; margin-bottom: 15px; border-left: 5px solid #0284C7;">
-                    <div style="font-weight: 750; font-size: 1.15rem; color: #38BDF8;">
-                        🗺️ SƠ ĐỒ BỐ TRÍ MẶT BẰNG 229 INVERTER THEO 7 PHÂN KHU TRẠM (SCADA HMI TOPOLOGY)
-                    </div>
-                    <div style="font-size: 0.84rem; color: #94A3B8;">
-                        Mô phỏng chính xác sơ đồ mạng SCADA HMI điều hành 229 Inverter theo từng tuyến lộ cáp (Tuyến <b>.1</b> và Tuyến <b>.2</b>) của 7 Trạm biến áp S1 đến S7. Màu sắc thể hiện tình trạng thời gian thực.
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st_tabs_list = st.tabs([
-                    "🏢 S1 (STATION-01: 35 INV)",
-                    "🏢 S2 (STATION-02: 35 INV)",
-                    "🏢 S3 (STATION-03: 35 INV)",
-                    "🏢 S4 (STATION-04: 35 INV)",
-                    "🏢 S5 (STATION-05: 35 INV)",
-                    "🏢 S6 (STATION-06: 36 INV)",
-                    "🏢 S7 (STATION-07: 18 INV)"
-                ])
-
-                station_tags_order = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
-                
-                for idx_st, (s_tag, s_tab_ui) in enumerate(zip(station_tags_order, st_tabs_list)):
-                    with s_tab_ui:
-                        st_df_grp = df_strings[df_strings['Station_Tag'] == s_tag].copy()
-                        if st_df_grp.empty:
-                            st.warning(f"Không có dữ liệu cho trạm {s_tag}")
-                            continue
-
-                        st_name = st_df_grp['Station'].iloc[0]
-                        tot_s_grp = st_df_grp['Installed_Strings'].sum()
-                        act_s_grp = st_df_grp['Active_Strings'].sum()
-                        loss_s_grp = st_df_grp['Est_Loss_kW'].sum()
-                        pdc_s_grp = st_df_grp['Total_Pdc_kW'].sum()
-
-                        # Thống kê nhanh trạm
-                        c_t1, c_t2, c_t3, c_t4 = st.columns(4)
-                        with c_t1:
-                            st.metric("🏢 Tổng Inverter", f"{len(st_df_grp)} INV", delta=f"{tot_s_grp} Strings")
-                        with c_t2:
-                            st.metric("⚡ Chuỗi Đang Phát", f"{act_s_grp} / {tot_s_grp}", delta=f"{act_s_grp/tot_s_grp*100:.1f}% hoạt động")
-                        with c_t3:
-                            st.metric("🔋 Công Suất DC", f"{pdc_s_grp/1000.0:.2f} MW", delta=f"Pdc tức thời")
-                        with c_t4:
-                            st.metric("✂️ Tổn Thất DC", f"{loss_s_grp:.1f} kW", delta=f"{tot_s_grp - act_s_grp} chuỗi hở/lỗi", delta_color="inverse")
-
-                        # Tách theo Tuyến Lộ Cáp 1 (.1) và Tuyến Lộ Cáp 2 (.2)
-                        line1_df = st_df_grp[st_df_grp['Inverter_ID'].str.contains(r'INV\d+\.1\.', regex=True)].copy()
-                        line2_df = st_df_grp[st_df_grp['Inverter_ID'].str.contains(r'INV\d+\.2\.', regex=True)].copy()
-
-                        # Hàm sắp xếp tự nhiên
-                        def sort_nat(df_in):
-                            if df_in.empty: return df_in
-                            df_in['Sort_Order'] = df_in['Inverter_ID'].apply(lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(x))])
-                            return df_in.sort_values(by='Sort_Order')
-
-                        line1_df = sort_nat(line1_df)
-                        line2_df = sort_nat(line2_df)
-
-                        def render_line_html(line_title, line_data):
-                            if line_data.empty: return ""
-                            html = f"""
-                            <div style="background: #1E293B; border-radius: 8px; padding: 12px 16px; margin-top: 10px; margin-bottom: 12px;">
-                                <div style="font-weight: 700; color: #FBBF24; font-size: 0.95rem; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 5px;">
-                                    🔌 {line_title} ({len(line_data)} Inverter - {line_data['Installed_Strings'].sum()} Strings)
-                                </div>
-                                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                            """
-                            for _, r in line_data.iterrows():
-                                inv_id = r['Inverter_ID']
-                                h_st = r['Health_Status']
-                                p_dc = r['Total_Pdc_kW']
-                                n_str = r.get('Installed_Strings', 18)
-                                act_str = r['Active_Strings']
-                                
-                                if h_st == 'CRITICAL':
-                                    bg_c = "#EF4444"
-                                    txt_c = "#FFFFFF"
-                                elif h_st == 'MAJOR':
-                                    bg_c = "#EA580C"
-                                    txt_c = "#FFFFFF"
-                                elif h_st in ['MINOR', 'WARNING']:
-                                    bg_c = "#F59E0B"
-                                    txt_c = "#000000"
-                                else:
-                                    bg_c = "#10B981"
-                                    txt_c = "#FFFFFF"
-
-                                html += f"""
-                                <div style="background: {bg_c}; color: {txt_c}; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; min-width: 105px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);" title="{inv_id}: {r['Anomaly_Type']} | Pdc={p_dc:.1f}kW ({act_str}/{n_str}S) | {r.get('Root_Cause', '')}">
-                                    <div>{inv_id}</div>
-                                    <div style="font-size: 0.72rem; opacity: 0.95; margin-top: 2px;">{act_str}/{n_str}S | {p_dc:.0f}kW</div>
-                                </div>
-                                """
-                            html += "</div></div>"
-                            return html
-
-                        if not line1_df.empty:
-                            st.markdown(render_line_html(f"Tuyến Lộ L1 ({s_tag}.1)", line1_df), unsafe_allow_html=True)
-                        if not line2_df.empty:
-                            st.markdown(render_line_html(f"Tuyến Lộ L2 ({s_tag}.2)", line2_df), unsafe_allow_html=True)
-
-            # =========================================================================
-            # SUBTAB 3: BẢN ĐỒ NHIỆT MA TRẬN CHUỖI STRING (HEATMAP)
+            # SUBTAB 2: BẢN ĐỒ NHIỆT MA TRẬN CHUỖI STRING (HEATMAP)
             # =========================================================================
             with t_heat:
                 st.markdown("##### 📊 Bản Đồ Nhiệt Toàn Diện 4.058 Chuỗi String DC (Phát Hiện Ngay Chuỗi Hỏng & Lệch Dòng):")
@@ -3998,34 +3887,25 @@ elif selected_menu == NAV_OPTIONS[7]:
 
                     row_hover = []
                     for idx in range(18):
-                        if idx == 17 and not r.get('Has_PV18', True):
-                            txt = (f"<b>{r['Inverter_ID']}</b> ({r['Station_Tag']}) - <b>PV18</b><br>"
-                                   f"<b>⚪ KHÔNG ĐẤU NỐI (Theo Thiết Kế)</b><br>"
-                                   f"Inverter sử dụng cấu hình 17 chuỗi String.")
+                        pv_num = idx + 1
+                        u_v = r['Upv_List'][idx]
+                        i_v = r['Ipv_List'][idx]
+                        p_v = r['Pdc_List'][idx]
+                        
+                        if pv_num == 18 and not r.get('Has_PV18', True):
+                            h_txt = f"<b>{r['Inverter_ID']} - PV18</b><br>Trạng thái: <b>Không Đấu Nối (Thiết Kế)</b>"
+                        elif i_v <= 0.05 and u_v > 300:
+                            h_txt = f"<b>{r['Inverter_ID']} - PV{pv_num}</b><br>🚨 <b>HỞ MẠCH MC4</b><br>Điện áp Voc: {u_v:.1f} V | Dòng: 0.0 A"
+                        elif i_v <= 0.05:
+                            h_txt = f"<b>{r['Inverter_ID']} - PV{pv_num}</b><br>⚪ <b>MẤT DÒNG / DỪNG</b><br>Điện áp: {u_v:.1f} V | Dòng: {i_v:.2f} A"
+                        elif i_v < r['Avg_Current_A'] * 0.70 and r['Avg_Current_A'] > 0.5:
+                            h_txt = f"<b>{r['Inverter_ID']} - PV{pv_num}</b><br>⚠️ <b>DÒNG THẤP / CHE BÓNG</b><br>Dòng: {i_v:.2f} A (TB: {r['Avg_Current_A']:.2f}A)<br>Điện áp: {u_v:.1f} V | Pdc: {p_v:.2f} kW"
                         else:
-                            u_v = r['Upv_List'][idx]
-                            i_v = r['Ipv_List'][idx]
-                            p_v = r['Pdc_List'][idx]
-                            
-                            if i_v <= 0.05 and u_v > 300:
-                                st_tag = "🔴 HỞ MẠCH (I=0, U>300V)"
-                            elif i_v <= 0.05:
-                                st_tag = "⚪ DỪNG / MẤT DÒNG"
-                            elif i_v < r['Avg_Current_A'] * 0.7 and r['Avg_Current_A'] > 0.5:
-                                st_tag = "🟡 LỆCH DÒNG THẤP"
-                            else:
-                                st_tag = "🟢 HOẠT ĐỘNG TỐT"
-                                
-                            txt = (f"<b>{r['Inverter_ID']}</b> ({r['Station_Tag']}) - <b>PV{idx+1}</b><br>"
-                                   f"Dòng điện: <b>{i_v:.2f} A</b><br>"
-                                   f"Điện áp: <b>{u_v:.1f} V</b><br>"
-                                   f"Công suất: <b>{p_v:.2f} kW</b><br>"
-                                   f"Tình trạng: {st_tag}")
-                        row_hover.append(txt)
+                            h_txt = f"<b>{r['Inverter_ID']} - PV{pv_num}</b><br>✅ <b>HOẠT ĐỘNG TỐT</b><br>Dòng: {i_v:.2f} A | Điện áp: {u_v:.1f} V | Pdc: {p_v:.2f} kW"
+                        row_hover.append(h_txt)
                     hover_texts.append(row_hover)
 
-                colorscale_choice = 'Turbo' if "Điện Áp" in hm_metric else 'Viridis'
-
+                colorscale_choice = 'YlOrRd' if "Điện Áp" in hm_metric else ('Viridis' if "Công Suất" in hm_metric else 'Plasma')
                 fig_hm = go.Figure(data=go.Heatmap(
                     z=z_matrix,
                     x=string_x_labels,
@@ -4050,7 +3930,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 st.plotly_chart(fig_hm, use_container_width=True)
 
             # =========================================================================
-            # SUBTAB 4: PHÂN TÍCH CÂN BẰNG 9 CẶP MPPT (MPPT PAIR BALANCE & MISMATCH)
+            # SUBTAB 3: PHÂN TÍCH CÂN BẰNG 9 CẶP MPPT (MPPT PAIR BALANCE & MISMATCH)
             # =========================================================================
             with t_mppt:
                 st.markdown("##### ⚖️ Phân Tích Cân Bằng Dòng & Áp Trên 9 Cặp Cổng MPPT (Huawei 175KTL-H0):")
@@ -4121,7 +4001,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                 st.dataframe(df_mppt_show, use_container_width=True, height=400, hide_index=True)
 
             # =========================================================================
-            # SUBTAB 5: SO SÁNH BIẾN ĐỘNG LỖI GIỮA CÁC SNAPSHOT (SNAPSHOT DELTA)
+            # SUBTAB 4: SO SÁNH BIẾN ĐỘNG LỖI GIỮA CÁC SNAPSHOT (SNAPSHOT DELTA)
             # =========================================================================
             with t_delta:
                 st.markdown("##### 🕒 So Sánh Biến Động Chuỗi String Giữa 2 Thời Điểm (Snapshot Delta):")
@@ -4167,7 +4047,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                                 st.dataframe(delta_res['df_persistent'], use_container_width=True, hide_index=True)
 
             # =========================================================================
-            # SUBTAB 6: SOI CHI TIẾT CHUỖI TỪNG INVERTER (STRING DEEP-DIVE)
+            # SUBTAB 5: SOI CHI TIẾT CHUỖI TỪNG INVERTER (STRING DEEP-DIVE)
             # =========================================================================
             with t_dive:
                 st.markdown(r"""
@@ -4306,7 +4186,7 @@ elif selected_menu == NAV_OPTIONS[7]:
                     st.success(f"✅ {msg_box}")
 
             # =========================================================================
-            # SUBTAB 7: BẢNG KÊ TOÀN DIỆN 229 INVERTER & XUẤT BÁO CÁO EXCEL TỔNG THỂ
+            # SUBTAB 6: BẢNG KÊ TOÀN DIỆN 229 INVERTER & XUẤT BÁO CÁO EXCEL TỔNG THỂ
             # =========================================================================
             with t_tbl:
                 st.markdown("##### 📋 Bảng Kê Toàn Diện Tình Trạng 229 Inverter & 4.058 Chuỗi String DC:")
