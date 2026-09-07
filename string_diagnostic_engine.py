@@ -344,18 +344,23 @@ class StringDataManager:
                     mppt_mismatch_max = pair_mismatch
 
                 mppt_st = "TỐT"
+                mppt_note = ""
                 if is_single_configured:
                     mppt_st = "ĐƠN (17S - KĐN PV18)" if ia > 0.3 else ("HỞ MẠCH PV17" if ua > 300 else "MẤT DÒNG")
+                    mppt_note = "Chuỗi đơn (Thiết kế KĐN PV18)"
                 elif ia <= 0.05 and ib <= 0.05:
                     mppt_st = "MẤT CẢ 2 CHUỖI" if (ua > 300 or ub > 300) else "DỪNG CẢ 2"
+                    mppt_note = "Cả 2 chuỗi đều không có dòng"
                     both_dead_mppts.append(m + 1)
                     mppt_faulty_count += 1
                 elif ia <= 0.05 or ib <= 0.05:
                     h_name = f"PV{pv_a}" if ia <= 0.05 else f"PV{pv_b}"
-                    mppt_st = f"HỞ 1 CHUỖI ({h_name})"
+                    mppt_st = "HỞ 1 CHUỖI"
+                    mppt_note = f"Mất dòng tại chuỗi {h_name}"
                     mppt_faulty_count += 1
                 elif pair_mismatch > 20.0:
-                    mppt_st = f"LỆCH DÒNG ({pair_mismatch}%)"
+                    mppt_st = "LỆCH DÒNG (>20%)"
+                    mppt_note = f"Độ lệch dòng {pair_mismatch}%"
                     mppt_faulty_count += 1
 
                 mppt_details.append({
@@ -368,7 +373,8 @@ class StringDataManager:
                     'u_b': round(ub, 1),
                     'diff_i': round(diff_i, 2),
                     'mismatch_pct': pair_mismatch,
-                    'status': mppt_st
+                    'status': mppt_st,
+                    'note': mppt_note
                 })
 
             # Helper format PV list

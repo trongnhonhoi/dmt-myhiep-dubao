@@ -4153,7 +4153,8 @@ elif selected_menu == NAV_OPTIONS[7]:
                             'Áp Chuỗi B (V)': mp['u_b'],
                             'Chênh Lệch Dòng (A)': mp['diff_i'],
                             'Tỷ Lệ Lệch Cặp (%)': mp['mismatch_pct'],
-                            'Trạng Thái MPPT': mp['status']
+                            'Trạng Thái MPPT': mp['status'],
+                            'Ghi Chú': mp.get('note', '')
                         })
 
                 df_mppt_all = pd.DataFrame(all_mppt_rows)
@@ -4169,22 +4170,37 @@ elif selected_menu == NAV_OPTIONS[7]:
                         title="<b>PHÂN BỐ TỶ LỆ LỆCH DÒNG NỘI BỘ CẶP MPPT (%)</b>",
                         color_discrete_sequence=['#F59E0B']
                     )
-                    fig_mppt_st.update_layout(template="plotly_white", height=360)
+                    fig_mppt_st.update_layout(
+                        template="plotly_white", 
+                        height=360,
+                        margin=dict(t=40, b=20, l=10, r=10)
+                    )
                     st.plotly_chart(fig_mppt_st, use_container_width=True)
 
                 with m_c2:
                     # Đếm các dạng lỗi MPPT
                     st_counts = df_mppt_all['Trạng Thái MPPT'].value_counts().reset_index()
                     st_counts.columns = ['Trạng Thái', 'Số Lượng Cặp MPPT']
+                    
                     fig_pie_mppt = px.pie(
                         st_counts,
                         values='Số Lượng Cặp MPPT',
                         names='Trạng Thái',
                         title="<b>TỶ LỆ TRẠNG THÁI 2.052 CẶP MPPT TOÀN NHÀ MÁY</b>",
                         hole=0.45,
-                        color_discrete_sequence=px.colors.qualitative.Safe
+                        color_discrete_sequence=['#10B981', '#38BDF8', '#F59E0B', '#EF4444', '#94A3B8', '#8B5CF6']
                     )
-                    fig_pie_mppt.update_layout(template="plotly_white", height=360)
+                    fig_pie_mppt.update_traces(
+                        textposition='inside',
+                        textinfo='percent',
+                        hovertemplate='<b>%{label}</b><br>Số lượng: %{value} cặp MPPT<br>Tỷ lệ: %{percent}<extra></extra>'
+                    )
+                    fig_pie_mppt.update_layout(
+                        template="plotly_white", 
+                        height=360,
+                        margin=dict(t=40, b=20, l=10, r=10),
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5)
+                    )
                     st.plotly_chart(fig_pie_mppt, use_container_width=True)
 
                 st.markdown("###### 📋 Danh Sách Các Cặp MPPT Bị Lệch Dòng Hoặc Mất Chuỗi:")
