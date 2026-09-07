@@ -55,31 +55,37 @@ def generate_annotated_scada_image(df_strings: pd.DataFrame, station_filter: str
                 inst_s = 18
                 loss_kw = 175.0
 
-            x = pos['x']
-            y = pos['y']
+            # KHÔNG ĐÁNH DẤU INV BÌNH THƯỜNG (để nguyên ảnh gốc chuẩn)
+            if h_st == 'NORMAL':
+                continue
+
+            # TỌA ĐỘ CHÍNH XÁC Ô ĐÈN CHỈ THỊ (GREEN DOT BBOX)
+            x0 = pos.get('dot_x0', pos['x'] + 19)
+            y0 = pos.get('dot_y0', pos['y'] - 5)
+            x1 = pos.get('dot_x1', pos['x'] + 29)
+            y1 = pos.get('dot_y1', pos['y'] + 5)
+
+            bx = pos['x']
+            by = pos['y']
             box_w = 64
             box_h = 16
 
-            # Determine fault colors & highlight
+            # ĐÁNH DẤU CHÍNH XÁC VÀO Ô ĐÈN & VIỀN INVERTER LỖI
             if h_st == 'CRITICAL':
-                # Bright Red glowing box on inverter
-                draw.rectangle([x - box_w/2 - 2, y - box_h/2 - 2, x + box_w/2 + 2, y + box_h/2 + 2], outline=(239, 68, 68, 255), width=2)
-                draw.rectangle([x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2], fill=(239, 68, 68, 120))
-                # Red dot
-                draw.rectangle([x - box_w/2 + 2, y - box_h/2 + 2, x - box_w/2 + 12, y + box_h/2 - 2], fill=(239, 68, 68, 255))
+                # Đỏ đậm phủ chính xác lên ô xanh lá
+                draw.rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], fill=(239, 68, 68, 255), outline=(255, 255, 255, 255), width=1)
+                # Viền đỏ nổi bật quanh thân Inverter
+                draw.rectangle([bx - box_w/2, by - box_h/2, bx + box_w/2, by + box_h/2], outline=(239, 68, 68, 255), width=2)
             elif h_st == 'MAJOR':
-                # Bright Orange box
-                draw.rectangle([x - box_w/2 - 2, y - box_h/2 - 2, x + box_w/2 + 2, y + box_h/2 + 2], outline=(234, 88, 12, 255), width=2)
-                draw.rectangle([x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2], fill=(234, 88, 12, 100))
-                draw.rectangle([x - box_w/2 + 2, y - box_h/2 + 2, x - box_w/2 + 12, y + box_h/2 - 2], fill=(234, 88, 12, 255))
+                # Cam phủ chính xác lên ô xanh lá
+                draw.rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], fill=(234, 88, 12, 255), outline=(255, 255, 255, 255), width=1)
+                # Viền cam quanh thân Inverter
+                draw.rectangle([bx - box_w/2, by - box_h/2, bx + box_w/2, by + box_h/2], outline=(234, 88, 12, 255), width=2)
             elif h_st in ['MINOR', 'WARNING']:
-                # Yellow box
-                draw.rectangle([x - box_w/2 - 2, y - box_h/2 - 2, x + box_w/2 + 2, y + box_h/2 + 2], outline=(245, 158, 11, 255), width=2)
-                draw.rectangle([x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2], fill=(245, 158, 11, 80))
-                draw.rectangle([x - box_w/2 + 2, y - box_h/2 + 2, x - box_w/2 + 12, y + box_h/2 - 2], fill=(245, 158, 11, 255))
-            else:
-                # Normal green dot
-                draw.rectangle([x - box_w/2 + 2, y - box_h/2 + 2, x - box_w/2 + 12, y + box_h/2 - 2], fill=(16, 185, 129, 255))
+                # Vàng phủ chính xác lên ô xanh lá
+                draw.rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], fill=(245, 158, 11, 255), outline=(255, 255, 255, 255), width=1)
+                # Viền vàng quanh thân Inverter
+                draw.rectangle([bx - box_w/2, by - box_h/2, bx + box_w/2, by + box_h/2], outline=(245, 158, 11, 255), width=2)
 
     return img
 
