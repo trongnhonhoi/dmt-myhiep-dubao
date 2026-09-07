@@ -3627,10 +3627,10 @@ elif selected_menu == NAV_OPTIONS[7]:
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <div style="font-size: 1.35rem; font-weight: 750; color: #FBBF24; margin-bottom: 4px;">
-                    🔌 HỆ THỐNG GIÁM SÁT, CẤP CỨU & CHẨN ĐOÁN 4.040 CHUỖI STRING DC
+                    🔌 HỆ THỐNG GIÁM GIÁM SÁT 4.058 CHUỖI STRING DC
                 </div>
                 <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-                    Trọn gói chẩn đoán <b>4.058 chuỗi String DC</b> (229 Inverter Huawei 175KTL-H0 thuộc 7 Trạm S1..S7). Tự động <b>Suy luận nguyên nhân gốc (Root Cause)</b>, <b>Phân tích cân bằng 9 cặp MPPT</b>, <b>So sánh biến động lỗi (Snapshot Delta)</b> và <b>Xuất Phiếu Lệnh O&M Hiện Trường</b> tức thì.
+                    Chẩn đoán <b>4.058 chuỗi String DC</b> (229 Inverter Huawei 175KTL-H0 thuộc 7 Trạm S1..S7).
                 </div>
             </div>
             <div style="margin-top: 8px;">
@@ -3657,10 +3657,17 @@ elif selected_menu == NAV_OPTIONS[7]:
         col_s_top1, col_s_top2 = st.columns([3.5, 1.5])
         with col_s_top1:
             if snapshots:
-                snap_options = {f"📅 {s['time_label']} ({s['file_count']} tệp SmartLogger S1..S7)": s['dir_path'] for s in snapshots}
+                snap_options = {}
+                for idx_s, s in enumerate(snapshots):
+                    rel_info = f" - {s['rel_dir']}" if s.get('rel_dir') and s.get('rel_dir') != '.' else ""
+                    lbl = f"📅 {s['time_label']} ({s['file_count']} tệp SmartLogger S1..S7{rel_info})"
+                    if lbl in snap_options:
+                        lbl = f"{lbl} (Thư mục {idx_s+1})"
+                    snap_options[lbl] = s['dir_path']
                 selected_snap_label = st.selectbox("Chọn bộ dữ liệu SmartLogger (Snapshot):", list(snap_options.keys()), index=0, key="sel_string_snap")
                 target_snap_dir = snap_options[selected_snap_label]
             else:
+                snap_options = {"Mặc định (D:\\STRING_INV)": DEFAULT_STRING_PATH}
                 target_snap_dir = DEFAULT_STRING_PATH
                 selected_snap_label = "Mặc định (D:\\STRING_INV)"
 
@@ -3732,12 +3739,12 @@ elif selected_menu == NAV_OPTIONS[7]:
 
             # 7 Phân hệ Tab Chuyên Sâu
             t_map, t_om, t_heat, t_mppt, t_delta, t_dive, t_tbl = st.tabs([
-                "🗺️ 1. Sơ Đồ SCADA 229 Inverter (HMI Digital Twin)",
-                "🚨 2. Cấp Cứu O&M & Phiếu Giao Việc",
+                "🗺️ 1. Sơ Đồ SCADA 229 Inverter ",
+                "🚨 2. O&M & Phiếu Giao Việc",
                 "📊 3. Bản Đồ Nhiệt Chuỗi Pin (Heatmap)",
                 "⚖️ 4. Cân Bằng 9 Cặp MPPT",
                 "🕒 5. So Sánh Xu Hướng Biến Động (Delta)",
-                "🔍 6. Soi Chi Tiết Từng Inverter",
+                "🔍 6. Chi Tiết Từng Inverter",
                 "📋 7. Bảng Kê 229 INV & Xuất Báo Cáo"
             ])
 
@@ -4202,21 +4209,27 @@ elif selected_menu == NAV_OPTIONS[7]:
                 st.markdown("##### 🕒 So Sánh Biến Động Chuỗi String Giữa 2 Thời Điểm (Snapshot Delta):")
                 st.caption("Giúp ca trực phát hiện các chuỗi **mới bị đứt trong ca**, các chuỗi **đã được sửa xong** và các chuỗi **lỗi kinh niên**.")
 
-                if len(snapshots) < 2:
-                    st.info("ℹ️ Cần ít nhất 2 bộ dữ liệu (Snapshot) khác nhau trong `D:\\STRING_INV` để thực hiện so sánh biến động. Hiện tại hệ thống đang có 1 snapshot.")
+                snap_keys = list(snap_options.keys()) if 'snap_options' in locals() and snap_options else []
+                if len(snap_keys) < 2:
+                    st.info("ℹ️ Cần ít nhất 2 bộ dữ liệu (Snapshot) khác nhau trong `D:\\STRING_INV` để thực hiện so sánh biến động. Hiện tại hệ thống đang có ít hơn 2 snapshot.")
                 else:
                     col_d1, col_d2, col_d3 = st.columns([2, 2, 1])
                     with col_d1:
-                        snap_a_lbl = st.selectbox("Thời điểm Gốc (Trước):", list(snap_options.keys()), index=1, key="snap_a_sel")
-                        snap_a_path = snap_options[snap_a_lbl]
+                        idx_a = min(1, len(snap_keys) - 1)
+                        snap_a_lbl = st.selectbox("Thời điểm Gốc (Trước):", snap_keys, index=idx_a, key="snap_a_sel")
+                        snap_a_path = snap_options.get(snap_a_lbl, "")
                     with col_d2:
-                        snap_b_lbl = st.selectbox("Thời điểm So Sánh (Sau):", list(snap_options.keys()), index=0, key="snap_b_sel")
-                        snap_b_path = snap_options[snap_b_lbl]
+                        idx_b = 0
+                        snap_b_lbl = st.selectbox("Thời điểm So Sánh (Sau):", snap_keys, index=idx_b, key="snap_b_sel")
+                        snap_b_path = snap_options.get(snap_b_lbl, "")
                     with col_d3:
                         st.write("")
                         btn_compare_snap = st.button("⚡ So Sánh Biến Động", type="primary", use_container_width=True)
 
-                    delta_res = string_mgr.compare_snapshots(snap_a_path, snap_b_path)
+                    if snap_a_path and snap_b_path:
+                        delta_res = string_mgr.compare_snapshots(snap_a_path, snap_b_path)
+                    else:
+                        delta_res = {'status': 'error', 'message': 'Không tìm thấy đường dẫn snapshot'}
                     if delta_res.get('status') == 'success':
                         cd1, cd2, cd3 = st.columns(3)
                         with cd1:
