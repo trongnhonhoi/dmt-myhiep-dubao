@@ -673,7 +673,7 @@ class StringDataManager:
         for inv_id in all_inv_ids:
             r1 = dict1.get(inv_id)
             r2 = dict2.get(inv_id)
-            if not r1 or not r2:
+            if r1 is None or r2 is None:
                 continue
 
             has_pv18 = r2.get('Has_PV18', True)
