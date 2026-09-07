@@ -40,7 +40,8 @@ importlib.reload(string_diagnostic_engine)
 importlib.reload(scada_map_builder)
 
 from scada_map_builder import (
-    create_scada_overview_figure
+    create_scada_overview_figure,
+    generate_annotated_scada_image
 )
 
 from performance_report_engine import (
@@ -3790,6 +3791,22 @@ elif selected_menu == NAV_OPTIONS[7]:
                 # Vẽ bản đồ SCADA Plotly
                 fig_scada = create_scada_overview_figure(df_strings, scada_st_filter)
                 st.plotly_chart(fig_scada, use_container_width=True)
+
+                # Nút tải ảnh SCADA độ phân giải cao 1080p kèm đánh dấu sự cố
+                col_dl_s1, col_dl_s2 = st.columns([3.5, 1.5])
+                with col_dl_s1:
+                    st.caption("💡 **Hướng dẫn:** Rê chuột lên các ô Inverter để xem thông số chi tiết tức thời. Quý ca trực có thể dùng chuột cuộn để phóng to/thu nhỏ (Zoom) hoặc kéo di chuyển (Pan).")
+                with col_dl_s2:
+                    ann_pil_img = generate_annotated_scada_image(df_strings, scada_st_filter)
+                    buf_img = io.BytesIO()
+                    ann_pil_img.save(buf_img, format="PNG")
+                    st.download_button(
+                        "📥 TẢI ẢNH SƠ ĐỒ SCADA (.PNG)",
+                        data=buf_img.getvalue(),
+                        file_name=f"So_Do_SCADA_229_Inverter_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.png",
+                        mime="image/png",
+                        use_container_width=True
+                    )
 
             # =========================================================================
             # SUBTAB 2: BẢNG ĐIỀU KHIỂN CẤP CỨU O&M & PHIẾU GIAO VIỆC HIỆN TRƯỜNG
