@@ -957,7 +957,7 @@ class InverterAnomalyManager:
         if daily_energy < 5.0 or ratio_pct < 10.0:
             status = 'CRITICAL'
             diagnosis = f"🔴 Mất Điện / Ngắt CB AC 800V / Inverter Huawei 175KTL-H0 Offline Hoàn Toàn Suốt Cả Ngày"
-            rec = "Kiểm tra khẩn cấp: CB AC 800V phía tủ gom trạm biến áp, công tắc DC Switch trên Inverter Huawei, cáp truyền thông RS485 kết nối SmartLogger."
+            rec = "Kiểm tra khẩn cấp: CB AC 800V ngăn LV trạm biến áp, công tắc DC Switch trên Inverter Huawei, cáp truyền thông RS485 kết nối SmartLogger."
         elif ratio_pct < 75.0:
             status = 'MAJOR'
             ratio_deficit = 100.0 - ratio_pct

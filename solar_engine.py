@@ -1,7 +1,6 @@
 """
-Engine tính toán và dự báo sản lượng điện mặt trời chu kỳ 15 phút
+Tính toán và dự báo sản lượng điện mặt trời chu kỳ 15 phút
 Nhà máy Điện mặt trời Mỹ Hiệp (50MWp / 40.075MW - Tấm pin Sharp NU-440)
-Bộ Parser Đa Tầng Siêu Cấp: Hỗ trợ cả File Bức Xạ Trạm Thời Tiết & File Công Suất Điện Lực SCADA (110kV / 22kV / 7 Trạm Inverter)
 """
 
 import io

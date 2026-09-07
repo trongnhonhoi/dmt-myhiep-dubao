@@ -1,6 +1,6 @@
 r"""
-Module Dự Báo Thông Minh Tích Hợp Khí Tượng Thời Tiết Xã Mỹ Hiệp / Phù Mỹ, Bình Định
-và Bộ Tạo Thuyết Minh Vận Hành - Khí Tượng - Sản Lượng (Chuẩn Điều Độ EVN / A0 / A3)
+Module Dự Báo Thời Tiết Xã Phù Mỹ Nam
+và Dự Báo sản lượng
 """
 
 import json
@@ -161,7 +161,7 @@ def convert_nwp_to_15min_dispatch(nwp_data: Dict[str, Any], params: Optional[Dic
             'Specific_Yield_kWh_kWp': round(daily_e_mwh * 1000.0 / 50000.0, 2)
         })
 
-        # Tạo thuyết minh chuyên sâu cho từng ngày
+        # Tạo thuyết minh
         narratives.append(generate_daily_operational_narrative({
             'date_str': d_str,
             'day_name': day_vn_name,
@@ -181,8 +181,7 @@ def convert_nwp_to_15min_dispatch(nwp_data: Dict[str, Any], params: Optional[Dic
 
 def generate_daily_operational_narrative(day_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Tạo bản thuyết minh vận hành khí tượng & sản lượng cho từng ngày
-    phục vụ báo cáo điều độ nội bộ và đăng ký biểu đồ phụ tải phát điện EVN
+    Tạo bản thuyết minh vận hành khí tượng & sản lượng 
     """
     d_str = day_data['date_str']
     day_name = day_data['day_name']
@@ -273,7 +272,7 @@ def generate_unified_hybrid_forecast(
     enable_ai: bool = False
 ) -> Tuple[pd.DataFrame, pd.DataFrame, List[Dict[str, Any]]]:
     """
-    MÔ HÌNH DỰ BÁO LAI GHÉP THỐNG NHẤT (UNIFIED HYBRID ENSEMBLE FORECAST MODEL)
+    MÔ HÌNH DỰ BÁO 
     Kết hợp 2 mô hình cốt lõi:
     1. Mô hình Khí Tượng Số Trị (NWP - ECMWF/GFS) dự báo mây, bức xạ, mưa, nhiệt độ
     2. Mô hình Đo Đếm Lịch Sử SCADA ĐMT Mỹ Hiệp (Bức xạ thực tế, hệ số PR, giới hạn trần Inverter 40.075MW)

@@ -21,6 +21,7 @@ import exporter
 import historical_data_manager
 import performance_report_engine
 import inverter_diagnostic_engine
+import meter_summary_engine
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -29,6 +30,7 @@ importlib.reload(exporter)
 importlib.reload(historical_data_manager)
 importlib.reload(performance_report_engine)
 importlib.reload(inverter_diagnostic_engine)
+importlib.reload(meter_summary_engine)
 
 from performance_report_engine import (
     generate_performance_kpi_table,
@@ -40,6 +42,13 @@ from inverter_diagnostic_engine import (
     export_inverter_diagnostics_to_excel_bytes,
     export_inverter_30day_heatmap_excel_bytes,
     STATION_CONFIG
+)
+
+from meter_summary_engine import (
+    MeterDataManager,
+    export_meter_report_to_excel_bytes,
+    DEFAULT_METER_PATH,
+    METER_CONFIG
 )
 
 from solar_engine import (
@@ -2044,12 +2053,13 @@ elif selected_menu == NAV_OPTIONS[4]:
 
         st.markdown("---")
 
-        # 4 Subtabs for Historical Analysis
-        h_sub1, h_sub2, h_sub3, h_sub4 = st.tabs([
+        # 5 Subtabs for Historical & Actual Meter Analysis
+        h_sub1, h_sub2, h_sub3, h_sub4, h_sub5 = st.tabs([
             "📊 1. Phân Bố Mùa Vụ & Chỉ Tiêu 12 Tháng (P10/P50/P90)",
             "🗓️ 2. Biểu Đồ Sản Lượng Theo Năm (2020 - 2026)",
             "⚖️ 3. Đối Soát Kỹ Thuật & Tương Quan 4 Công Tơ",
-            "📋 4. Bảng Kê Chi Tiết 2.069 Ngày & Xuất Báo Cáo"
+            "📋 4. Bảng Kê Chi Tiết 2.069 Ngày & Xuất Báo Cáo",
+            "⚡ 5. Tổng Hợp Chỉ Số Công Tơ Thực Tế & Biểu Giá EVN (\\\\192.168.1.231\\csv)"
         ])
 
         # --- SUBTAB 1: PHÂN BỐ MÙA VỤ 12 THÁNG ---
@@ -2294,6 +2304,287 @@ elif selected_menu == NAV_OPTIONS[4]:
 
             st.write("")
             st.dataframe(df_hist, width='stretch', hide_index=True)
+
+        # --- SUBTAB 5: TỔNG HỢP CHỈ SỐ CÔNG TƠ & BIỂU GIÁ THỰC TẾ EVN ---
+        with h_sub5:
+            st.markdown(r"""
+            <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 18px; border-left: 5px solid #0284C7;">
+                <div style="font-weight: 750; font-size: 1.15rem; color: #38BDF8;">
+                    ⚡ HỆ THỐNG TỔNG HỢP CHỈ SỐ CÔNG TƠ & BIỂU GIÁ ĐIỆN NĂNG THƯƠNG PHẨM (EVN / A0 / A3)
+                </div>
+                <div style="font-size: 0.85rem; color: #CBD5E1; margin-top: 4px; line-height: 1.5;">
+                    Tự động quét và nạp dữ liệu đo đếm phụ tải 48 chu kỳ (30 phút/điểm) của <b>4 Công Tơ Đo Đếm</b> từ máy chủ <code>\\192.168.1.231\csv</code>: Công tơ Ranh giới 110kV <b>6101</b>, Công tơ Đầu cực MBA 22kV <b>6301</b>, và 2 Công tơ đối chứng dự phòng <b>6302, 6303</b>. Tự động phân loại 3 biểu giá EVN (T1 Bình thường, T2 Cao điểm, T3 Thấp điểm), đối soát sai số kỹ thuật và tính toán hệ số công suất <i>cosφ</i>.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            @st.cache_resource
+            def get_meter_manager():
+                return MeterDataManager(DEFAULT_METER_PATH)
+
+            meter_mgr = get_meter_manager()
+
+            if not meter_mgr.check_connection():
+                st.error(f"❌ Không thể kết nối tới máy chủ công tơ đo đếm tại đường dẫn: `{DEFAULT_METER_PATH}`. Vui lòng kiểm tra lại kết nối mạng LAN/VPN.")
+            else:
+                with st.spinner("⏳ Đang nạp và tổng hợp dữ liệu 4 công tơ từ máy chủ \\192.168.1.231\\csv..."):
+                    df_raw_meters = meter_mgr.load_all_meters()
+
+                if df_raw_meters.empty:
+                    st.warning("⚠️ Không tìm thấy dữ liệu tệp CSV công tơ hợp lệ trong thư mục.")
+                else:
+                    # Bộ lọc khung thời gian & Công tơ
+                    col_mf1, col_mf2, col_mf3 = st.columns([1.6, 1.8, 1.6])
+                    
+                    all_months = sorted(df_raw_meters['Month_Str'].unique(), key=lambda x: datetime.strptime(x, 'Tháng %m/%Y'))
+                    
+                    with col_mf1:
+                        time_filter_mode = st.radio(
+                            "Phạm vi thời gian:",
+                            ["Toàn Bộ Năm 2026", "Theo Tháng Cụ Thể", "Chọn Ngày Cụ Thể"],
+                            index=0,
+                            key="meter_time_mode"
+                        )
+                    
+                    df_view = df_raw_meters.copy()
+                    sel_date_for_curve = df_raw_meters['Date_Str'].iloc[-1]
+                    date_filter_label = "Năm 2026 (01/01 - 06/09/2026)"
+
+                    with col_mf2:
+                        if time_filter_mode == "Theo Tháng Cụ Thể":
+                            sel_m = st.selectbox("Chọn tháng:", all_months, index=len(all_months)-1, key="meter_sel_month")
+                            df_view = df_view[df_view['Month_Str'] == sel_m]
+                            date_filter_label = sel_m
+                        elif time_filter_mode == "Chọn Ngày Cụ Thể":
+                            all_dates_avail = sorted(df_raw_meters['Date_Str'].unique(), key=lambda d: datetime.strptime(d, '%d/%m/%Y'), reverse=True)
+                            sel_date = st.selectbox("Chọn ngày đo đếm:", all_dates_avail, index=0, key="meter_sel_date")
+                            df_view = df_view[df_view['Date_Str'] == sel_date]
+                            sel_date_for_curve = sel_date
+                            date_filter_label = f"Ngày {sel_date}"
+
+                    with col_mf3:
+                        meter_pick = st.selectbox(
+                            "Lọc công tơ:",
+                            [
+                                "Tất Cả 4 Công Tơ (6101, 6301, 6302, 6303)",
+                                "6101 - Ranh Giới 110kV (Chính)",
+                                "6301 - Đầu Cực MBA 22kV (Chính)",
+                                "6302 - Đối Chứng 22kV (Dự Phòng 1)",
+                                "6303 - Đối Chứng 22kV (Dự Phòng 2)"
+                            ],
+                            index=0,
+                            key="meter_pick_code"
+                        )
+                        if "Tất Cả" not in meter_pick:
+                            p_code = meter_pick.split(' ')[0]
+                            df_view = df_view[df_view['Meter_Code'] == p_code]
+
+                    # Tính toán KPIs
+                    kpis_m = meter_mgr.get_summary_kpis(df_view)
+
+                    # 6 Thẻ KPI tổng hợp
+                    st.markdown("---")
+                    mk1, mk2, mk3, mk4, mk5, mk6 = st.columns(6)
+                    with mk1:
+                        st.metric("⚡ Tổng MWh Giao (Phát)", f"{kpis_m.get('total_giao_mwh', 0.0):,.2f} MWh", delta=f"{kpis_m.get('avg_daily_giao_mwh', 0.0):,.1f} MWh/ngày")
+                    with mk2:
+                        st.metric("🔌 Tổng MWh Nhận (Tự Dùng)", f"{kpis_m.get('total_nhan_mwh', 0.0):,.3f} MWh", delta=f"{kpis_m.get('days_count', 0)} ngày đo đếm")
+                    with mk3:
+                        st.metric("📊 Giờ Bình Thường T1", f"{kpis_m.get('t1_giao_mwh', 0.0):,.2f} MWh", delta=f"{kpis_m.get('t1_pct', 0.0)}% tổng sản lượng")
+                    with mk4:
+                        st.metric("☀️ Giờ Cao Điểm T2", f"{kpis_m.get('t2_giao_mwh', 0.0):,.2f} MWh", delta=f"{kpis_m.get('t2_pct', 0.0)}% tổng sản lượng")
+                    with mk5:
+                        st.metric("📈 Công Suất Đỉnh Pmax", f"{kpis_m.get('p_max_mw', 0.0):.2f} MW", delta="Điện áp 110kV")
+                    with mk6:
+                        st.metric("🎯 Hệ Số Cos Phi (TB)", f"{kpis_m.get('avg_cos_phi', 1.0):.4f}", delta="Quy định EVN ≥ 0.90")
+
+                    st.markdown("---")
+
+                    # 3 TABS ĐỒ THỊ TRỰC QUAN HÓA
+                    tab_m_chart1, tab_m_chart2, tab_m_chart3 = st.tabs([
+                        "📈 1. Đường Cong Phụ Tải 48 Chu Kỳ (30 Phút)",
+                        "📊 2. Cơ Cấu Sản Lượng 3 Biểu Giá EVN (T1 / T2 / T3)",
+                        "⚖️ 3. Đối Soát Sai Số Đo Đếm (%) Giữa 4 Công Tơ"
+                    ])
+
+                    # --- TAB 1: ĐƯỜNG CONG PHỤ TẢI 48 CHU KỲ ---
+                    with tab_m_chart1:
+                        col_c1, col_c2 = st.columns([2.5, 1.5])
+                        with col_c1:
+                            all_d_list = sorted(df_raw_meters['Date_Str'].unique(), key=lambda d: datetime.strptime(d, '%d/%m/%Y'), reverse=True)
+                            sel_d_curve = st.selectbox("Chọn ngày xem biểu đồ phụ tải 48 chu kỳ:", all_d_list, index=0, key="curve_date_select")
+                        with col_c2:
+                            st.write("")
+                            st.caption(f"Đo đếm 48 chu kỳ 30 phút ngày **{sel_d_curve}**")
+
+                        day_meters = df_raw_meters[df_raw_meters['Date_Str'] == sel_d_curve]
+
+                        # Chuẩn bị trục X thời gian 48 chu kỳ
+                        x_time_labels = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)]
+
+                        fig_curve = go.Figure()
+                        for _, r in day_meters.iterrows():
+                            m_c = r['Meter_Code']
+                            m_color = METER_CONFIG.get(m_c, {}).get('color', '#0284C7')
+                            m_name = METER_CONFIG.get(m_c, {}).get('name', m_c)
+                            p_kw_profile = r['Profile_48_kWh_Giao'] * 2.0 # 30-min kWh * 2 = kW
+                            
+                            fig_curve.add_trace(go.Scatter(
+                                x=x_time_labels,
+                                y=p_kw_profile / 1000.0, # MW
+                                mode='lines+markers',
+                                name=f"{m_c} - {m_name} (MW)",
+                                line=dict(color=m_color, width=2.5),
+                                hovertemplate=f"<b>{m_c}</b> (%{{x}})<br>Công suất: <b>%{{y:.3f}} MW</b><extra></extra>"
+                            ))
+
+                        fig_curve.update_layout(
+                            title=f"<b>BIỂU ĐỒ PHỤ TẢI CÔNG SUẤT 48 CHU KỲ (30 PHÚT) - NGÀY {sel_d_curve}</b>",
+                            xaxis_title="Thời Gian (Chu Kỳ 30 Phút)",
+                            yaxis_title="Công Suất Phát P (MW)",
+                            template="plotly_white",
+                            height=460,
+                            hovermode="x unified",
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        st.plotly_chart(fig_curve, use_container_width=True)
+
+                    # --- TAB 2: CƠ CẤU 3 BIỂU GIÁ EVN ---
+                    with tab_m_chart2:
+                        st.markdown("##### 📊 Cơ Cấu Điện Năng Theo Biểu Giá 3 Giá EVN (T1 Bình Thường, T2 Cao Điểm, T3 Thấp Điểm):")
+                        
+                        # Tổng hợp theo tháng cho công tơ 6101 (hoặc 6301)
+                        df_tariff_m = df_raw_meters[df_raw_meters['Meter_Code'] == '6101'].groupby('Month_Str').agg({
+                            'T1_MWh_Giao': 'sum',
+                            'T2_MWh_Giao': 'sum',
+                            'T3_MWh_Giao': 'sum'
+                        }).reindex(all_months).reset_index()
+
+                        fig_tariff = go.Figure()
+                        fig_tariff.add_trace(go.Bar(
+                            x=df_tariff_m['Month_Str'],
+                            y=df_tariff_m['T1_MWh_Giao'],
+                            name='⚡ Giờ Bình Thường (T1)',
+                            marker_color='#0284C7',
+                            text=[f"{v:,.0f}" if v > 0 else "" for v in df_tariff_m['T1_MWh_Giao']],
+                            textposition='auto'
+                        ))
+                        fig_tariff.add_trace(go.Bar(
+                            x=df_tariff_m['Month_Str'],
+                            y=df_tariff_m['T2_MWh_Giao'],
+                            name='☀️ Giờ Cao Điểm (T2)',
+                            marker_color='#F59E0B',
+                            text=[f"{v:,.0f}" if v > 0 else "" for v in df_tariff_m['T2_MWh_Giao']],
+                            textposition='auto'
+                        ))
+                        fig_tariff.add_trace(go.Bar(
+                            x=df_tariff_m['Month_Str'],
+                            y=df_tariff_m['T3_MWh_Giao'],
+                            name='🌙 Giờ Thấp Điểm (T3)',
+                            marker_color='#94A3B8',
+                            text=[f"{v:,.0f}" if v > 0 else "" for v in df_tariff_m['T3_MWh_Giao']],
+                            textposition='auto'
+                        ))
+
+                        fig_tariff.update_layout(
+                            title="<b>SẢN LƯỢNG ĐIỆN NĂNG THƯƠNG PHẨM PHÂN THEO 3 BIỂU GIÁ EVN TỪNG THÁNG (MWh)</b>",
+                            barmode='stack',
+                            xaxis_title="Tháng Đo Đếm",
+                            yaxis_title="Sản Lượng Phát (MWh)",
+                            template="plotly_white",
+                            height=450,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        st.plotly_chart(fig_tariff, use_container_width=True)
+
+                    # --- TAB 3: ĐỐI SOÁT SAI SỐ ĐO ĐẾM ---
+                    with tab_m_chart3:
+                        st.markdown("##### ⚖️ Độ Lệch Sai Số Đo Đếm (%) Giữa Công Tơ Chính & Dự Phòng (Tiêu Chuẩn 0.2S):")
+                        
+                        df_err_plot = meter_mgr.get_discrepancy_table(df_raw_meters)
+                        
+                        if not df_err_plot.empty:
+                            fig_err = go.Figure()
+                            if 'Err_6101_6301_Pct' in df_err_plot.columns:
+                                fig_err.add_trace(go.Scatter(
+                                    x=df_err_plot['Date_Str'],
+                                    y=df_err_plot['Err_6101_6301_Pct'],
+                                    mode='lines',
+                                    name='Lệch 6101 (110kV) vs 6301 (22kV) (%) - Tổn Thất MBA',
+                                    line=dict(color='#0284C7', width=1.8)
+                                ))
+                            if 'Err_6301_6302_Pct' in df_err_plot.columns:
+                                fig_err.add_trace(go.Scatter(
+                                    x=df_err_plot['Date_Str'],
+                                    y=df_err_plot['Err_6301_6302_Pct'],
+                                    mode='lines',
+                                    name='Lệch 6301 vs 6302 (Dự Phòng 1) (%)',
+                                    line=dict(color='#10B981', width=1.5)
+                                ))
+                            if 'Err_6301_6303_Pct' in df_err_plot.columns:
+                                fig_err.add_trace(go.Scatter(
+                                    x=df_err_plot['Date_Str'],
+                                    y=df_err_plot['Err_6301_6303_Pct'],
+                                    mode='lines',
+                                    name='Lệch 6301 vs 6303 (Dự Phòng 2) (%)',
+                                    line=dict(color='#8B5CF6', width=1.5)
+                                ))
+
+                            # Đường giới hạn tiêu chuẩn ±0.2%
+                            fig_err.add_hline(y=0.2, line_dash="dash", line_color="#EF4444", annotation_text="+0.2% Giới hạn Class 0.2S")
+                            fig_err.add_hline(y=-0.2, line_dash="dash", line_color="#EF4444", annotation_text="-0.2% Giới hạn Class 0.2S")
+
+                            fig_err.update_layout(
+                                title="<b>ĐỐI SOÁT TỶ LỆ SAI LỆCH ĐO ĐẾM GIỮA CÁC CÔNG TƠ THEO THỜI GIAN (%)</b>",
+                                xaxis_title="Ngày Đo Đếm",
+                                yaxis_title="Độ Lệch Tỷ Lệ (%)",
+                                template="plotly_white",
+                                height=420,
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            st.plotly_chart(fig_err, use_container_width=True)
+
+                    # BẢNG TỔNG HỢP & NÚT TẢI BÁO CÁO EXCEL
+                    st.markdown("---")
+                    st.markdown("##### 📋 Bảng Tổng Hợp Chi Tiết Số Liệu Đo Đếm:")
+                    
+                    c_exp_m1, c_exp_m2, c_exp_m3 = st.columns([2.5, 2.0, 2.5])
+                    with c_exp_m1:
+                        meter_excel_bytes = export_meter_report_to_excel_bytes(df_view, kpis_m, date_filter_label)
+                        st.download_button(
+                            "📥 TẢI BÁO CÁO CÔNG TƠ EVN (.xlsx)",
+                            data=meter_excel_bytes,
+                            file_name=f"Bao_Cao_Cong_To_EVN_MyHiep_{date_filter_label.replace(' ', '_').replace('/', '')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            type="primary",
+                            use_container_width=True
+                        )
+                    with c_exp_m2:
+                        meter_csv_bytes = df_view.to_csv(index=False).encode('utf-8-sig')
+                        st.download_button(
+                            "📄 Tải Bảng CSV (.csv)",
+                            data=meter_csv_bytes,
+                            file_name=f"Chi_Tiet_Cong_To_MyHiep_{date_filter_label.replace(' ', '_').replace('/', '')}.csv",
+                            mime="text/csv",
+                            type="secondary",
+                            use_container_width=True
+                        )
+                    with c_exp_m3:
+                        st.caption(f"Tổng số bản ghi: **{len(df_view):,} dòng** | Máy chủ: `\\\\192.168.1.231\\csv`")
+
+                    df_show_table = df_view[[
+                        'Date_Str', 'Meter_Code', 'Meter_Name', 'Location',
+                        'MWh_Giao', 'MWh_Nhan', 'MWh_Net',
+                        'T1_MWh_Giao', 'T2_MWh_Giao', 'T3_MWh_Giao',
+                        'Pmax_MW', 'Pmax_Time', 'Cos_Phi'
+                    ]].copy()
+                    df_show_table.columns = [
+                        'Ngày', 'Mã CT', 'Tên Công Tơ', 'Vị Trí',
+                        'MWh Giao', 'MWh Nhận', 'MWh Thuần',
+                        'T1 Bình Thường (MWh)', 'T2 Cao Điểm (MWh)', 'T3 Thấp Điểm (MWh)',
+                        'Pmax (MW)', 'Giờ Pmax', 'Cos Phi'
+                    ]
+                    st.dataframe(df_show_table, width='stretch', hide_index=True)
 
 
 # -------------------------------------------------------------------------
