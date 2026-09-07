@@ -22,6 +22,7 @@ import historical_data_manager
 import performance_report_engine
 import inverter_diagnostic_engine
 import meter_summary_engine
+import string_diagnostic_engine
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -31,6 +32,7 @@ importlib.reload(historical_data_manager)
 importlib.reload(performance_report_engine)
 importlib.reload(inverter_diagnostic_engine)
 importlib.reload(meter_summary_engine)
+importlib.reload(string_diagnostic_engine)
 
 from performance_report_engine import (
     generate_performance_kpi_table,
@@ -49,6 +51,13 @@ from meter_summary_engine import (
     export_meter_report_to_excel_bytes,
     DEFAULT_METER_PATH,
     METER_CONFIG
+)
+
+from string_diagnostic_engine import (
+    StringDataManager,
+    export_string_diagnostics_to_excel_bytes,
+    DEFAULT_STRING_PATH,
+    LOGGER_MAPPING
 )
 
 from solar_engine import (
@@ -426,7 +435,8 @@ NAV_OPTIONS = [
     "🔮 4. Dự Báo Chu Kỳ & Thuyết Minh Thời Tiết (Phù Mỹ Nam)",
     "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
     "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)",
-    "🚨 7. Chẩn Đoán Bất Thường Inverter (S1 - S7 SCADA)"
+    "🚨 7. Chẩn Đoán Bất Thường Inverter (S1 - S7 SCADA)",
+    "🔌 8. Giám Sát & Chẩn Đoán 4.104 Chuỗi String DC (D:\\STRING_INV)"
 ]
 
 # --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
@@ -3594,5 +3604,475 @@ elif selected_menu == NAV_OPTIONS[6]:
 
     else:
         st.warning("⚠️ Không tìm thấy dữ liệu file S1..S7 cho khung thời gian đã chọn.")
+
+
+# -------------------------------------------------------------------------
+# PHẦN 8: GIÁM SÁT, TỔNG HỢP & CHẨN ĐOÁN 4.104 CHUỖI STRING DC (D:\STRING_INV)
+# -------------------------------------------------------------------------
+elif selected_menu == NAV_OPTIONS[7]:
+    st.markdown(r"""
+    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
+        <div style="font-size: 1.35rem; font-weight: 750; color: #FBBF24; margin-bottom: 4px;">
+            🔌 HỆ THỐNG GIÁM SÁT & CHẨN ĐOÁN CHI TIẾT 4.104 CHUỖI STRING DC (SMARTLOGGER D:\STRING_INV)
+        </div>
+        <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
+            Tự động giải nén và phân tích dữ liệu <b>4.104 chuỗi String DC</b> (18 chuỗi/Inverter $\times$ 228 Inverter Huawei SUN2000-175KTL-H0 thuộc 7 Trạm S1..S7). Tự động phát hiện đứt chuỗi, hở mạch ($U > 300\text{V}, I = 0\text{A}$), lệch dòng điện chuỗi pin, Inverter dừng/nghỉ và định lượng chính xác công suất tổn thất DC.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    @st.cache_resource
+    def get_string_manager():
+        return StringDataManager(DEFAULT_STRING_PATH)
+
+    string_mgr = get_string_manager()
+
+    if not string_mgr.check_connection():
+        st.error(f"❌ Không tìm thấy thư mục lưu trữ dữ liệu SmartLogger tại đường dẫn: `{DEFAULT_STRING_PATH}`. Vui lòng kiểm tra lại ổ đĩa hoặc kết nối.")
+    else:
+        snapshots = string_mgr.get_available_snapshots()
+
+        # Bộ điều khiển chọn Snapshot / Thư mục ngày
+        col_s_top1, col_s_top2 = st.columns([3.5, 1.5])
+        with col_s_top1:
+            if snapshots:
+                snap_options = {f"📅 {s['time_label']} ({s['file_count']} tệp SmartLogger S1..S7)": s['dir_path'] for s in snapshots}
+                selected_snap_label = st.selectbox("Chọn bộ dữ liệu SmartLogger (Snapshot):", list(snap_options.keys()), index=0, key="sel_string_snap")
+                target_snap_dir = snap_options[selected_snap_label]
+            else:
+                target_snap_dir = DEFAULT_STRING_PATH
+                selected_snap_label = "Mặc định (D:\\STRING_INV)"
+
+        with col_s_top2:
+            st.write("")
+            if st.button("🔄 Quét & Làm Mới Dữ Liệu String", help="Quét lại toàn bộ file tar.gz SmartLogger từ thư mục", key="btn_reload_strings", use_container_width=True):
+                string_mgr.load_string_data(target_dir=target_snap_dir, force_reload=True)
+                st.success("Đã nạp mới dữ liệu chuỗi String thành công!")
+                st.rerun()
+
+        with st.spinner("⏳ Đang giải nén và phân tích 4.104 chuỗi String DC từ SmartLogger..."):
+            df_strings = string_mgr.load_string_data(target_dir=target_snap_dir)
+
+        if df_strings.empty:
+            st.warning("⚠️ Không tìm thấy dữ liệu tệp nén SmartLogger (.tar.gz) hợp lệ trong thư mục đã chọn.")
+        else:
+            kpis_str = string_mgr.get_summary_kpis(df_strings)
+
+            # 6 Thẻ KPI tổng quan
+            sk1, sk2, sk3, sk4, sk5, sk6 = st.columns(6)
+            with sk1:
+                st.metric("⚡ Chuỗi Đang Phát", f"{kpis_str.get('active_strings', 0):,} / {kpis_str.get('total_strings', 0):,}", delta=f"{kpis_str.get('healthy_string_pct', 0.0)}% hoạt động")
+            with sk2:
+                st.metric("🚨 Chuỗi Hở / Hỏng", f"{kpis_str.get('dead_strings', 0):,} Chuỗi", delta=f"{kpis_str.get('open_circuit_strings', 0)} chuỗi hở mạch U>300V")
+            with sk3:
+                st.metric("🔋 Công Suất DC Tức Thời", f"{kpis_str.get('total_pdc_mw', 0.0):.2f} MW", delta=f"{kpis_str.get('total_inverters', 0)} Inverter 175KTL")
+            with sk4:
+                st.metric("✂️ Tổn Thất Công Suất DC", f"{kpis_str.get('est_loss_kw', 0.0):,.1f} kW", delta=f"~{kpis_str.get('est_loss_mw', 0.0):.2f} MW công suất mất")
+            with sk5:
+                st.metric("🏢 Inverter Hòa Lưới", f"{kpis_str.get('on_grid_inverters', 0)} / {kpis_str.get('total_inverters', 0)} INV", delta=f"{kpis_str.get('offline_inverters', 0)} INV Dừng/Lỗi")
+            with sk6:
+                st.metric("🎯 Dòng & Áp TB Chuỗi", f"{kpis_str.get('avg_current_a', 0.0):.2f} A", delta=f"{kpis_str.get('avg_voltage_v', 0.0):.0f} V (Điện áp TB)")
+
+            st.markdown("---")
+
+            # 4 Phân hệ Tab
+            tab_str1, tab_str2, tab_str3, tab_str4 = st.tabs([
+                "📊 1. Bản Đồ Nhiệt Ma Trận 18 Chuỗi String x 228 Inverter (Heatmap)",
+                "🏢 2. Thống Kê Sức Khỏe String Theo 7 Trạm Biến Áp (S1 .. S7)",
+                "🔍 3. Soi Chi Tiết 18 Chuỗi String Từng Inverter (String Deep-Dive)",
+                "📋 4. Bảng Kê Toàn Diện 228 Inverter & Xuất Báo Cáo Excel O&M"
+            ])
+
+            # =========================================================================
+            # SUBTAB 1: BẢN ĐỒ NHIỆT MA TRẬN 18 CHUỖI STRING (HEATMAP)
+            # =========================================================================
+            with tab_str1:
+                st.markdown("##### 📊 Bản Đồ Nhiệt Toàn Diện 4.104 Chuỗi String DC (Phát Hiện Ngay Chuỗi Hỏng & Lệch Dòng):")
+                
+                col_hm_c1, col_hm_c2, col_hm_c3 = st.columns([1.5, 1.8, 1.7])
+                with col_hm_c1:
+                    hm_station_filter = st.selectbox(
+                        "Lọc theo trạm biến áp:",
+                        ["Tất Cả 7 Trạm (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                        index=0,
+                        key="hm_str_st_filter"
+                    )
+                with col_hm_c2:
+                    hm_metric = st.radio(
+                        "Thông số hiển thị ma trận:",
+                        ["Dòng Điện I (A)", "Công Suất Pdc (kW)", "Điện Áp U (V)"],
+                        index=0,
+                        horizontal=True,
+                        key="hm_str_metric_radio"
+                    )
+                with col_hm_c3:
+                    hm_sort_mode = st.selectbox(
+                        "Thứ tự sắp xếp Inverter:",
+                        ["Inverter Lỗi / Hỏng String Lên Đầu", "Theo Thứ Tự Trạm & Tên Inverter (S1..S7)"],
+                        index=0,
+                        key="hm_str_sort_sel"
+                    )
+
+                df_hm_pool = df_strings.copy()
+                if "Tất Cả" not in hm_station_filter:
+                    st_pick_tag = hm_station_filter.split(' ')[0]
+                    df_hm_pool = df_hm_pool[df_hm_pool['Station_Tag'] == st_pick_tag]
+
+                if "Lỗi / Hỏng" in hm_sort_mode:
+                    # Sắp xếp Inverter lỗi nhiều nhất lên trên
+                    df_hm_pool['Sort_Key'] = df_hm_pool['Dead_Strings_Count'] * 100 + df_hm_pool['Est_Loss_kW']
+                    df_hm_pool.sort_values(by='Sort_Key', ascending=True, inplace=True)
+                else:
+                    df_hm_pool.sort_values(by=['Station_Tag', 'Inverter_ID'], ascending=False, inplace=True)
+
+                # Chuẩn bị ma trận Z (Số hàng = Số Inverter, Số cột = 18 chuỗi)
+                inv_y_labels = []
+                z_matrix = []
+                hover_texts = []
+
+                string_x_labels = [f"PV{i}" for i in range(1, 19)]
+
+                for _, r in df_hm_pool.iterrows():
+                    inv_lbl = f"{r['Inverter_ID']} ({r['Station_Tag']})"
+                    inv_y_labels.append(inv_lbl)
+                    
+                    if "Dòng Điện" in hm_metric:
+                        row_vals = r['Ipv_List']
+                        unit = "A"
+                    elif "Công Suất" in hm_metric:
+                        row_vals = r['Pdc_List']
+                        unit = "kW"
+                    else:
+                        row_vals = r['Upv_List']
+                        unit = "V"
+                    
+                    z_matrix.append(row_vals)
+
+                    # Tạo hover text chi tiết
+                    row_hover = []
+                    for idx in range(18):
+                        u_v = r['Upv_List'][idx]
+                        i_v = r['Ipv_List'][idx]
+                        p_v = r['Pdc_List'][idx]
+                        
+                        if i_v <= 0.05 and u_v > 300:
+                            st_tag = "🔴 HỞ MẠCH (I=0, U>300V)"
+                        elif i_v <= 0.05:
+                            st_tag = "⚪ DỪNG / KHÔNG CẮM"
+                        elif i_v < r['Avg_Current_A'] * 0.7:
+                            st_tag = "🟡 LỆCH DÒNG THẤP"
+                        else:
+                            st_tag = "🟢 HOẠT ĐỘNG TỐT"
+                            
+                        txt = (f"<b>{r['Inverter_ID']}</b> ({r['Station_Tag']}) - <b>PV{idx+1}</b><br>"
+                               f"Dòng điện: <b>{i_v:.2f} A</b><br>"
+                               f"Điện áp: <b>{u_v:.1f} V</b><br>"
+                               f"Công suất: <b>{p_v:.2f} kW</b><br>"
+                               f"Tình trạng: {st_tag}")
+                        row_hover.append(txt)
+                    hover_texts.append(row_hover)
+
+                # Vẽ Heatmap tương tác Plotly
+                colorscale_choice = 'Turbo' if "Điện Áp" in hm_metric else 'Viridis'
+
+                fig_hm = go.Figure(data=go.Heatmap(
+                    z=z_matrix,
+                    x=string_x_labels,
+                    y=inv_y_labels,
+                    text=hover_texts,
+                    hoverinfo='text',
+                    colorscale=colorscale_choice,
+                    colorbar=dict(title=f"{hm_metric}"),
+                    xgap=1,
+                    ygap=1
+                ))
+
+                chart_height = max(500, len(df_hm_pool) * 16 + 120)
+                fig_hm.update_layout(
+                    title=f"<b>MA TRẬN NHIỆT 18 CHUỖI STRING DC ({len(df_hm_pool)} INVERTER) - THÔNG SỐ {hm_metric.upper()}</b>",
+                    xaxis=dict(title="Chuỗi String DC (PV1 đến PV18)", side="top", tickmode='array', tickvals=string_x_labels),
+                    yaxis=dict(title="Mã Inverter (Kèm Trạm Biến Áp)", dtick=1, tickfont=dict(size=10)),
+                    template="plotly_white",
+                    height=chart_height,
+                    margin=dict(l=140, r=40, t=80, b=40)
+                )
+                st.plotly_chart(fig_hm, use_container_width=True)
+
+            # =========================================================================
+            # SUBTAB 2: THỐNG KÊ SỨC KHỎE STRING THEO 7 TRẠM BIẾN ÁP (S1..S7)
+            # =========================================================================
+            with tab_str2:
+                st.markdown("##### 🏢 Thống Kê & Đánh Giá Tình Trạng Chuỗi String DC Theo 7 Trạm Biến Áp (S1 đến S7):")
+                
+                df_st_summary = string_mgr.get_station_summary(df_strings)
+
+                col_st_c1, col_st_c2 = st.columns(2)
+                with col_st_c1:
+                    # Biểu đồ Số Chuỗi Phát vs Chuỗi Hỏng
+                    fig_st_bar = go.Figure()
+                    fig_st_bar.add_trace(go.Bar(
+                        x=df_st_summary['Mã Trạm'],
+                        y=df_st_summary['String Đang Phát'],
+                        name='⚡ String Đang Phát',
+                        marker_color='#10B981',
+                        text=df_st_summary['String Đang Phát'],
+                        textposition='auto'
+                    ))
+                    fig_st_bar.add_trace(go.Bar(
+                        x=df_st_summary['Mã Trạm'],
+                        y=df_st_summary['String Hỏng / Hở'],
+                        name='🚨 String Hỏng / Hở Mạch',
+                        marker_color='#EF4444',
+                        text=df_st_summary['String Hỏng / Hở'],
+                        textposition='auto'
+                    ))
+                    fig_st_bar.update_layout(
+                        title="<b>SỐ LƯỢNG CHUỖI STRING ĐANG PHÁT vs HỎNG TỪNG TRẠM</b>",
+                        barmode='stack',
+                        xaxis_title="Trạm Biến Áp",
+                        yaxis_title="Số Lượng Chuỗi String",
+                        template="plotly_white",
+                        height=400,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    st.plotly_chart(fig_st_bar, use_container_width=True)
+
+                with col_st_c2:
+                    # Biểu đồ Công Suất Pdc (MW) vs Tổn Thất (kW)
+                    from plotly.subplots import make_subplots
+                    fig_st_loss = make_subplots(specs=[[{"secondary_y": True}]])
+                    fig_st_loss.add_trace(go.Bar(
+                        x=df_st_summary['Mã Trạm'],
+                        y=df_st_summary['Công Suất Pdc (MW)'],
+                        name='🔋 Công Suất DC (MW)',
+                        marker_color='#0284C7',
+                        text=df_st_summary['Công Suất Pdc (MW)'].apply(lambda x: f"{x:.2f} MW"),
+                        textposition='auto'
+                    ), secondary_y=False)
+
+                    fig_st_loss.add_trace(go.Scatter(
+                        x=df_st_summary['Mã Trạm'],
+                        y=df_st_summary['Tổn Thất Ước Tính (kW)'],
+                        name='✂️ Tổn Thất DC (kW)',
+                        mode='lines+markers',
+                        line=dict(color='#F59E0B', width=3),
+                        marker=dict(size=8, color='#EF4444')
+                    ), secondary_y=True)
+
+                    fig_st_loss.update_layout(
+                        title="<b>CÔNG SUẤT DC (MW) & TỔN THẤT CÔNG SUẤT (kW) THEO TRẠM</b>",
+                        xaxis_title="Trạm Biến Áp",
+                        template="plotly_white",
+                        height=400,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    fig_st_loss.update_yaxes(title_text="Công Suất DC (MW)", secondary_y=False)
+                    fig_st_loss.update_yaxes(title_text="Tổn Thất DC (kW)", secondary_y=True, showgrid=False)
+                    st.plotly_chart(fig_st_loss, use_container_width=True)
+
+                st.markdown("###### 📋 Bảng Tổng Hợp Chi Tiết 7 Trạm Biến Áp:")
+                st.dataframe(df_st_summary, width='stretch', hide_index=True)
+
+            # =========================================================================
+            # SUBTAB 3: SOI CHI TIẾT 18 CHUỖI STRING TỪNG INVERTER (STRING DEEP-DIVE)
+            # =========================================================================
+            with tab_str3:
+                st.markdown(r"""
+                <div style="background: #1E293B; border-radius: 10px; padding: 12px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: #38BDF8;">
+                        🔍 SOI CHI TIẾT ĐỒ THỊ 18 CHUỖI STRING DC CỦA TỪNG INVERTER
+                    </div>
+                    <div style="font-size: 0.84rem; color: #94A3B8;">
+                        Xem đồ thị cột so sánh trực tiếp Dòng điện $I_{\text{pv1}} \dots I_{\text{pv18}}$ (A) và Điện áp $U_{\text{pv1}} \dots U_{\text{pv18}}$ (V) để phát hiện chính xác vị trí chuỗi pin bị hỏng, giắc nối MC4 lỏng hoặc đứt chuỗi.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col_div1, col_div2 = st.columns([1.5, 3.5])
+                with col_div1:
+                    dive_st_filter = st.selectbox(
+                        "Lọc Inverter theo trạm:",
+                        ["Tất Cả Trạm (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                        index=0,
+                        key="dive_st_filter"
+                    )
+
+                df_dive_pool = df_strings.copy()
+                if "Tất Cả" not in dive_st_filter:
+                    st_tag_f = dive_st_filter.split(' ')[0]
+                    df_dive_pool = df_dive_pool[df_dive_pool['Station_Tag'] == st_tag_f]
+
+                # Sắp xếp Inverter lỗi lên đầu
+                dive_options = []
+                for _, r in df_dive_pool.iterrows():
+                    badge = "🔴" if r['Health_Status'] == 'CRITICAL' else ("🟠" if r['Health_Status'] == 'MAJOR' else ("🟡" if r['Health_Status'] in ['MINOR', 'WARNING'] else "🟢"))
+                    lbl = f"{r['Inverter_ID']} ({r['Station_Tag']}) | {badge} {r['Anomaly_Type']} - Pdc: {r['Total_Pdc_kW']:.1f} kW"
+                    dive_options.append((lbl, r['Inverter_ID']))
+
+                with col_div2:
+                    if dive_options:
+                        selected_dive_label = st.selectbox(
+                            "Chọn Inverter cần phân tích chi tiết 18 chuỗi String:",
+                            options=[opt[0] for opt in dive_options],
+                            index=0,
+                            key="dive_inv_select"
+                        )
+                        selected_dive_inv_id = [opt[1] for opt in dive_options if opt[0] == selected_dive_label][0]
+                    else:
+                        selected_dive_inv_id = df_strings['Inverter_ID'].iloc[0]
+
+                # Lấy dữ liệu Inverter được chọn
+                target_inv_data = df_strings[df_strings['Inverter_ID'] == selected_dive_inv_id].iloc[0]
+
+                # Thẻ thông số chi tiết Inverter được chọn
+                ic1, ic2, ic3, ic4 = st.columns(4)
+                with ic1:
+                    st.metric("⚡ Trạng Thái Máy", target_inv_data['Device_Status'], delta=f"Đánh giá: {target_inv_data['Health_Status']}")
+                with ic2:
+                    st.metric("🔌 Công Suất DC Tức Thời", f"{target_inv_data['Total_Pdc_kW']:.2f} kW", delta=f"{target_inv_data['Active_Strings']}/18 String phát")
+                with ic3:
+                    st.metric("✂️ Tổn Thất Ước Tính", f"{target_inv_data['Est_Loss_kW']:.2f} kW", delta=f"{target_inv_data['Dead_Strings_Count']} chuỗi hỏng")
+                with ic4:
+                    st.metric("📊 Dòng & Áp TB", f"{target_inv_data['Avg_Current_A']:.2f} A", delta=f"{target_inv_data['Avg_Voltage_V']:.1f} V")
+
+                # Đồ thị cột dòng điện & đường điện áp 18 chuỗi
+                pv_indices = [f"PV{i}" for i in range(1, 19)]
+                i_vals = target_inv_data['Ipv_List']
+                u_vals = target_inv_data['Upv_List']
+
+                # Màu sắc cột dòng điện
+                bar_colors = []
+                for i_val, u_val in zip(i_vals, u_vals):
+                    if i_val <= 0.05 and u_val > 300:
+                        bar_colors.append('#EF4444') # Đỏ cảnh báo hở mạch
+                    elif i_val <= 0.05:
+                        bar_colors.append('#94A3B8') # Xám dừng
+                    elif i_val < target_inv_data['Avg_Current_A'] * 0.70 and target_inv_data['Avg_Current_A'] > 0.5:
+                        bar_colors.append('#F59E0B') # Vàng cam lệch dòng
+                    else:
+                        bar_colors.append('#10B981') # Xanh ngọc tốt
+
+                fig_inv_strings = make_subplots(specs=[[{"secondary_y": True}]])
+                
+                # Cột Dòng Điện I (A)
+                fig_inv_strings.add_trace(go.Bar(
+                    x=pv_indices,
+                    y=i_vals,
+                    name='⚡ Dòng Điện Chuỗi I (A)',
+                    marker_color=bar_colors,
+                    text=[f"{v:.2f} A" if v > 0 else "0 A" for v in i_vals],
+                    textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>Dòng điện: <b>%{y:.2f} A</b><extra></extra>'
+                ), secondary_y=False)
+
+                # Đường Điện Áp U (V)
+                fig_inv_strings.add_trace(go.Scatter(
+                    x=pv_indices,
+                    y=u_vals,
+                    name='🔌 Điện Áp Chuỗi U (V)',
+                    mode='lines+markers',
+                    line=dict(color='#0284C7', width=2.5),
+                    marker=dict(size=7, color='#0284C7'),
+                    hovertemplate='<b>%{x}</b><br>Điện áp: <b>%{y:.1f} V</b><extra></extra>'
+                ), secondary_y=True)
+
+                # Đường tham chiếu dòng trung bình
+                if target_inv_data['Avg_Current_A'] > 0.5:
+                    fig_inv_strings.add_hline(
+                        y=target_inv_data['Avg_Current_A'],
+                        line_dash="dash",
+                        line_color="#10B981",
+                        annotation_text=f"Dòng TB Inverter: {target_inv_data['Avg_Current_A']:.2f}A",
+                        annotation_position="top left",
+                        secondary_y=False
+                    )
+
+                fig_inv_strings.update_layout(
+                    title=dict(
+                        text=f"<b>THÔNG SỐ DÒNG ĐIỆN & ĐIỆN ÁP 18 CHUỖI STRING DC: {selected_dive_inv_id} ({target_inv_data['Station']})</b>",
+                        font=dict(size=16, color='#0F172A')
+                    ),
+                    template='plotly_white',
+                    height=450,
+                    xaxis=dict(title="Chuỗi String DC (PV1 .. PV18)"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+                )
+                fig_inv_strings.update_yaxes(title_text="Dòng Điện Chuỗi I (A)", secondary_y=False, rangemode='tozero', range=[0, max(6.0, max(i_vals)*1.25)])
+                fig_inv_strings.update_yaxes(title_text="Điện Áp Chuỗi U (V)", secondary_y=True, showgrid=False, rangemode='tozero', range=[0, 1200])
+                st.plotly_chart(fig_inv_strings, use_container_width=True)
+
+                # Hộp cảnh báo chẩn đoán kỹ thuật
+                alert_type = "error" if target_inv_data['Health_Status'] in ['CRITICAL', 'MAJOR'] else ("warning" if target_inv_data['Health_Status'] in ['MINOR', 'WARNING'] else "success")
+                msg_box = f"**Chẩn đoán kỹ thuật O&M cho {selected_dive_inv_id}:** {target_inv_data['Diagnostic_Message']}"
+                if alert_type == "error":
+                    st.error(f"🚨 {msg_box}")
+                elif alert_type == "warning":
+                    st.warning(f"⚠️ {msg_box}")
+                else:
+                    st.success(f"✅ {msg_box}")
+
+            # =========================================================================
+            # SUBTAB 4: BẢNG KÊ TOÀN DIỆN 228 INVERTER & XUẤT BÁO CÁO EXCEL
+            # =========================================================================
+            with tab_str4:
+                st.markdown("##### 📋 Bảng Kê Toàn Diện Tình Trạng 228 Inverter & 4.104 Chuỗi String DC:")
+                
+                # Bộ lọc bảng
+                fb_c1, fb_c2, _ = st.columns([2, 2, 3])
+                with fb_c1:
+                    tbl_st_f = st.selectbox("Lọc theo trạm:", ["Tất Cả (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"], index=0, key="tbl_str_st_filter")
+                with fb_c2:
+                    tbl_status_f = st.selectbox("Lọc theo tình trạng sức khỏe:", ["Tất Cả Trạng Thái", "Chỉ Inverter Bị Hỏng String / Lỗi", "Chỉ Inverter Offline / Dừng", "Chỉ Inverter Hoạt Động Tốt (Normal)"], index=0, key="tbl_str_status_filter")
+
+                df_table_pool = df_strings.copy()
+                if "Tất Cả" not in tbl_st_f:
+                    st_key = tbl_st_f.split(' ')[0]
+                    df_table_pool = df_table_pool[df_table_pool['Station_Tag'] == st_key]
+
+                if "Hỏng String" in tbl_status_f:
+                    df_table_pool = df_table_pool[df_table_pool['Health_Status'].isin(['MAJOR', 'MINOR', 'WARNING'])]
+                elif "Offline" in tbl_status_f:
+                    df_table_pool = df_table_pool[df_table_pool['Health_Status'] == 'CRITICAL']
+                elif "Normal" in tbl_status_f:
+                    df_table_pool = df_table_pool[df_table_pool['Health_Status'] == 'NORMAL']
+
+                # Nút tải file Excel và CSV
+                c_str_dl1, c_str_dl2, c_str_dl3 = st.columns([2.5, 2.0, 2.5])
+                with c_str_dl1:
+                    excel_str_bytes = export_string_diagnostics_to_excel_bytes(df_strings, kpis_str, selected_snap_label)
+                    st.download_button(
+                        "📥 TẢI BÁO CÁO CHẨN ĐOÁN STRING EXCEL (.xlsx)",
+                        data=excel_str_bytes,
+                        file_name=f"Bao_Cao_Chan_Doan_String_DC_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                with c_str_dl2:
+                    csv_str_bytes = df_strings.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+                    st.download_button(
+                        "📄 Tải Bảng CSV (.csv)",
+                        data=csv_str_bytes,
+                        file_name=f"Chi_Tiet_String_DC_MyHiep_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        type="secondary",
+                        use_container_width=True
+                    )
+                with c_str_dl3:
+                    st.caption(f"Tổng hợp: **{len(df_table_pool)} / {len(df_strings)} Inverter** | File nén SmartLogger: `D:\\STRING_INV`")
+
+                # Bảng hiển thị
+                df_tbl_display = df_table_pool[[
+                    'Inverter_ID', 'Station', 'SN', 'Device_Status', 'Health_Status',
+                    'Active_Strings', 'Dead_Strings_Count', 'Open_Circuit_Count',
+                    'Total_Pdc_kW', 'Est_Loss_kW', 'Avg_Voltage_V', 'Avg_Current_A', 'Diagnostic_Message'
+                ]].copy()
+                df_tbl_display.columns = [
+                    'Mã Inverter', 'Trạm Biến Áp', 'Serial Number', 'Trạng Thái', 'Sức Khỏe',
+                    'String Đang Phát (trên 18)', 'String Hỏng', 'String Hở Mạch',
+                    'Công Suất DC (kW)', 'Tổn Thất Ước Tính (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Chẩn Đoán Kỹ Thuật O&M'
+                ]
+                st.dataframe(df_tbl_display, use_container_width=True, height=450, hide_index=True)
+
 
 
