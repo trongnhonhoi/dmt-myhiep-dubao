@@ -15,33 +15,44 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Tuple, Optional, Any
 
 DEFAULT_METER_PATH = r'\\192.168.1.231\csv'
-DEFAULT_METERS = ['6101', '6301', '6302', '6303']
+RAW_METER_CODES = ['6101', '6301', '6302', '6303']
+RAW_TO_DISPLAY_CODE = {
+    '6101': '171C',
+    '6301': '431',
+    '6302': '171 DP1',
+    '6303': '171 DP2'
+}
+DEFAULT_METERS = ['171C', '431', '171 DP1', '171 DP2']
 
 METER_CONFIG = {
-    '6101': {
+    '171C': {
+        'raw_code': '6101',
         'name': 'Công Tơ Đo Đếm Ranh Giới 110kV (Chính)',
-        'location': 'Ngăn Lộ 110kV / Xuất Tuyến',
+        'location': 'Ngăn Lộ 110kV / Xuất Tuyến 171',
         'voltage': '110 kV',
-        'type': 'Chính',
+        'type': 'Chính 110kV',
         'color': '#0284C7'
     },
-    '6301': {
+    '431': {
+        'raw_code': '6301',
         'name': 'Công Tơ Đo Đếm Đầu Cực MBA T1 22kV (Chính)',
-        'location': 'Phía 22kV Máy Biến Áp T1',
+        'location': 'Phía 22kV Máy Biến Áp T1 / Ngăn 431',
         'voltage': '22 kV',
-        'type': 'Chính MBA',
+        'type': 'Chính 22kV (Ngăn 431)',
         'color': '#10B981'
     },
-    '6302': {
+    '171 DP1': {
+        'raw_code': '6302',
         'name': 'Công Tơ Đo Đếm Đối Chứng 22kV (Dự Phòng 1)',
-        'location': 'Phía 22kV Máy Biến Áp T1',
+        'location': 'Phía 22kV Máy Biến Áp T1 (Dự Phòng 1)',
         'voltage': '22 kV',
         'type': 'Dự Phòng 1',
         'color': '#F59E0B'
     },
-    '6303': {
+    '171 DP2': {
+        'raw_code': '6303',
         'name': 'Công Tơ Đo Đếm Đối Chứng 22kV (Dự Phòng 2)',
-        'location': 'Phía 22kV Máy Biến Áp T1',
+        'location': 'Phía 22kV Máy Biến Áp T1 (Dự Phòng 2)',
         'voltage': '22 kV',
         'type': 'Dự Phòng 2',
         'color': '#8B5CF6'
@@ -71,9 +82,11 @@ def parse_single_meter_csv(filepath: str) -> Optional[Dict[str, Any]]:
     m = re.match(r'^(\d{2})(\d{2})(\w{4})\.CSV$', fname, re.IGNORECASE)
     if not m:
         return None
-    dd, mm, m_code = m.groups()
-    if m_code not in DEFAULT_METERS:
+    dd, mm, raw_m_code = m.groups()
+    if raw_m_code not in RAW_METER_CODES:
         return None
+
+    m_code = RAW_TO_DISPLAY_CODE.get(raw_m_code, raw_m_code)
 
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -170,6 +183,7 @@ def parse_single_meter_csv(filepath: str) -> Optional[Dict[str, Any]]:
         'Month_Str': dt.strftime('Tháng %m/%Y'),
         'Day': dt.day,
         'Meter_Code': m_code,
+        'Raw_Code': raw_m_code,
         'Meter_Name': m_info.get('name', f'Công tơ {m_code}'),
         'Location': m_info.get('location', ''),
         'Voltage': m_info.get('voltage', ''),
@@ -227,7 +241,7 @@ class MeterDataManager:
             with os.scandir(self.base_path) as entries:
                 for entry in entries:
                     if entry.is_file() and entry.name.upper().endswith('.CSV'):
-                        if any(m in entry.name for m in DEFAULT_METERS):
+                        if any(m in entry.name for m in RAW_METER_CODES):
                             file_paths.append(entry.path)
         except Exception:
             return pd.DataFrame()
@@ -257,9 +271,9 @@ class MeterDataManager:
         if df_filtered.empty:
             return {}
 
-        df_main = df_filtered[df_filtered['Meter_Code'] == '6101']
+        df_main = df_filtered[df_filtered['Meter_Code'] == '171C']
         if df_main.empty:
-            df_main = df_filtered[df_filtered['Meter_Code'] == '6301']
+            df_main = df_filtered[df_filtered['Meter_Code'] == '431']
         if df_main.empty:
             df_main = df_filtered
 
@@ -298,13 +312,17 @@ class MeterDataManager:
             return pd.DataFrame()
 
         pivot_giao = df_filtered.pivot(index='Date_Str', columns='Meter_Code', values='kWh_Giao')
-        if '6101' in pivot_giao.columns and '6301' in pivot_giao.columns:
-            pivot_giao['Delta_6101_6301_kWh'] = pivot_giao['6101'] - pivot_giao['6301']
-            pivot_giao['Err_6101_6301_Pct'] = ((pivot_giao['6101'] - pivot_giao['6301']) / pivot_giao['6101'] * 100.0).round(3)
-        if '6301' in pivot_giao.columns and '6302' in pivot_giao.columns:
-            pivot_giao['Err_6301_6302_Pct'] = ((pivot_giao['6301'] - pivot_giao['6302']) / pivot_giao['6301'] * 100.0).round(3)
-        if '6301' in pivot_giao.columns and '6303' in pivot_giao.columns:
-            pivot_giao['Err_6301_6303_Pct'] = ((pivot_giao['6301'] - pivot_giao['6303']) / pivot_giao['6301'] * 100.0).round(3)
+        if '171C' in pivot_giao.columns and '431' in pivot_giao.columns:
+            pivot_giao['Delta_171C_431_kWh'] = pivot_giao['171C'] - pivot_giao['431']
+            pivot_giao['Err_171C_431_Pct'] = ((pivot_giao['171C'] - pivot_giao['431']) / pivot_giao['171C'] * 100.0).round(3)
+        if '431' in pivot_giao.columns and '171 DP1' in pivot_giao.columns:
+            pivot_giao['Err_431_171DP1_Pct'] = ((pivot_giao['431'] - pivot_giao['171 DP1']) / pivot_giao['431'] * 100.0).round(3)
+        if '431' in pivot_giao.columns and '171 DP2' in pivot_giao.columns:
+            pivot_giao['Err_431_171DP2_Pct'] = ((pivot_giao['431'] - pivot_giao['171 DP2']) / pivot_giao['431'] * 100.0).round(3)
+        if '171C' in pivot_giao.columns and '171 DP1' in pivot_giao.columns:
+            pivot_giao['Err_171C_171DP1_Pct'] = ((pivot_giao['171C'] - pivot_giao['171 DP1']) / pivot_giao['171C'] * 100.0).round(3)
+        if '171C' in pivot_giao.columns and '171 DP2' in pivot_giao.columns:
+            pivot_giao['Err_171C_171DP2_Pct'] = ((pivot_giao['171C'] - pivot_giao['171 DP2']) / pivot_giao['171C'] * 100.0).round(3)
         return pivot_giao.reset_index()
 
 

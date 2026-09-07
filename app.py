@@ -2313,7 +2313,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                     ⚡ HỆ THỐNG TỔNG HỢP CHỈ SỐ CÔNG TƠ & BIỂU GIÁ ĐIỆN NĂNG THƯƠNG PHẨM (EVN / A0 / A3)
                 </div>
                 <div style="font-size: 0.85rem; color: #CBD5E1; margin-top: 4px; line-height: 1.5;">
-                    Tự động quét và nạp dữ liệu đo đếm phụ tải 48 chu kỳ (30 phút/điểm) của <b>4 Công Tơ Đo Đếm</b> từ máy chủ <code>\\192.168.1.231\csv</code>: Công tơ Ranh giới 110kV <b>6101</b>, Công tơ Đầu cực MBA 22kV <b>6301</b>, và 2 Công tơ đối chứng dự phòng <b>6302, 6303</b>. Tự động phân loại 3 biểu giá EVN (T1 Bình thường, T2 Cao điểm, T3 Thấp điểm), đối soát sai số kỹ thuật và tính toán hệ số công suất <i>cosφ</i>.
+                    Tự động quét và nạp dữ liệu đo đếm phụ tải 48 chu kỳ (30 phút/điểm) của <b>4 Công Tơ Đo Đếm</b> từ máy chủ <code>\\192.168.1.231\csv</code>: Công tơ Ranh giới 110kV Chính <b>171C</b> (Mã file: 6101), Công tơ Đầu cực MBA 22kV <b>431</b> (Mã file: 6301), và 2 Công tơ đối chứng dự phòng <b>171 DP1</b> (Mã file: 6302), <b>171 DP2</b> (Mã file: 6303). Tự động phân loại 3 biểu giá EVN (T1 Bình thường, T2 Cao điểm, T3 Thấp điểm), đối soát sai số kỹ thuật và tính toán hệ số công suất <i>cosφ</i>.
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -2366,17 +2366,17 @@ elif selected_menu == NAV_OPTIONS[4]:
                         meter_pick = st.selectbox(
                             "Lọc công tơ:",
                             [
-                                "Tất Cả 4 Công Tơ (6101, 6301, 6302, 6303)",
-                                "6101 - Ranh Giới 110kV (Chính)",
-                                "6301 - Đầu Cực MBA 22kV (Chính)",
-                                "6302 - Đối Chứng 22kV (Dự Phòng 1)",
-                                "6303 - Đối Chứng 22kV (Dự Phòng 2)"
+                                "Tất Cả 4 Công Tơ (171C, 431, 171 DP1, 171 DP2)",
+                                "171C - Ranh Giới 110kV (Chính)",
+                                "431 - Đầu Cực MBA 22kV (Ngăn 431)",
+                                "171 DP1 - Đối Chứng 22kV (Dự Phòng 1)",
+                                "171 DP2 - Đối Chứng 22kV (Dự Phòng 2)"
                             ],
                             index=0,
                             key="meter_pick_code"
                         )
                         if "Tất Cả" not in meter_pick:
-                            p_code = meter_pick.split(' ')[0]
+                            p_code = meter_pick.split(' - ')[0].strip()
                             df_view = df_view[df_view['Meter_Code'] == p_code]
 
                     # Tính toán KPIs
@@ -2453,8 +2453,14 @@ elif selected_menu == NAV_OPTIONS[4]:
                     with tab_m_chart2:
                         st.markdown("##### 📊 Cơ Cấu Điện Năng Theo Biểu Giá 3 Giá EVN (T1 Bình Thường, T2 Cao Điểm, T3 Thấp Điểm):")
                         
-                        # Tổng hợp theo tháng cho công tơ 6101 (hoặc 6301)
-                        df_tariff_m = df_raw_meters[df_raw_meters['Meter_Code'] == '6101'].groupby('Month_Str').agg({
+                        # Tổng hợp theo tháng cho công tơ 171C (hoặc 431)
+                        df_main_tariff = df_raw_meters[df_raw_meters['Meter_Code'] == '171C']
+                        if df_main_tariff.empty:
+                            df_main_tariff = df_raw_meters[df_raw_meters['Meter_Code'] == '431']
+                        if df_main_tariff.empty:
+                            df_main_tariff = df_raw_meters
+
+                        df_tariff_m = df_main_tariff.groupby('Month_Str').agg({
                             'T1_MWh_Giao': 'sum',
                             'T2_MWh_Giao': 'sum',
                             'T3_MWh_Giao': 'sum'
@@ -2505,29 +2511,45 @@ elif selected_menu == NAV_OPTIONS[4]:
                         
                         if not df_err_plot.empty:
                             fig_err = go.Figure()
-                            if 'Err_6101_6301_Pct' in df_err_plot.columns:
+                            if 'Err_171C_431_Pct' in df_err_plot.columns:
                                 fig_err.add_trace(go.Scatter(
                                     x=df_err_plot['Date_Str'],
-                                    y=df_err_plot['Err_6101_6301_Pct'],
+                                    y=df_err_plot['Err_171C_431_Pct'],
                                     mode='lines',
-                                    name='Lệch 6101 (110kV) vs 6301 (22kV) (%) - Tổn Thất MBA',
+                                    name='Lệch 171C (110kV) vs 431 (22kV) (%) - Tổn Thất MBA',
                                     line=dict(color='#0284C7', width=1.8)
                                 ))
-                            if 'Err_6301_6302_Pct' in df_err_plot.columns:
+                            if 'Err_431_171DP1_Pct' in df_err_plot.columns:
                                 fig_err.add_trace(go.Scatter(
                                     x=df_err_plot['Date_Str'],
-                                    y=df_err_plot['Err_6301_6302_Pct'],
+                                    y=df_err_plot['Err_431_171DP1_Pct'],
                                     mode='lines',
-                                    name='Lệch 6301 vs 6302 (Dự Phòng 1) (%)',
+                                    name='Lệch 431 vs 171 DP1 (Dự Phòng 1) (%)',
                                     line=dict(color='#10B981', width=1.5)
                                 ))
-                            if 'Err_6301_6303_Pct' in df_err_plot.columns:
+                            if 'Err_431_171DP2_Pct' in df_err_plot.columns:
                                 fig_err.add_trace(go.Scatter(
                                     x=df_err_plot['Date_Str'],
-                                    y=df_err_plot['Err_6301_6303_Pct'],
+                                    y=df_err_plot['Err_431_171DP2_Pct'],
                                     mode='lines',
-                                    name='Lệch 6301 vs 6303 (Dự Phòng 2) (%)',
+                                    name='Lệch 431 vs 171 DP2 (Dự Phòng 2) (%)',
                                     line=dict(color='#8B5CF6', width=1.5)
+                                ))
+                            if 'Err_171C_171DP1_Pct' in df_err_plot.columns:
+                                fig_err.add_trace(go.Scatter(
+                                    x=df_err_plot['Date_Str'],
+                                    y=df_err_plot['Err_171C_171DP1_Pct'],
+                                    mode='lines',
+                                    name='Lệch 171C vs 171 DP1 (%)',
+                                    line=dict(color='#F59E0B', width=1.2, dash='dot')
+                                ))
+                            if 'Err_171C_171DP2_Pct' in df_err_plot.columns:
+                                fig_err.add_trace(go.Scatter(
+                                    x=df_err_plot['Date_Str'],
+                                    y=df_err_plot['Err_171C_171DP2_Pct'],
+                                    mode='lines',
+                                    name='Lệch 171C vs 171 DP2 (%)',
+                                    line=dict(color='#EC4899', width=1.2, dash='dot')
                                 ))
 
                             # Đường giới hạn tiêu chuẩn ±0.2%
