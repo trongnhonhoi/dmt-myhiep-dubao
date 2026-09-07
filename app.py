@@ -2303,7 +2303,20 @@ elif selected_menu == NAV_OPTIONS[4]:
                 st.caption(f"Tổng số bản ghi: **{len(df_hist):,} ngày** | Dung lượng: **~212 KB**")
 
             st.write("")
-            st.dataframe(df_hist, width='stretch', hide_index=True)
+            df_hist_show = df_hist.copy()
+            df_hist_show['Date'] = pd.to_datetime(df_hist_show['Date']).dt.strftime('%d/%m/%Y')
+            df_hist_show = df_hist_show[[
+                'Date', 'Year', 'Month', 'Day', 'MH_171C_MWh', 'MH_171DP1_MWh', 'MH_171DP2_MWh', 'MH_431_MWh', 'Specific_Yield_Psh'
+            ]].copy()
+            df_hist_show.columns = [
+                'Ngày', 'Năm', 'Tháng', 'Ngày (D)',
+                '171C - Ranh Giới 110kV (MWh)',
+                '171 DP1 - TBA 220kV Phù Mỹ (MWh)',
+                '171 DP2 - TBA NMĐT Mỹ Hiệp (MWh)',
+                '431 - Đầu Cực MBA 22kV (MWh)',
+                'PSH (h)'
+            ]
+            st.dataframe(df_hist_show, width='stretch', hide_index=True)
 
         # --- SUBTAB 5: TỔNG HỢP CHỈ SỐ CÔNG TƠ & BIỂU GIÁ THỰC TẾ EVN ---
         with h_sub5:
@@ -2313,7 +2326,7 @@ elif selected_menu == NAV_OPTIONS[4]:
                     ⚡ HỆ THỐNG TỔNG HỢP CHỈ SỐ CÔNG TƠ & BIỂU GIÁ ĐIỆN NĂNG THƯƠNG PHẨM (EVN / A0 / A3)
                 </div>
                 <div style="font-size: 0.85rem; color: #CBD5E1; margin-top: 4px; line-height: 1.5;">
-                    Tự động quét và nạp dữ liệu đo đếm phụ tải 48 chu kỳ (30 phút/điểm) của <b>4 Công Tơ Đo Đếm</b> từ máy chủ <code>\\192.168.1.231\csv</code>: Công tơ Ranh giới 110kV Chính <b>171C</b> (Mã file: 6101), Công tơ Đầu cực MBA 22kV <b>431</b> (Mã file: 6301), và 2 Công tơ đối chứng dự phòng <b>171 DP1</b> (Mã file: 6302), <b>171 DP2</b> (Mã file: 6303). Tự động phân loại 3 biểu giá EVN (T1 Bình thường, T2 Cao điểm, T3 Thấp điểm), đối soát sai số kỹ thuật và tính toán hệ số công suất <i>cosφ</i>.
+                    Tự động quét và nạp dữ liệu đo đếm phụ tải 48 chu kỳ (30 phút/điểm) của <b>4 Công Tơ Đo Đếm</b> từ máy chủ <code>\\192.168.1.231\csv</code>: Công tơ Ranh giới 110kV Chính <b>171C</b> (Mã file: 6101), Công tơ Đầu cực MBA 22kV <b>431</b> (Mã file: 6301), Công tơ đối chứng 110kV Dự phòng 1 <b>171 DP1</b> tại TBA 220kV Phù Mỹ (Mã file: 6302), và Công tơ đối chứng 110kV Dự phòng 2 <b>171 DP2</b> tại MBA T1 NMĐT Mỹ Hiệp (Mã file: 6303). Tự động phân loại 3 biểu giá EVN (T1 Bình thường, T2 Cao điểm, T3 Thấp điểm), đối soát sai số kỹ thuật và tính toán hệ số công suất <i>cosφ</i>.
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -2323,6 +2336,14 @@ elif selected_menu == NAV_OPTIONS[4]:
                 return MeterDataManager(DEFAULT_METER_PATH)
 
             meter_mgr = get_meter_manager()
+
+            # Nút làm mới dữ liệu từ máy chủ
+            col_hdr1, col_hdr2 = st.columns([8, 2])
+            with col_hdr2:
+                if st.button("🔄 Làm Mới Dữ Liệu", help="Xóa bộ nhớ đệm và quét lại toàn bộ file CSV từ máy chủ LAN", key="btn_reload_meters_top", use_container_width=True):
+                    meter_mgr.load_all_meters(force_reload=True)
+                    st.success("Đã làm mới dữ liệu từ máy chủ!")
+                    st.rerun()
 
             if not meter_mgr.check_connection():
                 st.error(f"❌ Không thể kết nối tới máy chủ công tơ đo đếm tại đường dẫn: `{DEFAULT_METER_PATH}`. Vui lòng kiểm tra lại kết nối mạng LAN/VPN.")
