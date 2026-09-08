@@ -5057,7 +5057,8 @@ elif selected_menu == NAV_OPTIONS[8]:
                     df_run_filtered = df_run_filtered[df_run_filtered['Phân Hệ'].str.contains("M12")]
 
                 st.write(f"Hiển thị: **{len(df_run_filtered):,}** dòng sự kiện")
-                st.dataframe(df_run_filtered[['Thời Gian', 'Phân Hệ', 'Module Hàm', 'Nội Dung Sự Kiện']], use_container_width=True, height=450, hide_index=True)
+                display_cols_run = [c for c in ['Thời Gian', 'Phân Hệ', 'Module Hàm (File/Line)', 'Nội Dung Sự Kiện', 'Ý Nghĩa Kỹ Thuật'] if c in df_run_filtered.columns]
+                st.dataframe(df_run_filtered[display_cols_run], use_container_width=True, height=450, hide_index=True)
 
             # --- SUBTAB 5: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:

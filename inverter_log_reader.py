@@ -991,31 +991,58 @@ class HuaweiInverterLogParser:
 
         parsed_rows = []
         for line in lines:
-            # Lọc bỏ ký tự điều khiển lạ
-            clean_l = clean_excel_string(line)
-            if not clean_l.strip():
+            clean_l = clean_excel_string(line).strip()
+            if not clean_l:
                 continue
 
             if keyword and keyword.lower() not in clean_l.lower():
                 continue
-            
-            m = re.match(r"^(\d{2})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})\s+(\w+)\s+(\S+)\s+(.*)$", clean_l)
+
+            m = re.search(r"(\d{4}|\d{2})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})\s+(\w+)\s+(.*)", clean_l)
             if m:
-                yr, mo, dy, hr, mn, sc, mod, caller, msg = m.groups()
-                time_str = f"{dy}/{mo}/20{yr} {hr}:{mn}:{sc}"
+                yr, mo, dy, hr, mn, sc, mod, rest = m.groups()
+                yr_full = yr if len(yr) == 4 else f"20{yr}"
+                time_str = f"{dy}/{mo}/{yr_full} {hr}:{mn}:{sc}"
+
+                m_split = re.search(r"^(.*?\.(?:cpp|c|h)\d*)(.*)$", rest)
+                if m_split:
+                    caller = m_split.group(1).strip()
+                    msg = m_split.group(2).strip()
+                else:
+                    parts = rest.split(maxsplit=1)
+                    caller = parts[0] if parts else "-"
+                    msg = parts[1] if len(parts) > 1 else ""
+
+                # Diễn giải kỹ thuật O&M
+                meaning = "Ghi nhận sự kiện chu kỳ vận hành."
+                if "u8OnOff =0" in msg or "u8OnOff = 0" in msg:
+                    meaning = "🌙 Lệnh ngắt phát điện / Chuyển chế độ chờ Standby ban đêm (Hết nắng)."
+                elif "u8OnOff =1" in msg or "u8OnOff = 1" in msg or "u8OnOff =0x7,0" in msg:
+                    meaning = "☀️ Lệnh khởi động phát điện hòa lưới ban ngày."
+                elif "Can 0" in msg:
+                    meaning = "🔌 Ngắt kết nối giao tiếp Bus CAN nội bộ (Chế độ ngủ đêm)."
+                elif "Can 1" in msg:
+                    meaning = "⚡ Kích hoạt giao tiếp Bus CAN nội bộ khi Inverter thức dậy."
+                elif "V300R001" in msg or "Pd V" in msg:
+                    meaning = "⚙️ Xác nhận phiên bản Firmware hệ thống DSP/ARM."
+                elif "msg_manager" in caller or "Qer1" in msg:
+                    meaning = "📶 Trao đổi gói tin điều khiển & đồng bộ tham số Modbus/MBUS."
+
                 parsed_rows.append({
                     "Thời Gian": time_str,
                     "Phân Hệ": mod,
-                    "Module Hàm": caller,
+                    "Module Hàm (File/Line)": caller,
                     "Nội Dung Sự Kiện": msg,
+                    "Ý Nghĩa Kỹ Thuật": meaning,
                     "Raw_Line": clean_l
                 })
             else:
                 parsed_rows.append({
                     "Thời Gian": "Hệ thống",
                     "Phân Hệ": "INFO",
-                    "Module Hàm": "-",
+                    "Module Hàm (File/Line)": "-",
                     "Nội Dung Sự Kiện": clean_l,
+                    "Ý Nghĩa Kỹ Thuật": "Thông tin trạng thái hệ điều hành nhúng.",
                     "Raw_Line": clean_l
                 })
 
