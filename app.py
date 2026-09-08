@@ -72,6 +72,13 @@ from string_diagnostic_engine import (
     NO_PV18_INVERTERS
 )
 
+from inverter_log_reader import (
+    HuaweiInverterLogParser,
+    export_inverter_log_to_excel,
+    DEFAULT_LOG_PATH,
+    HUAWEI_ALARM_REGISTRY
+)
+
 from solar_engine import (
     MyHiepSolarPlantConfig,
     robust_decode_bytes,
@@ -448,7 +455,8 @@ NAV_OPTIONS = [
     "📈 5. Phân Tích & Đối Soát Lịch Sử 4 Công Tơ (2020 - 2026)",
     "📋 6. Báo Cáo Vận Hành & Hiệu Suất PR (IEC 61724)",
     "🚨 7. Chẩn Đoán Bất Thường Inverter (S1 - S7 SCADA)",
-    "🔌 8. Giám Sát & Chẩn Đoán 4.058 Chuỗi String DC (D:\\STRING_INV)"
+    "🔌 8. Giám Sát & Chẩn Đoán 4.058 Chuỗi String DC (D:\\STRING_INV)",
+    "📑 9. Đọc & Giải Mã Log Biến Tần Huawei (D:\\LOG)"
 ]
 
 # --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
@@ -4499,3 +4507,219 @@ elif selected_menu == NAV_OPTIONS[7]:
                     'Công Suất DC (kW)', 'Tổn Thất (kW)', 'Điện Áp TB (V)', 'Dòng Điện TB (A)', 'Chẩn Đoán Nguyên Nhân Gốc', 'Khuyến Nghị O&M'
                 ]
                 st.dataframe(df_tbl_display, use_container_width=True, height=450, hide_index=True)
+
+
+# -------------------------------------------------------------------------
+# PHẦN 9: ĐỌC & GIẢI MÃ NHẬT KÝ BIẾN TẦN HUAWEI (D:\LOG)
+# -------------------------------------------------------------------------
+elif selected_menu == NAV_OPTIONS[8]:
+    st.markdown(r"""
+    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #38BDF8;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div>
+                <div style="font-size: 1.35rem; font-weight: 750; color: #38BDF8; margin-bottom: 4px;">
+                    📑 HỆ THỐNG TRÍCH XUẤT & GIẢI MÃ NHẬT KÝ BIẾN TẦN HUAWEI (D:\LOG)
+                </div>
+                <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
+                    Đọc và giải mã trực tiếp các tệp nhật ký nhị phân <b>Huawei SUN2000-175KTL-H0</b> (Lịch sử cảnh báo <code>alarmg_history.gz</code>, Nhật ký vận hành <code>run_log.gz</code>, Nhật ký bảo vệ <code>sun_escp_log.gz</code>, I-V Curve <code>iv_data.emap</code>). Hỗ trợ tra cứu mã lỗi chuẩn hóa, đối soát nguyên nhân gốc và xuất phiếu kỹ thuật O&M.
+                </div>
+            </div>
+            <div style="margin-top: 8px;">
+                <span class="badge bg-info text-dark px-3 py-2 fw-bold" style="font-size: 0.82rem;">
+                    ⚙️ Huawei Diagnostic Engine v2.0
+                </span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    @st.cache_resource
+    def get_inverter_log_parser():
+        return HuaweiInverterLogParser(DEFAULT_LOG_PATH)
+
+    log_parser = get_inverter_log_parser()
+
+    if not log_parser.check_connection():
+        st.error(f"❌ Không tìm thấy thư mục lưu trữ Log biến tần tại đường dẫn: `{DEFAULT_LOG_PATH}`. Vui lòng kiểm tra lại ổ đĩa `D:\\LOG` hoặc kết nối mạng.")
+    else:
+        inverter_logs = log_parser.scan_inverter_log_folders()
+
+        col_top_l1, col_top_l2 = st.columns([3.5, 1.5])
+        with col_top_l1:
+            if inverter_logs:
+                inv_options = {}
+                for idx_inv, inv_item in enumerate(inverter_logs):
+                    lbl = f"📦 [{inv_item['inverter_id']}] ESN: {inv_item['esn']} | {inv_item['station_tag']} | Xuất lúc: {inv_item['export_time']} ({inv_item['file_count']} tệp)"
+                    inv_options[lbl] = inv_item
+                selected_inv_lbl = st.selectbox("Chọn Inverter cần đọc và phân tích Log:", list(inv_options.keys()), index=0, key="sel_inv_log_item")
+                cur_inv = inv_options[selected_inv_lbl]
+            else:
+                cur_inv = None
+
+        with col_top_l2:
+            st.write("")
+            if st.button("🔄 Quét Lại Thư Mục D:\\LOG", help="Quét lại toàn bộ các gói Log Inverter trong D:\\LOG", key="btn_reload_inverter_logs", use_container_width=True):
+                log_parser.scan_inverter_log_folders(force_reload=True)
+                st.success("Đã làm mới danh mục Log biến tần thành công!")
+                st.rerun()
+
+        if not cur_inv:
+            st.warning("⚠️ Chưa phát hiện thư mục nhật ký Inverter nào trong `D:\\LOG`.")
+        else:
+            # 5 Thẻ thông tin nhanh về Biến tần
+            st.markdown("---")
+            df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
+            df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
+
+            crit_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Khẩn cấp']) if not df_alarms_cur.empty else 0
+            major_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Nghiêm trọng']) if not df_alarms_cur.empty else 0
+            warn_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Cảnh báo']) if not df_alarms_cur.empty else 0
+
+            kpi_l1, kpi_l2, kpi_l3, kpi_l4, kpi_l5 = st.columns(5)
+            with kpi_l1:
+                st.metric("⚡ Biến Tần & Vị Trí", cur_inv['inverter_id'], delta=f"Trạm {cur_inv['station_tag']} Phù Mỹ")
+            with kpi_l2:
+                st.metric("🏷️ Số Serial (ESN)", cur_inv['esn'], delta="Huawei 175KTL-H0")
+            with kpi_l3:
+                st.metric("⚙️ Firmware Biến Tần", cur_inv['firmware_version'], delta="DSP/ARM Controller")
+            with kpi_l4:
+                st.metric("🚨 Tổng Lịch Sử Sự Cố", f"{len(df_alarms_cur):,} Lỗi", delta=f"{crit_alarms_count} Khẩn cấp | {major_alarms_count} Nghiêm trọng")
+            with kpi_l5:
+                st.metric("📦 Gói Nhật Ký Log", f"{cur_inv['file_count']} Tệp", delta=f"Xuất: {cur_inv['export_time']}")
+
+            st.markdown("---")
+
+            # 4 Sub-Tabs phân tích chuyên sâu
+            t_alarm, t_run, t_protect, t_excel = st.tabs([
+                f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
+                f"📜 2. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 3. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 4. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel)"
+            ])
+
+            # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
+            with t_alarm:
+                st.markdown(f"##### 🚨 Bảng Giải Mã Chi Tiết Lịch Sử Sự Cố & Cảnh Báo (Inverter {cur_inv['inverter_id']}):")
+                st.caption("Dữ liệu được giải mã trực tiếp từ tệp nhị phân cấu trúc 24-byte `alarmg_history.gz` theo quy chuẩn Modbus/Alarm Code Huawei.")
+
+                if df_alarms_cur.empty:
+                    st.success("✅ Inverter không ghi nhận bất kỳ sự cố hay cảnh báo nào trong tệp log.")
+                else:
+                    col_al_ch1, col_al_ch2 = st.columns([2, 2])
+                    with col_al_ch1:
+                        # Biểu đồ đếm sự cố theo loại lỗi
+                        alarm_type_counts = df_alarms_cur['Tên Sự Cố (Việt)'].value_counts().reset_index()
+                        alarm_type_counts.columns = ['Dạng Sự Cố', 'Số Lần Xảy Ra']
+                        fig_al_pie = px.pie(
+                            alarm_type_counts,
+                            values='Số Lần Xảy Ra',
+                            names='Dạng Sự Cố',
+                            title=f"<b>PHÂN BỐ CÁC DẠNG SỰ CỐ GHI NHẬN TRÊN {cur_inv['inverter_id']}</b>",
+                            hole=0.45,
+                            color_discrete_sequence=px.colors.qualitative.Bold
+                        )
+                        fig_al_pie.update_traces(textposition='inside', textinfo='percent')
+                        fig_al_pie.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10))
+                        st.plotly_chart(fig_al_pie, use_container_width=True)
+
+                    with col_al_ch2:
+                        # Biểu đồ theo mức độ nghiêm trọng
+                        sev_counts = df_alarms_cur['Mức Độ'].value_counts().reset_index()
+                        sev_counts.columns = ['Mức Độ', 'Số Lượng']
+                        color_map_sev = {"Khẩn cấp": "#EF4444", "Nghiêm trọng": "#F59E0B", "Cảnh báo": "#38BDF8", "Thông tin": "#10B981"}
+                        fig_sev_bar = px.bar(
+                            sev_counts,
+                            x='Mức Độ',
+                            y='Số Lượng',
+                            color='Mức Độ',
+                            title="<b>THỐNG KÊ MỨC ĐỘ NGHIÊM TRỌNG SỰ CỐ</b>",
+                            color_discrete_map=color_map_sev,
+                            text='Số Lượng'
+                        )
+                        fig_sev_bar.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10), showlegend=False)
+                        st.plotly_chart(fig_sev_bar, use_container_width=True)
+
+                    # Bộ lọc mức độ và tìm kiếm
+                    col_flt_a1, col_flt_a2 = st.columns([1.5, 2.5])
+                    with col_flt_a1:
+                        sev_filter = st.selectbox(
+                            "Lọc theo mức độ sự cố:",
+                            ["Tất Cả Mức Độ", "Khẩn cấp", "Nghiêm trọng", "Cảnh báo", "Thông tin"],
+                            index=0,
+                            key="sel_alarm_sev_flt"
+                        )
+                    with col_flt_a2:
+                        search_al_kw = st.text_input("🔍 Tìm kiếm tên sự cố / mã lỗi:", placeholder="Nhập tên lỗi, mã lỗi hoặc nguyên nhân...", key="txt_alarm_search")
+
+                    df_al_show = df_alarms_cur.copy()
+                    if sev_filter != "Tất Cả Mức Độ":
+                        df_al_show = df_al_show[df_al_show['Mức Độ'] == sev_filter]
+                    if search_al_kw:
+                        kw_low = search_al_kw.lower()
+                        df_al_show = df_al_show[
+                            df_al_show['Tên Sự Cố (Việt)'].str.lower().str.contains(kw_low) |
+                            df_al_show['Mã Lỗi'].astype(str).str.contains(kw_low) |
+                            df_al_show['Nguyên Nhân Kỹ Thuật'].str.lower().str.contains(kw_low)
+                        ]
+
+                    display_al_cols = [
+                        'STT', 'Mã Lỗi', 'Tên Sự Cố (Việt)', 'Mức Độ',
+                        'Thời Điểm Bắt Đầu', 'Thời Điểm Kết Thúc', 'Thời Lượng',
+                        'Nguyên Nhân Kỹ Thuật', 'Biện Pháp Xử Lý'
+                    ]
+                    st.dataframe(df_al_show[display_al_cols], use_container_width=True, height=420, hide_index=True)
+
+            # --- SUBTAB 2: NHẬT KÝ VẬN HÀNH RUN LOG ---
+            with t_run:
+                st.markdown(f"##### 📜 Nhật Ký Hoạt Động & Chu Kỳ Vận Hành (run_log.gz - {cur_inv['inverter_id']}):")
+                st.caption("Trích xuất chi tiết các lệnh điều khiển, trạng thái On/Off, chuyển đổi chế độ công suất và thông điệp truyền thông nội bộ.")
+
+                col_run_s1, col_run_s2 = st.columns([3.0, 1.0])
+                with col_run_s1:
+                    kw_run = st.text_input("🔍 Tìm kiếm sự kiện (ví dụ: OnOff, Grid, Can, Trip, Err, V300, Pd, Qer...):", key="txt_run_kw")
+                with col_run_s2:
+                    mod_pick = st.selectbox("Lọc phân hệ:", ["Tất Cả", "M32 (Equip / Driver)", "M00 (Msg Manager)", "M12 (Port / Energy)"], key="sel_run_mod")
+
+                df_run_filtered = df_run_cur.copy()
+                if kw_run:
+                    df_run_filtered = df_run_filtered[df_run_filtered['Nội Dung Sự Kiện'].str.lower().str.contains(kw_run.lower()) | df_run_filtered['Raw_Line'].str.lower().str.contains(kw_run.lower())]
+                if "M32" in mod_pick:
+                    df_run_filtered = df_run_filtered[df_run_filtered['Phân Hệ'].str.contains("M32")]
+                elif "M00" in mod_pick:
+                    df_run_filtered = df_run_filtered[df_run_filtered['Phân Hệ'].str.contains("M00")]
+                elif "M12" in mod_pick:
+                    df_run_filtered = df_run_filtered[df_run_filtered['Phân Hệ'].str.contains("M12")]
+
+                st.write(f"Hiển thị: **{len(df_run_filtered):,}** dòng sự kiện")
+                st.dataframe(df_run_filtered[['Thời Gian', 'Phân Hệ', 'Module Hàm', 'Nội Dung Sự Kiện']], use_container_width=True, height=450, hide_index=True)
+
+            # --- SUBTAB 3: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
+            with t_protect:
+                st.markdown(f"##### 🛡️ Nhật Ký Bảo Vệ Phần Cứng & Mạch Lái Driver (sun_escp_log.gz):")
+                st.caption("Ghi nhận các can thiệp bảo vệ cấp độ phần cứng DSP / PcbDriver chống quá tải, bảo vệ quá dòng ngắn mạch.")
+
+                df_prot = log_parser.get_inverter_protection_logs(cur_inv['folder_path'])
+                if df_prot.empty:
+                    st.info("ℹ️ Không có bản ghi bảo vệ bất thường nào trong tệp `sun_escp_log.gz`.")
+                else:
+                    st.dataframe(df_prot, use_container_width=True, height=420, hide_index=True)
+
+            # --- SUBTAB 4: XUẤT BÁO CÁO EXCEL ---
+            with t_excel:
+                st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
+                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 3 Sheet: **Tổng Quan Thiết Bị**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
+
+                col_x1, col_x2 = st.columns([2.5, 2.5])
+                with col_x1:
+                    excel_log_bytes = export_inverter_log_to_excel(cur_inv, df_alarms_cur, df_run_cur)
+                    st.download_button(
+                        label=f"📥 Tải Báo Cáo Log Inverter {cur_inv['inverter_id']} (Excel .xlsx)",
+                        data=excel_log_bytes,
+                        file_name=f"Bao_Cao_Log_Inverter_{cur_inv['inverter_id']}_{cur_inv['esn']}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True
+                    )
+                with col_x2:
+                    st.info(f"Tệp bao gồm: **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+
