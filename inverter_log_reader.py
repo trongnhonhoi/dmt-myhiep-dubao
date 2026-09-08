@@ -467,6 +467,331 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
     }
 
 
+def analyze_failure_risks_and_maintenance(
+    df_alarms: Optional[pd.DataFrame] = None,
+    df_telemetry: Optional[pd.DataFrame] = None,
+    cur_inv: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Động cơ Chẩn đoán Dự báo Nguy cơ Hư hỏng & Khuyến nghị Bảo trì O&M Ngăn ngừa
+    Dựa trên đối soát dữ liệu nhật ký sự cố (alarmg_history), dữ liệu điện học (his_inv_rd)
+    và đặc thù 229 Inverter Huawei SUN2000-175KTL-H0 tại ĐMT Mỹ Hiệp.
+    """
+    if df_alarms is None:
+        df_alarms = pd.DataFrame()
+    if df_telemetry is None:
+        df_telemetry = pd.DataFrame()
+
+    # 1. Đếm các mã lỗi mấu chốt
+    alarm_counts = {}
+    if not df_alarms.empty and "Mã Lỗi" in df_alarms.columns:
+        alarm_counts = df_alarms["Mã Lỗi"].value_counts().to_dict()
+
+    # 2. Thống kê thông số điện học
+    max_igbt_temp = 45.0
+    max_cab_temp = 42.0
+    min_grid_u = 800.0
+    max_grid_u = 800.0
+    if not df_telemetry.empty:
+        if "Nhiệt Độ Khối IGBT (°C)" in df_telemetry.columns:
+            max_igbt_temp = float(df_telemetry["Nhiệt Độ Khối IGBT (°C)"].max())
+        if "Nhiệt Độ Vỏ Tủ (°C)" in df_telemetry.columns:
+            max_cab_temp = float(df_telemetry["Nhiệt Độ Vỏ Tủ (°C)"].max())
+        if "Điện Áp Lưới U_ab (V)" in df_telemetry.columns:
+            min_grid_u = float(df_telemetry["Điện Áp Lưới U_ab (V)"].min())
+            max_grid_u = float(df_telemetry["Điện Áp Lưới U_ab (V)"].max())
+
+    risk_cards = []
+    maintenance_checklist = []
+
+    # -------------------------------------------------------------
+    # NGUY CƠ 1: QUÁ NHIỆT VÀ HỎNG QUẠT LÀM MÁT (THERMAL & FAN RISK)
+    # -------------------------------------------------------------
+    n_fan = alarm_counts.get(2065, 0)
+    n_temp = alarm_counts.get(2063, 0)
+    thermal_indicators = []
+    if n_fan > 0:
+        thermal_indicators.append(f"Ghi nhận {n_fan} lần cảnh báo lỗi/kẹt quạt làm mát (2065 - Fan Fault).")
+    if n_temp > 0:
+        thermal_indicators.append(f"Ghi nhận {n_temp} lần nhiệt độ vỏ tủ vượt ngưỡng an toàn (2063 - Over-Temperature).")
+    if max_igbt_temp >= 65.0:
+        thermal_indicators.append(f"Nhiệt độ khối IGBT đỉnh đạt {max_igbt_temp:.1f}°C (nguy cơ suy giảm hiệu suất tản nhiệt).")
+
+    if n_fan > 0 or n_temp >= 2 or max_igbt_temp >= 70.0:
+        fan_risk_level = "CRITICAL"
+        fan_badge = "🔴 Nguy cơ Cao"
+        fan_color = "#EF4444"
+        fan_risk_pct = min(95, 60 + n_fan * 15 + n_temp * 10)
+    elif n_temp == 1 or max_igbt_temp >= 60.0:
+        fan_risk_level = "WARNING"
+        fan_badge = "🟡 Cần Lưu Ý"
+        fan_color = "#F59E0B"
+        fan_risk_pct = 45
+    else:
+        fan_risk_level = "LOW"
+        fan_badge = "🟢 An Toàn"
+        fan_color = "#10B981"
+        fan_risk_pct = 10
+        thermal_indicators.append("Nhiệt độ khối IGBT và quạt làm mát hoạt động trong giới hạn tối ưu.")
+
+    risk_cards.append({
+        "id": "THERMAL_FAN",
+        "title": "🔥 Quá Nhiệt Vỏ Tủ & Suy Giảm Quạt Làm Mát",
+        "level": fan_risk_level,
+        "badge": fan_badge,
+        "color": fan_color,
+        "risk_pct": fan_risk_pct,
+        "indicators": thermal_indicators,
+        "root_cause": "Bụi bẩn bám dày trên cánh nhôm tản nhiệt phía sau hoặc quạt ngoài bị kẹt dị vật/suy thoái ổ bi.",
+        "action": "Vệ sinh cánh nhôm tản nhiệt bằng máy thổi khí nén, kiểm tra quay tự do 4 quạt ngoài và đo dòng khởi động quạt.",
+        "tools_needed": "Máy thổi khí áp lực cao, bộ lục giác mở lưới chắn quạt, quạt dự phòng Huawei 175KTL."
+    })
+
+    if fan_risk_level == "CRITICAL":
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🔴 Khẩn Cấp (24h - 48h)",
+            "Hạng Mục Thiết Bị": "Cụm Quạt & Cánh Tản Nhiệt",
+            "Nội Dung Kiểm Tra": "Kiểm tra thay thế quạt bị kẹt và vệ sinh toàn diện khe tản nhiệt",
+            "Quy Trình Kỹ Thuật": "Cắt AC/DC, dùng que đo kiểm tra điện áp cấp quạt 12V/24V, thay cụm quạt bị rít ổ bi.",
+            "Dụng Cụ / Vật Tư": "Cụm quạt ngoài Huawei, tua vít cách điện 1000V, máy thổi khí"
+        })
+    elif fan_risk_level == "WARNING":
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🟡 Định Kỳ (Trong tuần)",
+            "Hạng Mục Thiết Bị": "Hệ Thống Tản Nhiệt Khí",
+            "Nội Dung Kiểm Tra": "Thổi bụi cánh nhôm tản nhiệt Inverter giữa trưa",
+            "Quy Trình Kỹ Thuật": "Vệ sinh lưới chắn bụi, đảm bảo khoảng cách thông gió mặt sau máy > 50cm.",
+            "Dụng Cụ / Vật Tư": "Máy thổi bụi pin cầm tay, chổi cọ mềm"
+        })
+
+    # -------------------------------------------------------------
+    # NGUY CƠ 2: PHÓNG ĐIỆN HỒ QUANG & SUY GIẢM CÁCH ĐIỆN DC (AFCI & RISO)
+    # -------------------------------------------------------------
+    n_riso = alarm_counts.get(2061, 0)
+    n_rcd = alarm_counts.get(2062, 0)
+    n_afci = alarm_counts.get(2002, 0)
+    dc_iso_indicators = []
+    if n_afci > 0:
+        dc_iso_indicators.append(f"Ghi nhận {n_afci} lần phát sinh hồ quang điện DC (2002 - DC Arc Fault).")
+    if n_riso > 0:
+        dc_iso_indicators.append(f"Ghi nhận {n_riso} lần điện trở cách điện DC suy giảm dưới ngưỡng (2061 - Low Riso).")
+    if n_rcd > 0:
+        dc_iso_indicators.append(f"Ghi nhận {n_rcd} lần dòng điện rò tiếp địa tăng cao (2062 - Residual Current High).")
+
+    if n_afci > 0 or n_riso >= 2 or n_rcd >= 2:
+        iso_risk_level = "CRITICAL"
+        iso_badge = "🔴 Nguy cơ Cao"
+        iso_color = "#EF4444"
+        iso_risk_pct = min(95, 65 + n_afci * 20 + (n_riso + n_rcd) * 8)
+    elif n_riso == 1 or n_rcd == 1:
+        iso_risk_level = "WARNING"
+        iso_badge = "🟡 Cần Lưu Ý"
+        iso_color = "#F59E0B"
+        iso_risk_pct = 50
+    else:
+        iso_risk_level = "LOW"
+        iso_badge = "🟢 An Toàn"
+        iso_color = "#10B981"
+        iso_risk_pct = 5
+        dc_iso_indicators.append("Hệ thống cách điện DC và mạch bảo vệ chống hồ quang AFCI ổn định.")
+
+    risk_cards.append({
+        "id": "DC_INSULATION_ARC",
+        "title": "⚡ Hồ Quang Điện (AFCI) & Suy Giảm Cách Điện Cáp DC (Riso)",
+        "level": iso_risk_level,
+        "badge": iso_badge,
+        "color": iso_color,
+        "risk_pct": iso_risk_pct,
+        "indicators": dc_iso_indicators,
+        "root_cause": "Đầu cắm MC4 bị lỏng tiếp xúc, cáp DC ngầm bị trầy xước vỏ cách điện tiếp xúc máng cáp hoặc ngập nước mưa.",
+        "action": "Ngắt DC Switch, đo điện trở cách điện từng chuỗi String bằng Megger 1500VDC, kiểm tra siết lại toàn bộ giắc MC4.",
+        "tools_needed": "Đồng hồ Megger 1500VDC, Kìm bấm cosse MC4 chuyên dụng, Băng keo cách điện 3M, Giắc MC4 1500V."
+    })
+
+    if iso_risk_level in ["CRITICAL", "WARNING"]:
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🔴 Khẩn Cấp (24h - 48h)" if iso_risk_level == "CRITICAL" else "🟡 Định Kỳ (Trong tuần)",
+            "Hạng Mục Thiết Bị": "Chuỗi Cáp DC & Đầu Nối MC4",
+            "Nội Dung Kiểm Tra": "Đo Megger cách điện 18 Chuỗi String và siết ép lại giắc MC4",
+            "Quy Trình Kỹ Thuật": "Đo Riso cực (+) với đất và (-) với đất. Giá trị yêu cầu > 50 kΩ (khuyến nghị > 2 MΩ khi khô ráo).",
+            "Dụng Cụ / Vật Tư": "Đồng hồ đo cách điện Megger 1500V, Kìm tuốt cáp DC 4mm/6mm, Kẹp MC4"
+        })
+
+    # -------------------------------------------------------------
+    # NGUY CƠ 3: DÒNG NGƯỢC BACKFEED & HỎNG DIODE TẤM PIN
+    # -------------------------------------------------------------
+    n_backfeed = alarm_counts.get(2012, 0)
+    n_reverse = alarm_counts.get(2011, 0)
+    backfeed_indicators = []
+    if n_backfeed > 0:
+        backfeed_indicators.append(f"Ghi nhận {n_backfeed} lần dòng điện chạy ngược vào chuỗi pin (2012 - String Backfeed).")
+    if n_reverse > 0:
+        backfeed_indicators.append(f"Ghi nhận {n_reverse} lần đấu ngược cực tính chuỗi pin (2011 - Reverse Connection).")
+
+    if n_reverse > 0 or n_backfeed >= 3:
+        bf_risk_level = "CRITICAL"
+        bf_badge = "🔴 Nguy cơ Cao"
+        bf_color = "#EF4444"
+        bf_risk_pct = min(90, 50 + n_backfeed * 10 + n_reverse * 30)
+    elif n_backfeed > 0:
+        bf_risk_level = "WARNING"
+        bf_badge = "🟡 Cần Lưu Ý"
+        bf_color = "#F59E0B"
+        bf_risk_pct = 40
+    else:
+        bf_risk_level = "LOW"
+        bf_badge = "🟢 An Toàn"
+        bf_color = "#10B981"
+        bf_risk_pct = 5
+        backfeed_indicators.append("Cân bằng dòng điện giữa các chuỗi String cùng cổng MPPT đạt chuẩn.")
+
+    risk_cards.append({
+        "id": "DC_BACKFEED_DIODE",
+        "title": "🔄 Dòng Điện Ngược Backfeed & Hỏng Diode Tấm Pin",
+        "level": bf_risk_level,
+        "badge": bf_badge,
+        "color": bf_color,
+        "risk_pct": bf_risk_pct,
+        "indicators": backfeed_indicators,
+        "root_cause": "Độ lệch điện áp lớn giữa 2 chuỗi cùng MPPT do che bóng cục bộ, nổ tấm pin hoặc hỏng Diode Bypass trong hộp nối.",
+        "action": "Dùng Camera nhiệt FLIR quét bề mặt chuỗi tấm pin tìm điểm phát nhiệt (Hot-spot), kiểm tra hộp đấu nối Junction Box.",
+        "tools_needed": "Camera ảnh nhiệt FLIR / HIKMICRO, Ampe kìm DC Fluke 376 FC, Đồng hồ đo VOM."
+    })
+
+    if bf_risk_level in ["CRITICAL", "WARNING"]:
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🟡 Định Kỳ (Trong tuần)",
+            "Hạng Mục Thiết Bị": "Giàn Pin PV & Hộp Nối Diode",
+            "Nội Dung Kiểm Tra": "Quét ảnh nhiệt phát hiện Hot-spot và đo điện áp hở mạch Voc từng chuỗi",
+            "Quy Trình Kỹ Thuật": "Đo Voc so sánh giữa 2 chuỗi cùng MPPT lúc nắng đều. Độ lệch điện áp không được vượt quá 10V.",
+            "Dụng Cụ / Vật Tư": "Camera nhiệt cầm tay, Ampe kìm kẹp DC, sổ tay ghi nhận vị trí tấm pin lỗi"
+        })
+
+    # -------------------------------------------------------------
+    # NGUY CƠ 4: HỎNG KHỐI CÔNG SUẤT IGBT & PHẦN CỨNG (HARDWARE BREAKDOWN)
+    # -------------------------------------------------------------
+    n_dev = alarm_counts.get(2064, 0)
+    n_oc = alarm_counts.get(2038, 0)
+    n_sc = alarm_counts.get(2051, 0)
+    hw_indicators = []
+    if n_dev > 0:
+        hw_indicators.append(f"Ghi nhận {n_dev} lần lỗi phần cứng nội bộ biến tần (2064 - Hardware Fault).")
+    if n_oc > 0:
+        hw_indicators.append(f"Ghi nhận {n_oc} lần quá dòng AC tức thời IGBT (2038 - Output Overcurrent).")
+    if n_sc > 0:
+        hw_indicators.append(f"Ghi nhận {n_sc} lần đoản mạch đầu ra AC (2051 - Output Short Circuit).")
+
+    if n_dev > 0 or n_sc > 0:
+        hw_risk_level = "CRITICAL"
+        hw_badge = "🔴 Nguy cơ Cao"
+        hw_color = "#EF4444"
+        hw_risk_pct = 95
+    elif n_oc > 0:
+        hw_risk_level = "WARNING"
+        hw_badge = "🟡 Cần Lưu Ý"
+        hw_color = "#F59E0B"
+        hw_risk_pct = 55
+    else:
+        hw_risk_level = "LOW"
+        hw_badge = "🟢 An Toàn"
+        hw_color = "#10B981"
+        hw_risk_pct = 5
+        hw_indicators.append("Khối công suất nghịch lưu IGBT và mạch điều khiển DSP hoạt động tin cậy.")
+
+    risk_cards.append({
+        "id": "HARDWARE_IGBT",
+        "title": "💥 Lỗi Khối Công Suất IGBT & Mạch Lực Biến Tần",
+        "level": hw_risk_level,
+        "badge": hw_badge,
+        "color": hw_color,
+        "risk_pct": hw_risk_pct,
+        "indicators": hw_indicators,
+        "root_cause": "Suy thoái lớp cách điện bán dẫn IGBT, ngắn mạch pha AC hoặc bo mạch kích lái Driver bị xung đột điện áp.",
+        "action": "Trích xuất tệp sóng dsp_wave_data.gz và dsp_log, gửi hồ sơ RMA cho Trung tâm Bảo hành Kỹ thuật Huawei TAC.",
+        "tools_needed": "Cáp nạp firmware USB-RS485, Hồ sơ bảo hành RMA chuẩn hãng Huawei, Biến tần dự phòng."
+    })
+
+    if hw_risk_level == "CRITICAL":
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🔴 Khẩn Cấp (24h - 48h)",
+            "Hạng Mục Thiết Bị": "Khối Nghịch Lưu Inverter",
+            "Nội Dung Kiểm Tra": "Lập hồ sơ yêu cầu hỗ trợ kỹ thuật bảo hành hãng Huawei (RMA Ticket)",
+            "Quy Trình Kỹ Thuật": "Khóa cách ly CB AC/DC, trích xuất toàn bộ thư mục D:\\LOG, liên hệ Huawei TAC.",
+            "Dụng Cụ / Vật Tư": "Tệp Log Inverter, Biểu mẫu yêu cầu bảo hành Huawei"
+        })
+
+    # -------------------------------------------------------------
+    # NGUY CƠ 5: SỰ CỐ DAO ĐỘNG LƯỚI ĐIỆN EVN / TRẠM BIẾN ÁP (GRID ANOMALY)
+    # -------------------------------------------------------------
+    n_grid_u = alarm_counts.get(2032, 0) + alarm_counts.get(2033, 0)
+    n_freq = alarm_counts.get(2035, 0) + alarm_counts.get(2036, 0) + alarm_counts.get(2037, 0)
+    grid_indicators = []
+    if n_grid_u > 0:
+        grid_indicators.append(f"Ghi nhận {n_grid_u} lần sụt áp / quá áp điện lưới AC 800V (2032, 2033).")
+    if n_freq > 0:
+        grid_indicators.append(f"Ghi nhận {n_freq} lần tần số lưới dao động nhanh hoặc vượt ngưỡng bảo vệ (2035, 2036, 2037).")
+
+    if n_grid_u >= 10 or n_freq >= 5:
+        grid_risk_level = "WARNING"
+        grid_badge = "🟡 Cần Lưu Ý"
+        grid_color = "#F59E0B"
+        grid_risk_pct = 60
+    else:
+        grid_risk_level = "LOW"
+        grid_badge = "🟢 Bình Thường"
+        grid_color = "#10B981"
+        grid_risk_pct = 15
+        grid_indicators.append("Chất lượng điện áp và tần số lưới AC 800V đáp ứng tốt Grid Code.")
+
+    risk_cards.append({
+        "id": "GRID_STABILITY",
+        "title": "🌐 Sụt Áp & Dao Động Lưới Điện AC / Trạm Biến Áp",
+        "level": grid_risk_level,
+        "badge": grid_badge,
+        "color": grid_color,
+        "risk_pct": grid_risk_pct,
+        "indicators": grid_indicators,
+        "root_cause": "Dao động điện áp trên đường dây truyền tải 110kV/22kV hoặc nấc phân áp máy biến áp chưa tối ưu.",
+        "action": "Theo dõi thông số đo đếm công tơ trạm và rơ le bảo vệ TBA 22/110kV, phối hợp Điều độ viên A0/A3.",
+        "tools_needed": "Phần mềm SCADA trạm, Máy phân tích chất lượng điện năng Fluke 435."
+    })
+
+    # Hạng mục kiểm tra định kỳ tiêu chuẩn nếu checklist đang trống
+    if not maintenance_checklist:
+        maintenance_checklist.append({
+            "Mức Độ Ưu Tiên": "🟢 Định Kỳ (Hàng tháng / Quý)",
+            "Hạng Mục Thiết Bị": "Toàn Bộ Biến Tần & Tủ Đấu Nối",
+            "Nội Dung Kiểm Tra": "Bảo dưỡng cơ điện định kỳ và vệ sinh công nghiệp",
+            "Quy Trình Kỹ Thuật": "Vệ sinh quạt, siết lực bu-lông đầu cực AC (lực siết 35 N.m), kiểm tra gioăng cao su chống nước tủ máy.",
+            "Dụng Cụ / Vật Tư": "Cờ lê lực, Máy đo nhiệt độ hồng ngoại, Khí nén làm sạch"
+        })
+
+    # Đánh giá tổng thể
+    crit_count = sum(1 for c in risk_cards if c["level"] == "CRITICAL")
+    warn_count = sum(1 for c in risk_cards if c["level"] == "WARNING")
+    if crit_count > 0:
+        overall_level = "🔴 NGUY CƠ CAO"
+        overall_color = "#EF4444"
+        overall_summary = f"Inverter đang đối mặt với {crit_count} nguy cơ sự cố nghiêm trọng cần đội O&M xử lý ngay trong 24h - 48h để phòng ngừa dừng máy hoặc chập cháy."
+    elif warn_count > 0:
+        overall_level = "🟡 NGUY CƠ TRUNG BÌNH"
+        overall_color = "#F59E0B"
+        overall_summary = f"Ghi nhận {warn_count} nguy cơ kỹ thuật cần đưa vào lịch bảo dưỡng ngăn ngừa trong tuần tới."
+    else:
+        overall_level = "🟢 AN TOÀN VẬN HÀNH"
+        overall_color = "#10B981"
+        overall_summary = "Biến tần ở trạng thái kỹ thuật rất tốt, không phát hiện rủi ro sự cố bất thường."
+
+    return {
+        "overall_level": overall_level,
+        "overall_color": overall_color,
+        "overall_summary": overall_summary,
+        "risk_cards": risk_cards,
+        "maintenance_checklist": pd.DataFrame(maintenance_checklist)
+    }
+
+
+
 
 
 class HuaweiInverterLogParser:
@@ -886,6 +1211,14 @@ def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFra
             for col in exp_tel.columns:
                 exp_tel[col] = exp_tel[col].apply(clean_excel_string)
             exp_tel.to_excel(writer, sheet_name="Dien_Hoc_5Phut_Telemetry", index=False)
+
+        risk_analysis = analyze_failure_risks_and_maintenance(df_alarms, df_telemetry, inv_meta)
+        df_maint = risk_analysis.get("maintenance_checklist", pd.DataFrame())
+        if isinstance(df_maint, pd.DataFrame) and not df_maint.empty:
+            exp_maint = df_maint.copy()
+            for col in exp_maint.columns:
+                exp_maint[col] = exp_maint[col].apply(clean_excel_string)
+            exp_maint.to_excel(writer, sheet_name="Khuyen_Nghi_Bao_Tri_OM", index=False)
 
     output.seek(0)
     return output.getvalue()

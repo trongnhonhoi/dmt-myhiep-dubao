@@ -78,6 +78,7 @@ from inverter_log_reader import (
     HuaweiInverterLogParser,
     export_inverter_log_to_excel,
     calculate_inverter_health_score,
+    analyze_failure_risks_and_maintenance,
     DEFAULT_LOG_PATH,
     HUAWEI_ALARM_REGISTRY
 )
@@ -4688,15 +4689,14 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             st.markdown("---")
 
-            df_telemetry_cur = log_parser.get_inverter_telemetry_history(cur_inv['folder_path'])
-
-            # 5 Sub-Tabs phân tích chuyên sâu
-            t_alarm, t_telemetry, t_run, t_protect, t_excel = st.tabs([
+            # 6 Sub-Tabs phân tích chuyên sâu
+            t_alarm, t_telemetry, t_risk, t_run, t_protect, t_excel = st.tabs([
                 f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
-                f"📈 2. Dữ Liệu Điện Học & Hộp Đen Sự Cố ({len(df_telemetry_cur):,} Chu Kỳ 5 Phút)",
-                f"📜 3. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
-                "🛡️ 4. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
-                "📥 5. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 4 Sheet)"
+                f"📈 2. Dữ Liệu Điện Học & Hộp Đen ({len(df_telemetry_cur):,} Chu Kỳ 5P)",
+                "🛠️ 3. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
+                f"📜 4. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 5. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 6. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 5 Sheet)"
             ])
 
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
@@ -4799,7 +4799,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                     ]
                     st.dataframe(df_al_show[display_al_cols], use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 2: CHUỖI DỮ LIỆU ĐIỆN HỌC & HỘP ĐEN SỰ CỐ (BƯỚC 3) ---
+            # --- SUBTAB 2: CHUỖI DỮ LIỆU ĐIỆN HỌC & HỘP ĐEN SỰ CỐ ---
             with t_telemetry:
                 st.markdown(r"""
                 <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
@@ -4957,7 +4957,84 @@ elif selected_menu == NAV_OPTIONS[8]:
                         ]
                         st.dataframe(df_tel_plot[display_tel_cols].sort_values(by="Thời Gian", ascending=False), use_container_width=True, height=350, hide_index=True)
 
-            # --- SUBTAB 3: NHẬT KÝ VẬN HÀNH RUN LOG ---
+            # --- SUBTAB 3: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
+            with t_risk:
+                st.markdown(r"""
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
+                    <div style="font-size: 1.15rem; font-weight: 750; color: #F59E0B; margin-bottom: 4px;">
+                        🛠️ HỆ THỐNG CẢNH BÁO NGUY CƠ HƯ HỎNG SỚM & KHUYẾN NGHỊ BẢO TRÌ NGĂN NGỪA
+                    </div>
+                    <div style="font-size: 0.85rem; color: #CBD5E1;">
+                        Động cơ phân tích kết hợp giữa lịch sử lỗi (Alarm), xu hướng nhiệt độ/điện áp 5 phút và đặc tính suy thoái của dòng biến tần Huawei 175KTL để tự động dự báo 5 nhóm rủi ro hỏng hóc trọng yếu và tạo phiếu công tác bảo trì O&M.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                risk_results = analyze_failure_risks_and_maintenance(df_alarms_cur, df_telemetry_cur, cur_inv)
+                
+                # Banner tổng quan rủi ro
+                st.markdown(f"""
+                <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <div style="font-size: 0.85rem; color: #94A3B8;">MỨC ĐỘ RỦI RO TỔNG THỂ INVERTER:</div>
+                        <div style="font-size: 1.35rem; font-weight: 800; color: {risk_results['overall_color']};">
+                            {risk_results['overall_level']}
+                        </div>
+                    </div>
+                    <div style="font-size: 0.88rem; color: #CBD5E1; max-width: 650px; line-height: 1.4;">
+                        {risk_results['overall_summary']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown("#### 🔍 1. Đánh Giá Chi Tiết 5 Nguy Cơ Trọng Yếu:")
+                
+                # Hiển thị 5 thẻ nguy cơ
+                for idx_rc, rc in enumerate(risk_results['risk_cards']):
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="background: #0F172A; border: 1px solid #334155; border-left: 5px solid {rc['color']}; border-radius: 10px; padding: 16px 20px; margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+                                <div style="font-weight: 700; font-size: 1.02rem; color: #F8FAFC;">
+                                    {rc['title']}
+                                </div>
+                                <div>
+                                    <span style="background: {rc['color']}22; color: {rc['color']}; border: 1px solid {rc['color']}; padding: 3px 10px; border-radius: 15px; font-weight: 700; font-size: 0.82rem;">
+                                        {rc['badge']} (Xác suất rủi ro: {rc['risk_pct']}%)
+                                    </span>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <div style="font-size: 0.82rem; color: #94A3B8; margin-bottom: 4px;"><b>📌 Dấu hiệu ghi nhận từ dữ liệu Inverter:</b></div>
+                                {"".join([f"<div style='font-size: 0.83rem; color: #E2E8F0; margin-left: 10px;'>• {ind}</div>" for ind in rc['indicators']])}
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #1E293B; border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 0.82rem;">
+                                <div>
+                                    <span style="color: #F59E0B; font-weight: 700;">🔎 Nguyên nhân gốc:</span>
+                                    <div style="color: #CBD5E1; margin-top: 2px;">{rc['root_cause']}</div>
+                                </div>
+                                <div>
+                                    <span style="color: #38BDF8; font-weight: 700;">🛠️ Biện pháp O&M khuyến nghị:</span>
+                                    <div style="color: #CBD5E1; margin-top: 2px;">{rc['action']}</div>
+                                    <div style="color: #94A3B8; margin-top: 4px; font-size: 0.78rem;">🧰 <i>Dụng cụ cần thiết: {rc['tools_needed']}</i></div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                st.markdown("---")
+
+                # PHẦN 2: BẢNG KẾ HOẠCH BẢO TRÌ O&M VÀ ĐỀ XUẤT VẬT TƯ
+                st.markdown("#### 📋 2. Kế Hoạch Bảo Trì O&M Ngăn Ngừa & Danh Mục Vật Tư Chuẩn Bị:")
+                st.caption(f"Hệ thống tự động biên soạn phiếu công tác bảo trì kỹ thuật cho Inverter {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+
+                df_maint_show = risk_results['maintenance_checklist']
+                if not df_maint_show.empty:
+                    st.dataframe(df_maint_show, use_container_width=True, hide_index=True)
+                else:
+                    st.success("✅ Không có hạng mục nào cần bảo trì khẩn cấp. Tiếp tục duy trì quy trình kiểm tra định kỳ hàng tháng.")
+
+            # --- SUBTAB 4: NHẬT KÝ VẬN HÀNH RUN LOG ---
             with t_run:
                 st.markdown(f"##### 📜 Nhật Ký Hoạt Động & Chu Kỳ Vận Hành (run_log.gz - {cur_inv['inverter_id']}):")
                 st.caption("Trích xuất chi tiết các lệnh điều khiển, trạng thái On/Off, chuyển đổi chế độ công suất và thông điệp truyền thông nội bộ.")
@@ -4981,7 +5058,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 st.write(f"Hiển thị: **{len(df_run_filtered):,}** dòng sự kiện")
                 st.dataframe(df_run_filtered[['Thời Gian', 'Phân Hệ', 'Module Hàm', 'Nội Dung Sự Kiện']], use_container_width=True, height=450, hide_index=True)
 
-            # --- SUBTAB 4: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
+            # --- SUBTAB 5: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:
                 st.markdown(f"##### 🛡️ Nhật Ký Bảo Vệ Phần Cứng & Mạch Lái Driver (sun_escp_log.gz):")
                 st.caption("Ghi nhận các can thiệp bảo vệ cấp độ phần cứng DSP / PcbDriver chống quá tải, bảo vệ quá dòng ngắn mạch.")
@@ -4992,10 +5069,10 @@ elif selected_menu == NAV_OPTIONS[8]:
                 else:
                     st.dataframe(df_prot, use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 5: XUẤT BÁO CÁO EXCEL ---
+            # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
             with t_excel:
                 st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
-                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 4 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
+                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 5 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Khuyến Nghị Bảo Trì O&M & Vật Tư Chuẩn Bị**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
 
                 col_x1, col_x2 = st.columns([2.5, 2.5])
                 with col_x1:
@@ -5009,7 +5086,8 @@ elif selected_menu == NAV_OPTIONS[8]:
                         use_container_width=True
                     )
                 with col_x2:
-                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_telemetry_cur)} dòng điện học 5 phút** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **Khuyến nghị bảo trì O&M** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_telemetry_cur)} dòng điện học 5 phút** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+
 
 
 
