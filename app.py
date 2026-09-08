@@ -4536,11 +4536,7 @@ elif selected_menu == NAV_OPTIONS[8]:
     </div>
     """, unsafe_allow_html=True)
 
-    @st.cache_resource
-    def get_inverter_log_parser():
-        return HuaweiInverterLogParser(DEFAULT_LOG_PATH)
-
-    log_parser = get_inverter_log_parser()
+    log_parser = HuaweiInverterLogParser(DEFAULT_LOG_PATH)
 
     if not log_parser.check_connection():
         st.error(f"❌ Không tìm thấy thư mục lưu trữ Log biến tần tại đường dẫn: `{DEFAULT_LOG_PATH}`. Vui lòng kiểm tra lại ổ đĩa `D:\\LOG` hoặc kết nối mạng.")
@@ -4573,6 +4569,17 @@ elif selected_menu == NAV_OPTIONS[8]:
             st.markdown("---")
             df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
             df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
+
+            if not df_alarms_cur.empty:
+                if "Category_Code" not in df_alarms_cur.columns:
+                    df_alarms_cur["Category_Code"] = df_alarms_cur["Mã Lỗi"].apply(
+                        lambda x: HUAWEI_ALARM_REGISTRY.get(int(x), {}).get("category", "SYSTEM_OP") if pd.notnull(x) else "SYSTEM_OP"
+                    )
+                if "Nhóm Nguyên Nhân" not in df_alarms_cur.columns:
+                    df_alarms_cur["Nhóm Nguyên Nhân"] = df_alarms_cur["Mã Lỗi"].apply(
+                        lambda x: HUAWEI_ALARM_REGISTRY.get(int(x), {}).get("category_vi", "🛠️ Vận Hành & Khác") if pd.notnull(x) else "🛠️ Vận Hành & Khác"
+                    )
+
             health_info = calculate_inverter_health_score(df_alarms_cur, cur_inv)
 
             crit_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Khẩn cấp']) if not df_alarms_cur.empty else 0

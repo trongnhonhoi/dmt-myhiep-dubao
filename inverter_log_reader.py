@@ -336,14 +336,32 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
             "prescription": "Biến tần hoạt động hoàn toàn ổn định, không ghi nhận bất kỳ sự cố nào trong nhật ký. Tiếp tục duy trì kiểm tra định kỳ."
         }
 
+    df_calc = df_alarms.copy()
+
+    # Đảm bảo các cột cần thiết luôn tồn tại
+    if "Mã Lỗi" not in df_calc.columns:
+        df_calc["Mã Lỗi"] = 0
+
+    if "Category_Code" not in df_calc.columns:
+        df_calc["Category_Code"] = df_calc["Mã Lỗi"].apply(
+            lambda x: HUAWEI_ALARM_REGISTRY.get(int(x), {}).get("category", "SYSTEM_OP") if pd.notnull(x) else "SYSTEM_OP"
+        )
+
+    if "Nhóm Nguyên Nhân" not in df_calc.columns:
+        df_calc["Nhóm Nguyên Nhân"] = df_calc["Mã Lỗi"].apply(
+            lambda x: HUAWEI_ALARM_REGISTRY.get(int(x), {}).get("category_vi", "🛠️ Vận Hành & Khác") if pd.notnull(x) else "🛠️ Vận Hành & Khác"
+        )
+
+    if "Thời Điểm Kết Thúc" not in df_calc.columns:
+        df_calc["Thời Điểm Kết Thúc"] = "N/A"
+
     # Đếm số lượng sự cố theo từng nhóm nguyên nhân
-    for _, row in df_alarms.iterrows():
-        cat = row.get("Category_Code", "SYSTEM_OP")
+    for cat in df_calc["Category_Code"]:
         if cat in cat_counts:
             cat_counts[cat] += 1
 
     # Kiểm tra cảnh báo còn Active (Đang diễn ra)
-    active_alarms = df_alarms[df_alarms["Thời Điểm Kết Thúc"] == "Đang Diễn Ra"]
+    active_alarms = df_calc[df_calc["Thời Điểm Kết Thúc"] == "Đang Diễn Ra"]
     if not active_alarms.empty:
         n_act = len(active_alarms)
         pen_act = min(30.0, n_act * 15.0)
@@ -355,7 +373,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
         })
 
     # 1. Trừ điểm cho lỗi phần cứng (HARDWARE: 2064, 2065, 2051, 2038)
-    hw_crit = df_alarms[df_alarms["Mã Lỗi"].isin([2064, 2051, 2038])]
+    hw_crit = df_calc[df_calc["Mã Lỗi"].isin([2064, 2051, 2038])]
     if not hw_crit.empty:
         pen_hw = min(35.0, len(hw_crit) * 10.0)
         base_score -= pen_hw
@@ -365,7 +383,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
             "severity": "CRITICAL"
         })
 
-    fan_faults = df_alarms[df_alarms["Mã Lỗi"] == 2065]
+    fan_faults = df_calc[df_calc["Mã Lỗi"] == 2065]
     if not fan_faults.empty:
         pen_fan = min(15.0, len(fan_faults) * 5.0)
         base_score -= pen_fan
@@ -376,7 +394,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
         })
 
     # 2. Trừ điểm cho lỗi DC Field (2061 Riso, 2062 RCD, 2002 AFCI, 2001 Quá áp DC)
-    dc_crit = df_alarms[df_alarms["Mã Lỗi"].isin([2061, 2062, 2002, 2001])]
+    dc_crit = df_calc[df_calc["Mã Lỗi"].isin([2061, 2062, 2002, 2001])]
     if not dc_crit.empty:
         pen_dc = min(25.0, len(dc_crit) * 5.0)
         base_score -= pen_dc
@@ -387,7 +405,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
         })
 
     # 3. Trừ điểm cho Backfeed hoặc Quá nhiệt (2012, 2063)
-    backfeed_temp = df_alarms[df_alarms["Mã Lỗi"].isin([2012, 2063])]
+    backfeed_temp = df_calc[df_calc["Mã Lỗi"].isin([2012, 2063])]
     if not backfeed_temp.empty:
         pen_bt = min(12.0, len(backfeed_temp) * 2.0)
         base_score -= pen_bt
@@ -398,7 +416,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
         })
 
     # 4. Trừ điểm nhẹ cho dao động lưới (GRID_TBA: 2032, 2034, 2031, v.v.)
-    grid_events = df_alarms[df_alarms["Category_Code"] == "GRID_TBA"]
+    grid_events = df_calc[df_calc["Category_Code"] == "GRID_TBA"]
     if not grid_events.empty:
         pen_gr = min(8.0, len(grid_events) * 0.5)
         base_score -= pen_gr
@@ -447,6 +465,7 @@ def calculate_inverter_health_score(df_alarms: Optional[pd.DataFrame] = None, cu
         "category_counts": cat_counts,
         "prescription": "\n\n".join(prescriptions)
     }
+
 
 
 
