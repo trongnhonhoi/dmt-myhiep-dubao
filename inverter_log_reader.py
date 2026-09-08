@@ -1369,6 +1369,179 @@ class HuaweiInverterLogParser:
         }
 
 
+def benchmark_inverter_fleet(log_parser: 'HuaweiInverterLogParser', force_reload: bool = False) -> Dict[str, Any]:
+    """
+    Động cơ So Sánh Hiệu Suất Liên Inverter (Peer-to-Peer Fleet Benchmark Engine)
+    Phân tích đối chuẩn hiệu năng, điểm sức khỏe kỹ thuật IHI, sản lượng điện năng (kWh)
+    và nhận diện hao hụt sản lượng âm thầm (Silent Yield Loss) trên toàn bộ dàn Biến tần ĐMT Mỹ Hiệp.
+    """
+    inverters = log_parser.scan_inverter_log_folders(force_reload=force_reload)
+    if not inverters:
+        return {
+            "df_fleet": pd.DataFrame(),
+            "df_substations": pd.DataFrame(),
+            "top_performers": [],
+            "underperformers": [],
+            "summary": {}
+        }
+
+    fleet_records = []
+    
+    for inv in inverters:
+        fld = inv["folder_path"]
+        df_alarms = log_parser.get_inverter_alarm_history(fld)
+        df_tel = log_parser.get_inverter_telemetry_history(fld)
+        health = calculate_inverter_health_score(df_alarms, inv)
+        
+        # Inverter display name
+        inv_name = inv["inverter_id"]
+        if "Chưa rõ" in inv_name or not inv_name:
+            inv_name = f"INV-{inv['esn'][-6:]}"
+            
+        # Telemetry metrics
+        energy_kwh = 0.0
+        avg_pdc = 0.0
+        max_pdc = 0.0
+        max_igbt = 45.0
+        avg_igbt = 40.0
+        max_cab = 42.0
+        avg_grid_u = 800.0
+        
+        if not df_tel.empty:
+            if "Công Suất DC (kW)" in df_tel.columns:
+                avg_pdc = float(df_tel["Công Suất DC (kW)"].mean())
+                max_pdc = float(df_tel["Công Suất DC (kW)"].max())
+                energy_kwh = float(df_tel["Công Suất DC (kW)"].sum() * (5.0 / 60.0))
+            if "Nhiệt Độ Khối IGBT (°C)" in df_tel.columns:
+                max_igbt = float(df_tel["Nhiệt Độ Khối IGBT (°C)"].max())
+                avg_igbt = float(df_tel["Nhiệt Độ Khối IGBT (°C)"].mean())
+            if "Nhiệt Độ Vỏ Tủ (°C)" in df_tel.columns:
+                max_cab = float(df_tel["Nhiệt Độ Vỏ Tủ (°C)"].max())
+            if "Điện Áp Lưới U_ab (V)" in df_tel.columns:
+                avg_grid_u = float(df_tel["Điện Áp Lưới U_ab (V)"].mean())
+
+        # Alarm breakdown
+        n_crit = len(df_alarms[df_alarms["Mức Độ"] == "Khẩn cấp"]) if not df_alarms.empty else 0
+        n_hw = health["category_counts"].get("HARDWARE", 0)
+        n_dc = health["category_counts"].get("DC_FIELD", 0)
+        n_grid = health["category_counts"].get("GRID_TBA", 0)
+
+        fleet_records.append({
+            "inverter_id": inv_name,
+            "esn": inv["esn"],
+            "station_tag": inv["station_tag"],
+            "firmware": inv.get("firmware_version", "V300"),
+            "export_time": inv.get("export_time", "N/A"),
+            "ihi_score": health["score"],
+            "rating": health["rating"],
+            "badge": health["badge"],
+            "color": health["color"],
+            "total_alarms": len(df_alarms),
+            "crit_alarms": n_crit,
+            "hw_alarms": n_hw,
+            "dc_alarms": n_dc,
+            "grid_alarms": n_grid,
+            "max_pdc_kw": round(max_pdc, 1),
+            "avg_pdc_kw": round(avg_pdc, 1),
+            "energy_kwh": round(energy_kwh, 1),
+            "max_igbt_temp": round(max_igbt, 1),
+            "avg_igbt_temp": round(avg_igbt, 1),
+            "max_cab_temp": round(max_cab, 1),
+            "avg_grid_u": round(avg_grid_u, 1),
+            "folder_path": fld
+        })
+
+    df_fleet = pd.DataFrame(fleet_records)
+    if df_fleet.empty:
+        return {"df_fleet": df_fleet, "df_substations": pd.DataFrame(), "top_performers": [], "underperformers": [], "summary": {}}
+
+    # Benchmark against Substation Leader and Fleet Leader
+    st_leaders = df_fleet.groupby("station_tag")["energy_kwh"].transform("max")
+    st_max_pdc = df_fleet.groupby("station_tag")["max_pdc_kw"].transform("max")
+    
+    loss_pct = []
+    loss_kwh = []
+    silent_diag = []
+    
+    for idx, row in df_fleet.iterrows():
+        lead_e = st_leaders.iloc[idx]
+        inv_e = row["energy_kwh"]
+        lead_p = st_max_pdc.iloc[idx]
+        inv_p = row["max_pdc_kw"]
+        
+        if lead_e > 10.0:
+            diff_pct = max(0.0, ((lead_e - inv_e) / lead_e) * 100.0)
+            diff_kwh = max(0.0, lead_e - inv_e)
+        elif lead_p > 10.0:
+            diff_pct = max(0.0, ((lead_p - inv_p) / lead_p) * 100.0)
+            diff_kwh = max(0.0, (lead_p - inv_p) * 50.0)
+        else:
+            diff_pct = 0.0
+            diff_kwh = 0.0
+
+        # Silent loss diagnosis
+        if diff_pct >= 15.0 or row["ihi_score"] < 70.0:
+            if row["max_igbt_temp"] >= 70.0 or row["hw_alarms"] > 0:
+                d_reason = "🔥 Hao hụt do quá nhiệt IGBT / Tự động giảm tải Derating"
+            elif row["dc_alarms"] > 0:
+                d_reason = "☀️ Hao hụt do hở mạch DC / Đứt cầu chì / Suy hao cách điện"
+            elif row["grid_alarms"] > 0:
+                d_reason = "🌐 Hao hụt do gián đoạn lưới điện AC / Sụt áp trạm nâng"
+            else:
+                d_reason = "⚠️ Suy giảm sản lượng âm thầm - Nghi ngờ bám bụi dày hoặc che bóng"
+        elif diff_pct >= 5.0:
+            d_reason = "🟡 Độ lệch hiệu suất nhẹ so với Inverter dẫn đầu trạm"
+        else:
+            d_reason = "🟢 Hiệu suất tối ưu - Thuộc nhóm Inverter dẫn đầu trạm"
+
+        loss_pct.append(round(diff_pct, 1))
+        loss_kwh.append(round(diff_kwh, 1))
+        silent_diag.append(d_reason)
+
+    df_fleet["loss_pct"] = loss_pct
+    df_fleet["loss_kwh"] = loss_kwh
+    df_fleet["loss_diagnosis"] = silent_diag
+
+    # Ranking
+    df_fleet.sort_values(by=["ihi_score", "energy_kwh"], ascending=[False, False], inplace=True)
+    df_fleet.reset_index(drop=True, inplace=True)
+    df_fleet["rank"] = df_fleet.index + 1
+
+    # Substation Stats Summary
+    substation_stats = df_fleet.groupby("station_tag").agg(
+        total_inverters=("inverter_id", "count"),
+        avg_ihi=("ihi_score", "mean"),
+        total_energy_kwh=("energy_kwh", "sum"),
+        total_loss_kwh=("loss_kwh", "sum"),
+        avg_max_pdc=("max_pdc_kw", "mean"),
+        max_igbt=("max_igbt_temp", "max")
+    ).reset_index()
+
+    for col in ["avg_ihi", "total_energy_kwh", "total_loss_kwh", "avg_max_pdc", "max_igbt"]:
+        if col in substation_stats.columns:
+            substation_stats[col] = substation_stats[col].round(1)
+
+    top_performers = df_fleet.head(3).to_dict(orient="records")
+    underperformers = df_fleet[df_fleet["loss_pct"] > 5.0].tail(5).to_dict(orient="records")
+    if not underperformers:
+        underperformers = df_fleet.tail(2).to_dict(orient="records")
+
+    return {
+        "df_fleet": df_fleet,
+        "df_substations": substation_stats,
+        "top_performers": top_performers,
+        "underperformers": underperformers,
+        "summary": {
+            "total_inverters": len(df_fleet),
+            "avg_fleet_ihi": round(df_fleet["ihi_score"].mean(), 1),
+            "total_fleet_energy_kwh": round(df_fleet["energy_kwh"].sum(), 1),
+            "total_fleet_loss_kwh": round(df_fleet["loss_kwh"].sum(), 1),
+            "max_fleet_pdc_kw": round(df_fleet["max_pdc_kw"].max(), 1),
+            "highest_igbt_temp": round(df_fleet["max_igbt_temp"].max(), 1)
+        }
+    }
+
+
 def export_inverter_log_to_excel(
     inv_meta: Dict[str, Any],
     df_alarms: pd.DataFrame,

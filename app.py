@@ -79,6 +79,7 @@ from inverter_log_reader import (
     export_inverter_log_to_excel,
     calculate_inverter_health_score,
     analyze_failure_risks_and_maintenance,
+    benchmark_inverter_fleet,
     DEFAULT_LOG_PATH,
     HUAWEI_ALARM_REGISTRY
 )
@@ -4566,12 +4567,13 @@ elif selected_menu == NAV_OPTIONS[8]:
         if not cur_inv:
             st.warning("⚠️ Chưa phát hiện thư mục nhật ký Inverter nào trong `D:\\LOG`.")
         else:
-            # 1. Trích xuất thông tin cảnh báo, điện học, vận hành và I-V Curve
+            # 1. Trích xuất thông tin cảnh báo, điện học, vận hành, I-V Curve và Đối chuẩn Fleet
             st.markdown("---")
             df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
             df_telemetry_cur = log_parser.get_inverter_5min_telemetry(cur_inv['folder_path'])
             df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
             iv_data_cur = log_parser.get_inverter_iv_curves(cur_inv['folder_path'])
+            benchmark_data = benchmark_inverter_fleet(log_parser)
 
             if not df_alarms_cur.empty:
                 if "Category_Code" not in df_alarms_cur.columns:
@@ -4691,16 +4693,18 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             st.markdown("---")
 
-            # 7 Sub-Tabs phân tích chuyên sâu
+            # 8 Sub-Tabs phân tích chuyên sâu
             n_iv_curves = len(iv_data_cur.get('curves', []))
-            t_alarm, t_telemetry, t_iv, t_risk, t_run, t_protect, t_excel = st.tabs([
+            n_fleet_invs = len(benchmark_data.get('df_fleet', []))
+            t_alarm, t_telemetry, t_iv, t_bench, t_risk, t_run, t_protect, t_excel = st.tabs([
                 f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
                 f"📈 2. Dữ Liệu Điện Học & Hộp Đen ({len(df_telemetry_cur):,} Chu Kỳ 5P)",
                 f"⚡ 3. Chẩn Đoán Đặc Tuyến I-V ({n_iv_curves} Chuỗi PV)",
-                "🛠️ 4. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
-                f"📜 5. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
-                "🛡️ 6. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
-                "📥 7. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 6 Sheet)"
+                f"📊 4. So Sánh Hiệu Suất Peer-to-Peer ({n_fleet_invs} Inverters)",
+                "🛠️ 5. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
+                f"📜 6. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 7. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 8. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 6 Sheet)"
             ])
 
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
@@ -5126,7 +5130,165 @@ elif selected_menu == NAV_OPTIONS[8]:
                           - *Hành động O&M*: Lên kế hoạch rửa pin bằng xe cơ giới hoặc robot rửa pin chuyên dụng.
                         """)
 
-            # --- SUBTAB 4: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
+            # --- SUBTAB 4: SO SÁNH HIỆU SUẤT LIÊN INVERTER (PEER-TO-PEER BENCHMARK) ---
+            with t_bench:
+                st.markdown(r"""
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #10B981;">
+                    <div style="font-size: 1.15rem; font-weight: 750; color: #10B981; margin-bottom: 4px;">
+                        📊 ĐỐI CHUẨN HIỆU SUẤT LIÊN INVERTER & PHÁT HIỆN HAO HỤT ÂM THẦM (PEER-TO-PEER BENCHMARK)
+                    </div>
+                    <div style="font-size: 0.85rem; color: #CBD5E1;">
+                        Phân tích đối chuẩn tương quan giữa các Inverter trong cùng trạm và toàn nhà máy (229 Inverter / 7 Trạm S1–S7). Tự động tìm ra các Inverter phát yếu, bị giảm tải do quá nhiệt (Derating) hoặc suy hao chuỗi mà không phát sinh mã lỗi cảnh báo trực tiếp.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                df_fleet_all = benchmark_data.get('df_fleet', pd.DataFrame())
+                df_sub_stats = benchmark_data.get('df_substations', pd.DataFrame())
+                fleet_stats = benchmark_data.get('summary', {})
+                top_p = benchmark_data.get('top_performers', [])
+                under_p = benchmark_data.get('underperformers', [])
+
+                if df_fleet_all.empty:
+                    st.warning("⚠️ Chưa có dữ liệu đối chuẩn Inverter. Vui lòng quét thư mục `D:\\LOG`.")
+                else:
+                    # 4 Thẻ KPI Đối Chuẩn Toàn Nhà Máy
+                    best_inv_lbl = top_p[0]['inverter_id'] if top_p else "N/A"
+                    best_inv_kwh = f"{top_p[0]['energy_kwh']:,.1f} kWh" if top_p else "N/A"
+                    worst_inv_lbl = under_p[0]['inverter_id'] if under_p else "N/A"
+                    worst_loss_pct = f"-{under_p[0]['loss_pct']:.1f}%" if under_p else "0%"
+
+                    col_bm1, col_bm2, col_bm3, col_bm4 = st.columns(4)
+                    with col_bm1:
+                        st.metric("🏆 Inverter Dẫn Đầu Hiệu Suất", best_inv_lbl, delta=best_inv_kwh)
+                    with col_bm2:
+                        st.metric("📉 Inverter Cần Chú Ý O&M Nhất", worst_inv_lbl, delta=worst_loss_pct, delta_color="inverse")
+                    with col_bm3:
+                        st.metric("🩺 Điểm Sức Khỏe TB Dàn Máy", f"{fleet_stats.get('avg_fleet_ihi', 0):.1f} / 100", delta="IHI Index")
+                    with col_bm4:
+                        st.metric("💰 Tổng Thất Thoát Ước Tính", f"{fleet_stats.get('total_fleet_loss_kwh', 0):,.1f} kWh", delta="So với Leader")
+
+                    st.markdown("---")
+
+                    # THẺ ĐỐI CHUẨN RIÊNG CHO INVERTER ĐANG CHỌN (cur_inv)
+                    cur_match = df_fleet_all[df_fleet_all['esn'] == cur_inv['esn']]
+                    if not cur_match.empty:
+                        c_row = cur_match.iloc[0]
+                        st.markdown(f"""
+                        <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; border: 1px solid #334155; border-left: 5px solid {c_row['color']};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 6px;">
+                                <div style="font-size: 1.05rem; font-weight: 750; color: #F8FAFC;">
+                                    📍 Vị Trí Đối Chuẩn Của Inverter Đang Chọn: <b>{c_row['inverter_id']}</b> ({c_row['station_tag']})
+                                </div>
+                                <div>
+                                    <span style="background: {c_row['color']}22; color: {c_row['color']}; border: 1px solid {c_row['color']}; padding: 3px 12px; border-radius: 15px; font-weight: 700; font-size: 0.85rem;">
+                                        Xếp Hạng #{c_row['rank']} / {len(df_fleet_all)} | {c_row['badge']} {c_row['rating']} (IHI: {c_row['ihi_score']:.1f})
+                                    </span>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; font-size: 0.85rem; color: #CBD5E1;">
+                                <div>⚡ Sản Lượng: <b>{c_row['energy_kwh']:,.1f} kWh</b></div>
+                                <div>📉 Hao Hụt So Với Leader: <b style="color: {'#10B981' if c_row['loss_pct'] < 5 else '#EF4444'};">-{c_row['loss_pct']:.1f}% ({c_row['loss_kwh']:,.1f} kWh)</b></div>
+                                <div>🌡️ Nhiệt Độ IGBT Max: <b>{c_row['max_igbt_temp']:.1f} °C</b></div>
+                                <div>🚨 Tổng Lỗi Ghi Nhận: <b>{c_row['total_alarms']} lỗi</b></div>
+                            </div>
+                            <div style="margin-top: 8px; font-size: 0.83rem; color: #94A3B8;">
+                                🔎 <b>Chẩn đoán hiệu suất:</b> <span style="color: #F1F5F9;">{c_row['loss_diagnosis']}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # BIỂU ĐỒ SO SÁNH ĐA CHIỀU
+                    col_bm_ch1, col_bm_ch2 = st.columns([1.7, 1.3])
+                    with col_bm_ch1:
+                        # Biểu đồ so sánh sản lượng & điểm IHI giữa các Inverter
+                        fig_fleet_bar = px.bar(
+                            df_fleet_all,
+                            x="inverter_id",
+                            y="energy_kwh",
+                            color="ihi_score",
+                            color_continuous_scale=["#EF4444", "#F59E0B", "#38BDF8", "#10B981"],
+                            title="<b>SO SÁNH SẢN LƯỢNG (kWh) & ĐIỂM SỨC KHỎE (IHI) GIỮA CÁC INVERTER</b>",
+                            labels={"inverter_id": "Mã Inverter", "energy_kwh": "Sản Lượng (kWh)", "ihi_score": "Điểm IHI"},
+                            text="energy_kwh"
+                        )
+                        fig_fleet_bar.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                        fig_fleet_bar.update_layout(
+                            template="plotly_white",
+                            height=380,
+                            margin=dict(t=45, b=20, l=10, r=10),
+                            coloraxis_colorbar=dict(title="Điểm IHI")
+                        )
+                        st.plotly_chart(fig_fleet_bar, use_container_width=True)
+
+                    with col_bm_ch2:
+                        # Biểu đồ Scatter: Nhiệt độ IGBT vs Sản Lượng vs Điểm IHI
+                        fig_fleet_scatter = px.scatter(
+                            df_fleet_all,
+                            x="max_igbt_temp",
+                            y="energy_kwh",
+                            size="total_alarms",
+                            color="rating",
+                            hover_name="inverter_id",
+                            title="<b>TƯƠNG QUAN NHIỆT ĐỘ IGBT vs SẢN LƯỢNG ĐIỆN</b>",
+                            labels={"max_igbt_temp": "Nhiệt Độ IGBT Max (°C)", "energy_kwh": "Sản Lượng (kWh)", "rating": "Đánh Giá"},
+                            color_discrete_map={
+                                "Rất Tốt (Excellent)": "#10B981",
+                                "Tốt (Good)": "#38BDF8",
+                                "Cần Bảo Trì (Attention)": "#F59E0B",
+                                "Nguy Cơ Cao (High Risk)": "#EF4444"
+                            }
+                        )
+                        fig_fleet_scatter.update_layout(
+                            template="plotly_white",
+                            height=380,
+                            margin=dict(t=45, b=20, l=10, r=10),
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        st.plotly_chart(fig_fleet_scatter, use_container_width=True)
+
+                    # BẢNG XẾP HẠNG TOÀN DIỆN (LEADERBOARD)
+                    st.markdown("##### 📋 Bảng Đối Chuẩn & Xếp Hạng Hiệu Suất Toàn Dàn Biến Tần (Fleet Leaderboard):")
+                    
+                    col_flt_f1, col_flt_f2 = st.columns([1.5, 2.5])
+                    with col_flt_f1:
+                        st_filter_list = ["Tất Cả Trạm"] + sorted(list(df_fleet_all['station_tag'].unique()))
+                        sel_st_bench = st.selectbox("Lọc theo trạm biến áp:", st_filter_list, index=0, key="sel_st_bench_flt")
+                    with col_flt_f2:
+                        kw_bench = st.text_input("🔍 Tìm kiếm Inverter / ESN / Chẩn đoán:", key="txt_bench_kw")
+
+                    df_fleet_display = df_fleet_all.copy()
+                    if sel_st_bench != "Tất Cả Trạm":
+                        df_fleet_display = df_fleet_display[df_fleet_display['station_tag'] == sel_st_bench]
+                    if kw_bench:
+                        kw_b = kw_bench.lower()
+                        df_fleet_display = df_fleet_display[
+                            df_fleet_display['inverter_id'].str.lower().str.contains(kw_b) |
+                            df_fleet_display['esn'].str.lower().str.contains(kw_b) |
+                            df_fleet_display['loss_diagnosis'].str.lower().str.contains(kw_b)
+                        ]
+
+                    show_bench_cols = [
+                        'rank', 'inverter_id', 'esn', 'station_tag', 'ihi_score', 'rating',
+                        'energy_kwh', 'loss_pct', 'loss_kwh', 'max_igbt_temp', 'total_alarms', 'loss_diagnosis'
+                    ]
+                    rename_bench_map = {
+                        'rank': 'Hạng',
+                        'inverter_id': 'Mã Inverter',
+                        'esn': 'Số Serial (ESN)',
+                        'station_tag': 'Trạm',
+                        'ihi_score': 'Điểm IHI',
+                        'rating': 'Đánh Giá',
+                        'energy_kwh': 'Sản Lượng (kWh)',
+                        'loss_pct': 'Hao Hụt (%)',
+                        'loss_kwh': 'Thất Thoát (kWh)',
+                        'max_igbt_temp': 'IGBT Max (°C)',
+                        'total_alarms': 'Tổng Lỗi',
+                        'loss_diagnosis': 'Chẩn Đoán Hao Hụt O&M'
+                    }
+                    st.dataframe(df_fleet_display[show_bench_cols].rename(columns=rename_bench_map), use_container_width=True, height=380, hide_index=True)
+
+            # --- SUBTAB 5: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
             with t_risk:
                 st.markdown(r"""
                 <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
