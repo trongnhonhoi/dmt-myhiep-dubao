@@ -4566,11 +4566,12 @@ elif selected_menu == NAV_OPTIONS[8]:
         if not cur_inv:
             st.warning("⚠️ Chưa phát hiện thư mục nhật ký Inverter nào trong `D:\\LOG`.")
         else:
-            # 1. Trích xuất thông tin cảnh báo và vận hành
+            # 1. Trích xuất thông tin cảnh báo, điện học, vận hành và I-V Curve
             st.markdown("---")
             df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
             df_telemetry_cur = log_parser.get_inverter_5min_telemetry(cur_inv['folder_path'])
             df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
+            iv_data_cur = log_parser.get_inverter_iv_curves(cur_inv['folder_path'])
 
             if not df_alarms_cur.empty:
                 if "Category_Code" not in df_alarms_cur.columns:
@@ -4690,14 +4691,16 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             st.markdown("---")
 
-            # 6 Sub-Tabs phân tích chuyên sâu
-            t_alarm, t_telemetry, t_risk, t_run, t_protect, t_excel = st.tabs([
+            # 7 Sub-Tabs phân tích chuyên sâu
+            n_iv_curves = len(iv_data_cur.get('curves', []))
+            t_alarm, t_telemetry, t_iv, t_risk, t_run, t_protect, t_excel = st.tabs([
                 f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
                 f"📈 2. Dữ Liệu Điện Học & Hộp Đen ({len(df_telemetry_cur):,} Chu Kỳ 5P)",
-                "🛠️ 3. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
-                f"📜 4. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
-                "🛡️ 5. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
-                "📥 6. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 5 Sheet)"
+                f"⚡ 3. Chẩn Đoán Đặc Tuyến I-V ({n_iv_curves} Chuỗi PV)",
+                "🛠️ 4. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
+                f"📜 5. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 6. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 7. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 6 Sheet)"
             ])
 
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
@@ -4958,7 +4961,172 @@ elif selected_menu == NAV_OPTIONS[8]:
                         ]
                         st.dataframe(df_tel_plot[display_tel_cols].sort_values(by="Thời Gian", ascending=False), use_container_width=True, height=350, hide_index=True)
 
-            # --- SUBTAB 3: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
+            # --- SUBTAB 3: CHẨN ĐOÁN ĐẶC TUYẾN I-V & P-V (iv_data.emap) ---
+            with t_iv:
+                st.markdown(r"""
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #38BDF8;">
+                    <div style="font-size: 1.15rem; font-weight: 750; color: #38BDF8; margin-bottom: 4px;">
+                        ⚡ CHẨN ĐOÁN THÔNG MINH ĐẶC TUYẾN I-V & P-V TOÀN DIỆN (iv_data.emap)
+                    </div>
+                    <div style="font-size: 0.85rem; color: #CBD5E1;">
+                        Giải mã trực tiếp 18 đường đặc tuyến I-V quét từ bộ nhớ biến tần Huawei SUN2000-175KTL-H0. Tự động phát hiện 4 dạng suy thoái điển hình: Che bóng (Shading), đứt Diode Bypass, hở mạch MC4 và suy giảm hệ số lấp đầy Fill Factor (FF).
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                curves_list = iv_data_cur.get('curves', [])
+                df_iv_sum = iv_data_cur.get('df_summary', pd.DataFrame())
+                iv_stats = iv_data_cur.get('summary', {})
+
+                if not curves_list:
+                    st.warning("⚠️ Không tìm thấy hoặc chưa có dữ liệu quét đặc tuyến trong tệp `iv_data.emap` của Biến tần này.")
+                else:
+                    # 5 Thẻ thông số KPI tổng quan I-V
+                    kpi_iv1, kpi_iv2, kpi_iv3, kpi_iv4, kpi_iv5 = st.columns(5)
+                    with kpi_iv1:
+                        st.metric("📊 Tổng Chuỗi Đã Quét", f"{iv_stats.get('total_strings', len(curves_list))} Chuỗi", delta="18 Strings / 9 MPPT")
+                    with kpi_iv2:
+                        st.metric("🟢 Chuỗi Hoạt Động Tốt", f"{iv_stats.get('healthy_count', 0)} Chuỗi", delta="Đặc tuyến lý tưởng")
+                    with kpi_iv3:
+                        st.metric("🟡 Chuỗi Cần Lưu Ý", f"{iv_stats.get('warning_count', 0)} Chuỗi", delta="Che bóng / Bám bụi")
+                    with kpi_iv4:
+                        st.metric("⚡ Điện Áp Hở Mạch TB Voc", f"{iv_stats.get('avg_voc', 0):.1f} V", delta="Định danh: 1220V")
+                    with kpi_iv5:
+                        st.metric("📐 Hệ Số Lấp Đầy TB (FF)", f"{iv_stats.get('avg_ff', 0):.1f} %", delta="Tiêu chuẩn > 75%")
+
+                    st.markdown("---")
+
+                    # Bộ lọc lựa chọn chuỗi hiển thị đồ thị
+                    col_iv_ctl1, col_iv_ctl2 = st.columns([1.5, 2.5])
+                    with col_iv_ctl1:
+                        view_mode = st.radio(
+                            "Chế độ hiển thị đặc tuyến:",
+                            ["Tất cả 18 Chuỗi PV", "Lọc theo từng MPPT (2 Chuỗi)", "Tùy chọn chuỗi cụ thể"],
+                            index=0,
+                            key="sel_iv_view_mode",
+                            horizontal=False
+                        )
+                    with col_iv_ctl2:
+                        if view_mode == "Lọc theo từng MPPT (2 Chuỗi)":
+                            sel_mppt = st.selectbox("Chọn MPPT cần kiểm tra:", [f"MPPT {i}" for i in range(1, 10)], index=0, key="sel_mppt_iv")
+                            selected_curves = [c for c in curves_list if c["mppt_name"] == sel_mppt]
+                        elif view_mode == "Tùy chọn chuỗi cụ thể":
+                            all_str_names = [c["string_id"] for c in curves_list]
+                            sel_strs = st.multiselect("Chọn danh sách chuỗi PV cần soi đặc tuyến:", all_str_names, default=all_str_names[:4], key="mul_sel_str_iv")
+                            selected_curves = [c for c in curves_list if c["string_id"] in sel_strs]
+                        else:
+                            selected_curves = curves_list
+
+                    if not selected_curves:
+                        st.info("Vui lòng chọn ít nhất một chuỗi PV để hiển thị đồ thị.")
+                    else:
+                        # 2 Đồ thị Plotly: I-V Curve và P-V Curve
+                        col_chart_iv1, col_chart_iv2 = st.columns(2)
+
+                        # Bảng màu cho 18 chuỗi
+                        iv_colors = [
+                            "#0284C7", "#0EA5E9", "#10B981", "#059669", "#F59E0B", "#D97706",
+                            "#EF4444", "#DC2626", "#8B5CF6", "#7C3AED", "#EC4899", "#DB2777",
+                            "#14B8A6", "#0D9488", "#F97316", "#EA580C", "#6366F1", "#4F46E5"
+                        ]
+
+                        with col_chart_iv1:
+                            fig_iv = go.Figure()
+                            for c_item in selected_curves:
+                                str_num = c_item["string_num"]
+                                c_color = iv_colors[(str_num - 1) % len(iv_colors)]
+                                fig_iv.add_trace(go.Scatter(
+                                    x=c_item["v_pts"],
+                                    y=c_item["i_pts"],
+                                    mode="lines",
+                                    name=f"{c_item['string_id']} ({c_item['mppt_name']})",
+                                    line=dict(color=c_color, width=2.0),
+                                    hovertemplate=f"<b>{c_item['string_id']}</b><br>Điện áp: %{{x:.1f}} V<br>Dòng điện: %{{y:.2f}} A<extra></extra>"
+                                ))
+                                fig_iv.add_trace(go.Scatter(
+                                    x=[c_item["vmpp"]],
+                                    y=[c_item["impp"]],
+                                    mode="markers",
+                                    name=f"MPP {c_item['string_id']}",
+                                    marker=dict(symbol="star", size=8, color=c_color),
+                                    showlegend=False,
+                                    hovertemplate=f"<b>Điểm MPP {c_item['string_id']}</b><br>Vmpp: {c_item['vmpp']:.1f} V<br>Impp: {c_item['impp']:.2f} A<br>Pmax: {c_item['pmax_kw']:.2f} kW<extra></extra>"
+                                ))
+
+                            fig_iv.update_layout(
+                                title="<b>ĐẶC TUYẾN DÒNG - ÁP I-V (CURRENT vs VOLTAGE)</b>",
+                                template="plotly_white",
+                                height=420,
+                                margin=dict(t=45, b=30, l=10, r=10),
+                                xaxis=dict(title="<b>Điện Áp Chuỗi V (Volt)</b>", range=[0, 1350]),
+                                yaxis=dict(title="<b>Dòng Điện Chuỗi I (Ampere)</b>"),
+                                hovermode="closest",
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            st.plotly_chart(fig_iv, use_container_width=True)
+
+                        with col_chart_iv2:
+                            fig_pv = go.Figure()
+                            for c_item in selected_curves:
+                                str_num = c_item["string_num"]
+                                c_color = iv_colors[(str_num - 1) % len(iv_colors)]
+                                fig_pv.add_trace(go.Scatter(
+                                    x=c_item["v_pts"],
+                                    y=c_item["p_pts"],
+                                    mode="lines",
+                                    name=f"{c_item['string_id']} ({c_item['mppt_name']})",
+                                    line=dict(color=c_color, width=2.0),
+                                    hovertemplate=f"<b>{c_item['string_id']}</b><br>Điện áp: %{{x:.1f}} V<br>Công suất: %{{y:.2f}} kW<extra></extra>"
+                                ))
+                                fig_pv.add_trace(go.Scatter(
+                                    x=[c_item["vmpp"]],
+                                    y=[c_item["pmax_kw"]],
+                                    mode="markers",
+                                    name=f"Pmax {c_item['string_id']}",
+                                    marker=dict(symbol="diamond", size=8, color=c_color),
+                                    showlegend=False,
+                                    hovertemplate=f"<b>Pmax {c_item['string_id']}</b>: {c_item['pmax_kw']:.2f} kW (tại {c_item['vmpp']:.1f} V)<extra></extra>"
+                                ))
+
+                            fig_pv.update_layout(
+                                title="<b>ĐẶC TUYẾN CÔNG SUẤT - ÁP P-V (POWER vs VOLTAGE)</b>",
+                                template="plotly_white",
+                                height=420,
+                                margin=dict(t=45, b=30, l=10, r=10),
+                                xaxis=dict(title="<b>Điện Áp Chuỗi V (Volt)</b>", range=[0, 1350]),
+                                yaxis=dict(title="<b>Công Suất Chuỗi P (kW)</b>"),
+                                hovermode="closest",
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            )
+                            st.plotly_chart(fig_pv, use_container_width=True)
+
+                    # BẢNG THỐNG KÊ CHI TIẾT 18 CHUỖI & CHẨN ĐOÁN
+                    st.markdown("##### 📋 Bảng Thống Kê Tham Số Điện Học & Kết Quả Chẩn Đoán Từng Chuỗi PV:")
+                    if not df_iv_sum.empty:
+                        st.dataframe(df_iv_sum, use_container_width=True, hide_index=True)
+
+                    # HƯỚNG DẪN KỸ THUẬT VỀ 4 DẠNG BIẾN DẠNG ĐẶC TUYẾN I-V
+                    with st.expander("📖 Sổ Tay Kỹ Thuật: Hướng Dẫn Chẩn Đoán 4 Dạng Bất Thường Đặc Tuyến I-V:", expanded=False):
+                        st.markdown(r"""
+                        - **1. Bậc Thang / Đa Đỉnh (Multi-Peak / Step Curve)**:
+                          - *Hiện tượng*: Đường cong I-V xuất hiện bậc gấp khúc (Knee) và đường P-V có từ 2 đỉnh công suất trở lên.
+                          - *Nguyên nhân*: Một số tấm pin trên chuỗi bị che bóng cục bộ (cây cỏ, bóng cọc, phân chim) hoặc Diode Bypass bị thông mạch bảo vệ.
+                          - *Hành động O&M*: Phát quang giàn pin, vệ sinh điểm che bóng và đo kiểm tra Diode hộp nối tấm pin.
+                        - **2. Độ dốc vùng Voc lớn (Độ dốc điện trở nối tiếp Rs tăng)**:
+                          - *Hiện tượng*: Đoạn dốc đi xuống gần điện áp $V_{\text{oc}}$ bị nghiêng nhiều thay vì dốc thẳng đứng.
+                          - *Nguyên nhân*: Điện trở nối tiếp $R_s$ tăng cao do lỏng đầu cosse MC4, tiếp xúc kém, hoặc tiết diện cáp DC dài suy hao.
+                          - *Hành động O&M*: Siết lại toàn bộ giắc MC4 bằng kìm chuyên dụng, dùng Camera nhiệt kiểm tra điểm phát nóng tại đầu nối.
+                        - **3. Độ dốc vùng Isc lớn (Độ dốc điện trở song song Rsh giảm)**:
+                          - *Hiện tượng*: Đoạn nằm ngang gần dòng ngắn mạch $I_{\text{sc}}$ bị dốc xuống thay vì nằm ngang phẳng.
+                          - *Nguyên nhân*: Điện trở cách điện song song $R_{\text{sh}}$ suy giảm do cell pin bị nứt vi mô (Micro-crack) hoặc rò điện do ẩm.
+                          - *Hành động O&M*: Đo cách điện Riso của chuỗi và dùng máy soi phát quang EL ban đêm nếu nghi ngờ nứt cell.
+                        - **4. Hệ số lấp đầy Fill Factor thấp (FF < 75%)**:
+                          - *Hiện tượng*: Diện tích dưới đường cong I-V bị thu hẹp đáng kể so với hình chữ nhật lý tưởng ($V_{\text{oc}} \times I_{\text{sc}}$).
+                          - *Nguyên nhân*: Tấm pin bám bụi đất dày lâu ngày hoặc suy thoái quang điện theo thời gian (PID / Aging).
+                          - *Hành động O&M*: Lên kế hoạch rửa pin bằng xe cơ giới hoặc robot rửa pin chuyên dụng.
+                        """)
+
+            # --- SUBTAB 4: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
             with t_risk:
                 st.markdown(r"""
                 <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
@@ -5035,7 +5203,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 else:
                     st.success("✅ Không có hạng mục nào cần bảo trì khẩn cấp. Tiếp tục duy trì quy trình kiểm tra định kỳ hàng tháng.")
 
-            # --- SUBTAB 4: NHẬT KÝ VẬN HÀNH RUN LOG ---
+            # --- SUBTAB 5: NHẬT KÝ VẬN HÀNH RUN LOG ---
             with t_run:
                 st.markdown(f"##### 📜 Nhật Ký Hoạt Động & Chu Kỳ Vận Hành (run_log.gz - {cur_inv['inverter_id']}):")
                 st.caption("Trích xuất chi tiết các lệnh điều khiển, trạng thái On/Off, chuyển đổi chế độ công suất và thông điệp truyền thông nội bộ.")
@@ -5060,7 +5228,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 display_cols_run = [c for c in ['Thời Gian', 'Phân Hệ', 'Module Hàm (File/Line)', 'Nội Dung Sự Kiện', 'Ý Nghĩa Kỹ Thuật'] if c in df_run_filtered.columns]
                 st.dataframe(df_run_filtered[display_cols_run], use_container_width=True, height=450, hide_index=True)
 
-            # --- SUBTAB 5: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
+            # --- SUBTAB 6: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:
                 st.markdown(r"""
                 <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
@@ -5094,14 +5262,16 @@ elif selected_menu == NAV_OPTIONS[8]:
                     ]
                     st.dataframe(df_prot[display_prot_cols], use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
+            # --- SUBTAB 7: XUẤT BÁO CÁO EXCEL ---
             with t_excel:
                 st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
-                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 5 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Khuyến Nghị Bảo Trì O&M & Vật Tư Chuẩn Bị**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
+                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 6 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Khuyến Nghị Bảo Trì O&M & Vật Tư Chuẩn Bị**, **Chẩn Đoán Đặc Tuyến I-V 18 Chuỗi PV (iv_data.emap)**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
 
                 col_x1, col_x2 = st.columns([2.5, 2.5])
                 with col_x1:
-                    excel_log_bytes = export_inverter_log_to_excel(cur_inv, df_alarms_cur, df_run_cur, df_telemetry_cur)
+                    excel_log_bytes = export_inverter_log_to_excel(
+                        cur_inv, df_alarms_cur, df_run_cur, df_telemetry_cur, iv_data_cur.get('df_summary')
+                    )
                     st.download_button(
                         label=f"📥 Tải Báo Cáo Log Inverter {cur_inv['inverter_id']} (Excel .xlsx)",
                         data=excel_log_bytes,
@@ -5111,7 +5281,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                         use_container_width=True
                     )
                 with col_x2:
-                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **Khuyến nghị bảo trì O&M** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_telemetry_cur)} dòng điện học 5 phút** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **Khuyến nghị O&M** + **Chẩn đoán {n_iv_curves} chuỗi I-V** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_telemetry_cur)} dòng điện học 5 phút** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
 
 
 

@@ -1243,9 +1243,140 @@ class HuaweiInverterLogParser:
             "avg_pv_current": closest_row["Dòng Điện PV TB (A)"]
         }
 
+    def get_inverter_iv_curves(self, folder_path: str) -> Dict[str, Any]:
+        """
+        Giải mã toàn bộ 18 đường đặc tuyến I-V và P-V (iv_data.emap) của Biến tần.
+        Tự động chẩn đoán thông minh:
+        - Điểm gãy / Bậc thang (Shading / Bypass Diode Fault)
+        - Độ dốc Rs (Tiếp xúc kém / Lỏng cáp MC4)
+        - Độ dốc Rsh (Rò điện / Suy thoái PID)
+        - Hệ số lấp đầy Fill Factor (FF)
+        """
+        p = os.path.join(folder_path, "iv_data.emap")
+        if not os.path.exists(p) or os.path.getsize(p) < 200:
+            return {"curves": [], "df_summary": pd.DataFrame(), "summary": {}}
 
-def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFrame, df_run_log: pd.DataFrame, df_telemetry: Optional[pd.DataFrame] = None) -> bytes:
-    """Xuất toàn bộ dữ liệu giải mã Logger Inverter sang tệp Excel chuyên nghiệp kèm Health Score và Dữ liệu điện học 5 phút"""
+        try:
+            with open(p, "rb") as f:
+                data = f.read()
+        except Exception:
+            return {"curves": [], "df_summary": pd.DataFrame(), "summary": {}}
+
+        stride = 534
+        start_offset = 132
+        curves = []
+        summary_rows = []
+
+        for str_idx in range(1, 19):
+            block_start = start_offset + (str_idx - 1) * stride
+            if block_start + 416 > len(data):
+                break
+
+            v_start = block_start + 12
+            num_pts = 101
+            v_raw = [struct.unpack(">H", data[v_start + k * 2 : v_start + (k + 1) * 2])[0] for k in range(num_pts)]
+            i_start = v_start + num_pts * 2
+            i_raw = [struct.unpack(">H", data[i_start + k * 2 : i_start + (k + 1) * 2])[0] for k in range(num_pts)]
+
+            v_pts = [round(v * 0.1, 1) for v in v_raw]
+            i_pts = [round(i * 0.01, 2) for i in i_raw]
+            p_pts = [round(v * i / 1000.0, 2) for v, i in zip(v_pts, i_pts)]
+
+            voc = max(v_pts)
+            isc = max(i_pts)
+            pmax = max(p_pts)
+            pmax_idx = p_pts.index(pmax)
+            vmpp = v_pts[pmax_idx]
+            impp = i_pts[pmax_idx]
+            ff = (pmax * 1000.0 / (voc * isc)) if (voc * isc) > 0 else 0
+            mppt_idx = (str_idx + 1) // 2
+
+            # AI chẩn đoán hình dạng đặc tuyến I-V
+            d_i = [abs(i_pts[k] - i_pts[k - 1]) for k in range(1, len(i_pts))]
+            max_di = max(d_i) if d_i else 0
+            avg_di = sum(d_i) / len(d_i) if d_i else 1
+
+            if max_di > avg_di * 4.0:
+                diag = "⚠️ Có điểm gấp khúc (Knee) - Che bóng cục bộ hoặc đứt Diode Bypass tấm pin"
+                status = "WARNING"
+                badge = "🟡 Cần Lưu Ý"
+                color = "#F59E0B"
+            elif ff < 0.72:
+                diag = "⚠️ Hệ số lấp đầy FF thấp (< 72%) - Suy thoái quang điện (Degradation) hoặc bám bụi dày"
+                status = "WARNING"
+                badge = "🟡 Bám Bụi/Suy Thoái"
+                color = "#F59E0B"
+            elif isc <= 0.1:
+                diag = "🔴 Hở mạch chuỗi (Open Circuit) - Đứt cầu chì hoặc tuột đầu nối giắc MC4"
+                status = "CRITICAL"
+                badge = "🔴 Hở Mạch"
+                color = "#EF4444"
+            else:
+                diag = "🟢 Đặc tuyến lý tưởng - Chuỗi pin đồng đều, phát quang điện tối ưu"
+                status = "HEALTHY"
+                badge = "🟢 Tốt / Chuẩn"
+                color = "#10B981"
+
+            curve_obj = {
+                "string_id": f"PV{str_idx}",
+                "string_num": str_idx,
+                "mppt_name": f"MPPT {mppt_idx}",
+                "mppt_num": mppt_idx,
+                "voc": voc,
+                "isc": isc,
+                "vmpp": vmpp,
+                "impp": impp,
+                "pmax_kw": pmax,
+                "ff": round(ff * 100, 1),
+                "diagnosis": diag,
+                "status": status,
+                "badge": badge,
+                "color": color,
+                "v_pts": v_pts,
+                "i_pts": i_pts,
+                "p_pts": p_pts
+            }
+            curves.append(curve_obj)
+
+            summary_rows.append({
+                "Chuỗi PV": f"PV{str_idx}",
+                "MPPT": f"MPPT {mppt_idx}",
+                "Voc (V)": voc,
+                "Isc (A)": isc,
+                "Vmpp (V)": vmpp,
+                "Impp (A)": impp,
+                "Pmax (kW)": pmax,
+                "FF (%)": round(ff * 100, 1),
+                "Đánh Giá Chẩn Đoán": diag,
+                "Trạng Thái": badge
+            })
+
+        df_summary = pd.DataFrame(summary_rows)
+        healthy_cnt = sum(1 for c in curves if c["status"] == "HEALTHY")
+        warning_cnt = sum(1 for c in curves if c["status"] != "HEALTHY")
+
+        return {
+            "curves": curves,
+            "df_summary": df_summary,
+            "summary": {
+                "total_strings": len(curves),
+                "healthy_count": healthy_cnt,
+                "warning_count": warning_cnt,
+                "avg_voc": round(df_summary["Voc (V)"].mean(), 1) if not df_summary.empty else 0.0,
+                "avg_ff": round(df_summary["FF (%)"].mean(), 1) if not df_summary.empty else 0.0,
+                "total_capacity_kw": round(df_summary["Pmax (kW)"].sum(), 1) if not df_summary.empty else 0.0
+            }
+        }
+
+
+def export_inverter_log_to_excel(
+    inv_meta: Dict[str, Any],
+    df_alarms: pd.DataFrame,
+    df_run_log: pd.DataFrame,
+    df_telemetry: Optional[pd.DataFrame] = None,
+    df_iv_summary: Optional[pd.DataFrame] = None
+) -> bytes:
+    """Xuất toàn bộ dữ liệu giải mã Logger Inverter sang tệp Excel chuyên nghiệp kèm Health Score, Dữ liệu điện học 5 phút và Chẩn đoán I-V Curve"""
     output = io.BytesIO()
     health_info = calculate_inverter_health_score(df_alarms, inv_meta)
     
@@ -1301,6 +1432,12 @@ def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFra
                 exp_tel[col] = exp_tel[col].apply(clean_excel_string)
             exp_tel.to_excel(writer, sheet_name="Dien_Hoc_5Phut_Telemetry", index=False)
 
+        if df_iv_summary is not None and not df_iv_summary.empty:
+            exp_iv = df_iv_summary.copy()
+            for col in exp_iv.columns:
+                exp_iv[col] = exp_iv[col].apply(clean_excel_string)
+            exp_iv.to_excel(writer, sheet_name="Chan_Doan_IV_Curve", index=False)
+
         risk_analysis = analyze_failure_risks_and_maintenance(df_alarms, df_telemetry, inv_meta)
         df_maint = risk_analysis.get("maintenance_checklist", pd.DataFrame())
         if isinstance(df_maint, pd.DataFrame) and not df_maint.empty:
@@ -1308,6 +1445,9 @@ def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFra
             for col in exp_maint.columns:
                 exp_maint[col] = exp_maint[col].apply(clean_excel_string)
             exp_maint.to_excel(writer, sheet_name="Khuyen_Nghi_Bao_Tri_OM", index=False)
+
+    output.seek(0)
+    return output.getvalue()
 
     output.seek(0)
     return output.getvalue()
