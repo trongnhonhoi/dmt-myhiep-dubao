@@ -1127,6 +1127,9 @@ class HuaweiInverterLogParser:
             df.reset_index(drop=True, inplace=True)
         return df
 
+    # Bí danh tiện ích
+    get_inverter_5min_telemetry = get_inverter_telemetry_history
+
     def get_fault_telemetry_blackbox(self, folder_path: str, fault_time_dt: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
         """
         Trích xuất Hộp Đen Điện Học (Black-Box Telemetry) tại thời điểm xảy ra sự cố.
