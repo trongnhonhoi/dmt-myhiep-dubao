@@ -27,6 +27,7 @@ import inverter_diagnostic_engine
 import meter_summary_engine
 import string_diagnostic_engine
 import scada_map_builder
+import inverter_log_reader
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -38,6 +39,7 @@ importlib.reload(inverter_diagnostic_engine)
 importlib.reload(meter_summary_engine)
 importlib.reload(string_diagnostic_engine)
 importlib.reload(scada_map_builder)
+importlib.reload(inverter_log_reader)
 
 from scada_map_builder import (
     create_scada_overview_figure,
@@ -75,6 +77,7 @@ from string_diagnostic_engine import (
 from inverter_log_reader import (
     HuaweiInverterLogParser,
     export_inverter_log_to_excel,
+    calculate_inverter_health_score,
     DEFAULT_LOG_PATH,
     HUAWEI_ALARM_REGISTRY
 )
@@ -4566,15 +4569,17 @@ elif selected_menu == NAV_OPTIONS[8]:
         if not cur_inv:
             st.warning("⚠️ Chưa phát hiện thư mục nhật ký Inverter nào trong `D:\\LOG`.")
         else:
-            # 5 Thẻ thông tin nhanh về Biến tần
+            # 1. Trích xuất thông tin cảnh báo và vận hành
             st.markdown("---")
             df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
             df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
+            health_info = calculate_inverter_health_score(df_alarms_cur, cur_inv)
 
             crit_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Khẩn cấp']) if not df_alarms_cur.empty else 0
             major_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Nghiêm trọng']) if not df_alarms_cur.empty else 0
             warn_alarms_count = len(df_alarms_cur[df_alarms_cur['Mức Độ'] == 'Cảnh báo']) if not df_alarms_cur.empty else 0
 
+            # 5 Thẻ thông tin nhanh về Biến tần
             kpi_l1, kpi_l2, kpi_l3, kpi_l4, kpi_l5 = st.columns(5)
             with kpi_l1:
                 st.metric("⚡ Biến Tần & Vị Trí", cur_inv['inverter_id'], delta=f"Trạm {cur_inv['station_tag']} Phù Mỹ")
@@ -4586,6 +4591,93 @@ elif selected_menu == NAV_OPTIONS[8]:
                 st.metric("🚨 Tổng Lịch Sử Sự Cố", f"{len(df_alarms_cur):,} Lỗi", delta=f"{crit_alarms_count} Khẩn cấp | {major_alarms_count} Nghiêm trọng")
             with kpi_l5:
                 st.metric("📦 Gói Nhật Ký Log", f"{cur_inv['file_count']} Tệp", delta=f"Xuất: {cur_inv['export_time']}")
+
+            # BẢNG ĐÁNH GIÁ SỨC KHỎE BIẾN TẦN & 3 NHÓM NGUYÊN NHÂN GỐC (BƯỚC 1)
+            score_val = health_info['score']
+            score_color = health_info['color']
+            score_badge = health_info['badge']
+            score_rating = health_info['rating']
+
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border-radius: 12px; padding: 18px 22px; margin-top: 15px; margin-bottom: 20px; border: 1px solid #334155; border-left: 6px solid {score_color};">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+                    <div style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;">
+                        🩺 CHỈ SỐ SỨC KHỎE BIẾN TẦN (INVERTER HEALTH INDEX - IHI)
+                    </div>
+                    <div>
+                        <span style="background: {score_color}22; color: {score_color}; border: 1px solid {score_color}; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.9rem;">
+                            {score_badge} Đánh Giá: {score_rating}
+                        </span>
+                    </div>
+                </div>
+                <div style="font-size: 0.85rem; color: #94A3B8; margin-bottom: 15px;">
+                    Điểm số sức khỏe kỹ thuật được tính toán tự động dựa trên mức độ nghiêm trọng, tần suất lặp lại của 26+ mã lỗi chuẩn Huawei và trạng thái các khối linh kiện.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            col_h1, col_h2, col_h3, col_h4 = st.columns([1.8, 1.4, 1.4, 1.4])
+            with col_h1:
+                st.markdown(f"""
+                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #94A3B8; text-transform: uppercase; font-weight: 600;">ĐIỂM SỨC KHỎE (IHI)</div>
+                    <div style="font-size: 2.3rem; font-weight: 800; color: {score_color}; line-height: 1.2; margin: 4px 0;">
+                        {score_val:.1f} <span style="font-size: 1.1rem; color: #64748B;">/ 100</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #CBD5E1;">{score_badge} {score_rating}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.progress(score_val / 100.0)
+
+            with col_h2:
+                n_grid = health_info['category_counts']['GRID_TBA']
+                st.markdown(f"""
+                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #38BDF8; font-weight: 600;">🌐 LƯỚI ĐIỆN & TBA</div>
+                    <div style="font-size: 2.1rem; font-weight: 750; color: #38BDF8; line-height: 1.2; margin: 4px 0;">
+                        {n_grid}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #94A3B8;">Sụt áp / Quá áp / Tần số</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_h3:
+                n_dc = health_info['category_counts']['DC_FIELD']
+                st.markdown(f"""
+                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #F59E0B; font-weight: 600;">☀️ CHUỖI PIN & CÁP DC</div>
+                    <div style="font-size: 2.1rem; font-weight: 750; color: #F59E0B; line-height: 1.2; margin: 4px 0;">
+                        {n_dc}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #94A3B8;">Riso / RCD / Backfeed / Voc</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_h4:
+                n_hw = health_info['category_counts']['HARDWARE']
+                st.markdown(f"""
+                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 10px; padding: 14px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #EF4444; font-weight: 600;">⚙️ PHẦN CỨNG & TỦ MÁY</div>
+                    <div style="font-size: 2.1rem; font-weight: 750; color: #EF4444; line-height: 1.2; margin: 4px 0;">
+                        {n_hw}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #94A3B8;">IGBT / Quạt / Quá nhiệt</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Chỉ định O&M & Bảng trừ điểm
+            col_rx1, col_rx2 = st.columns([2.5, 2.5])
+            with col_rx1:
+                st.markdown("##### 📋 Khuyến Nghị O&M Tự Động:")
+                st.info(health_info['prescription'])
+            with col_rx2:
+                if health_info['deductions']:
+                    with st.expander(f"⚠️ Chi tiết các khoản trừ điểm sức khỏe ({len(health_info['deductions'])} mục):", expanded=False):
+                        for ded in health_info['deductions']:
+                            tag_c = "#EF4444" if ded['severity'] == "CRITICAL" else ("#F59E0B" if ded['severity'] == "MAJOR" else "#38BDF8")
+                            st.markdown(f"- <b style='color:{tag_c};'>{ded['points']:.1f} điểm</b>: {ded['reason']}", unsafe_allow_html=True)
+                else:
+                    st.success("✅ Không có vi phạm hay lỗi nặng nào bị trừ điểm trên Inverter này.")
 
             st.markdown("---")
 
@@ -4600,60 +4692,87 @@ elif selected_menu == NAV_OPTIONS[8]:
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
             with t_alarm:
                 st.markdown(f"##### 🚨 Bảng Giải Mã Chi Tiết Lịch Sử Sự Cố & Cảnh Báo (Inverter {cur_inv['inverter_id']}):")
-                st.caption("Dữ liệu được giải mã trực tiếp từ tệp nhị phân cấu trúc 24-byte `alarmg_history.gz` theo quy chuẩn Modbus/Alarm Code Huawei.")
+                st.caption("Dữ liệu được giải mã trực tiếp từ tệp nhị phân cấu trúc 24-byte `alarmg_history.gz` theo quy chuẩn Modbus/Alarm Code Huawei và phân loại 3 nhóm nguyên nhân gốc.")
 
                 if df_alarms_cur.empty:
                     st.success("✅ Inverter không ghi nhận bất kỳ sự cố hay cảnh báo nào trong tệp log.")
                 else:
                     col_al_ch1, col_al_ch2 = st.columns([2, 2])
                     with col_al_ch1:
-                        # Biểu đồ đếm sự cố theo loại lỗi
-                        alarm_type_counts = df_alarms_cur['Tên Sự Cố (Việt)'].value_counts().reset_index()
-                        alarm_type_counts.columns = ['Dạng Sự Cố', 'Số Lần Xảy Ra']
-                        fig_al_pie = px.pie(
-                            alarm_type_counts,
-                            values='Số Lần Xảy Ra',
-                            names='Dạng Sự Cố',
-                            title=f"<b>PHÂN BỐ CÁC DẠNG SỰ CỐ GHI NHẬN TRÊN {cur_inv['inverter_id']}</b>",
-                            hole=0.45,
-                            color_discrete_sequence=px.colors.qualitative.Bold
+                        # Biểu đồ phân bố theo 3 nhóm nguyên nhân gốc
+                        cat_summary_rows = [
+                            {"Nhóm Nguyên Nhân": "🌐 Lưới Điện & TBA", "Số Lỗi": health_info['category_counts']['GRID_TBA'], "Color": "#38BDF8"},
+                            {"Nhóm Nguyên Nhân": "☀️ Chuỗi Pin & Cáp DC", "Số Lỗi": health_info['category_counts']['DC_FIELD'], "Color": "#F59E0B"},
+                            {"Nhóm Nguyên Nhân": "⚙️ Phần Cứng Máy", "Số Lỗi": health_info['category_counts']['HARDWARE'], "Color": "#EF4444"},
+                            {"Nhóm Nguyên Nhân": "🛠️ Vận Hành & Khác", "Số Lỗi": health_info['category_counts']['SYSTEM_OP'], "Color": "#10B981"}
+                        ]
+                        df_cat_chart = pd.DataFrame([r for r in cat_summary_rows if r["Số Lỗi"] > 0])
+                        if df_cat_chart.empty:
+                            df_cat_chart = pd.DataFrame([{"Nhóm Nguyên Nhân": "Không có lỗi", "Số Lỗi": 1, "Color": "#10B981"}])
+
+                        fig_cat_pie = px.pie(
+                            df_cat_chart,
+                            values='Số Lỗi',
+                            names='Nhóm Nguyên Nhân',
+                            title=f"<b>PHÂN BỐ THEO NHÓM NGUYÊN NHÂN GỐC ({cur_inv['inverter_id']})</b>",
+                            hole=0.48,
+                            color='Nhóm Nguyên Nhân',
+                            color_discrete_map={r["Nhóm Nguyên Nhân"]: r["Color"] for _, r in df_cat_chart.iterrows()}
                         )
-                        fig_al_pie.update_traces(textposition='inside', textinfo='percent')
-                        fig_al_pie.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10))
-                        st.plotly_chart(fig_al_pie, use_container_width=True)
+                        fig_cat_pie.update_traces(textposition='inside', textinfo='percent+label')
+                        fig_cat_pie.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10), showlegend=False)
+                        st.plotly_chart(fig_cat_pie, use_container_width=True)
 
                     with col_al_ch2:
-                        # Biểu đồ theo mức độ nghiêm trọng
-                        sev_counts = df_alarms_cur['Mức Độ'].value_counts().reset_index()
-                        sev_counts.columns = ['Mức Độ', 'Số Lượng']
-                        color_map_sev = {"Khẩn cấp": "#EF4444", "Nghiêm trọng": "#F59E0B", "Cảnh báo": "#38BDF8", "Thông tin": "#10B981"}
-                        fig_sev_bar = px.bar(
-                            sev_counts,
-                            x='Mức Độ',
-                            y='Số Lượng',
-                            color='Mức Độ',
-                            title="<b>THỐNG KÊ MỨC ĐỘ NGHIÊM TRỌNG SỰ CỐ</b>",
-                            color_discrete_map=color_map_sev,
-                            text='Số Lượng'
+                        # Biểu đồ đếm sự cố theo loại lỗi cụ thể
+                        alarm_type_counts = df_alarms_cur['Tên Sự Cố (Việt)'].value_counts().head(8).reset_index()
+                        alarm_type_counts.columns = ['Dạng Sự Cố', 'Số Lần Xảy Ra']
+                        fig_al_bar = px.bar(
+                            alarm_type_counts,
+                            x='Số Lần Xảy Ra',
+                            y='Dạng Sự Cố',
+                            orientation='h',
+                            title=f"<b>TOP SỰ CỐ XUẤT HIỆN NHIỀU NHẤT ({cur_inv['inverter_id']})</b>",
+                            color='Số Lần Xảy Ra',
+                            color_continuous_scale='Blues',
+                            text='Số Lần Xảy Ra'
                         )
-                        fig_sev_bar.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10), showlegend=False)
-                        st.plotly_chart(fig_sev_bar, use_container_width=True)
+                        fig_al_bar.update_layout(template="plotly_white", height=350, margin=dict(t=40, b=20, l=10, r=10), yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+                        st.plotly_chart(fig_al_bar, use_container_width=True)
 
-                    # Bộ lọc mức độ và tìm kiếm
-                    col_flt_a1, col_flt_a2 = st.columns([1.5, 2.5])
+                    # Bộ lọc đa chiều: Nhóm nguyên nhân, Mức độ và Tìm kiếm từ khóa
+                    col_flt_a1, col_flt_a2, col_flt_a3 = st.columns([1.5, 1.2, 2.3])
                     with col_flt_a1:
+                        cat_filter = st.selectbox(
+                            "Lọc theo nhóm nguyên nhân:",
+                            ["Tất Cả Nhóm", "🌐 Lưới Điện & TBA", "☀️ Chuỗi Pin PV & Cáp DC", "⚙️ Phần Cứng & Tủ Biến Tần", "🛠️ Vận Hành & Firmware"],
+                            index=0,
+                            key="sel_alarm_cat_flt"
+                        )
+                    with col_flt_a2:
                         sev_filter = st.selectbox(
-                            "Lọc theo mức độ sự cố:",
+                            "Lọc theo mức độ:",
                             ["Tất Cả Mức Độ", "Khẩn cấp", "Nghiêm trọng", "Cảnh báo", "Thông tin"],
                             index=0,
                             key="sel_alarm_sev_flt"
                         )
-                    with col_flt_a2:
-                        search_al_kw = st.text_input("🔍 Tìm kiếm tên sự cố / mã lỗi:", placeholder="Nhập tên lỗi, mã lỗi hoặc nguyên nhân...", key="txt_alarm_search")
+                    with col_flt_a3:
+                        search_al_kw = st.text_input("🔍 Tìm kiếm sự cố / mã lỗi / nguyên nhân:", placeholder="Nhập tên lỗi, mã lỗi hoặc nguyên nhân...", key="txt_alarm_search")
 
                     df_al_show = df_alarms_cur.copy()
+                    if cat_filter != "Tất Cả Nhóm":
+                        if "Lưới Điện" in cat_filter:
+                            df_al_show = df_al_show[df_al_show['Category_Code'] == 'GRID_TBA']
+                        elif "Chuỗi Pin" in cat_filter:
+                            df_al_show = df_al_show[df_al_show['Category_Code'] == 'DC_FIELD']
+                        elif "Phần Cứng" in cat_filter:
+                            df_al_show = df_al_show[df_al_show['Category_Code'] == 'HARDWARE']
+                        elif "Vận Hành" in cat_filter:
+                            df_al_show = df_al_show[df_al_show['Category_Code'] == 'SYSTEM_OP']
+
                     if sev_filter != "Tất Cả Mức Độ":
                         df_al_show = df_al_show[df_al_show['Mức Độ'] == sev_filter]
+
                     if search_al_kw:
                         kw_low = search_al_kw.lower()
                         df_al_show = df_al_show[
@@ -4662,8 +4781,9 @@ elif selected_menu == NAV_OPTIONS[8]:
                             df_al_show['Nguyên Nhân Kỹ Thuật'].str.lower().str.contains(kw_low)
                         ]
 
+                    st.write(f"Hiển thị: **{len(df_al_show):,}** / {len(df_alarms_cur):,} bản ghi cảnh báo")
                     display_al_cols = [
-                        'STT', 'Mã Lỗi', 'Tên Sự Cố (Việt)', 'Mức Độ',
+                        'STT', 'Mã Lỗi', 'Tên Sự Cố (Việt)', 'Nhóm Nguyên Nhân', 'Mức Độ',
                         'Thời Điểm Bắt Đầu', 'Thời Điểm Kết Thúc', 'Thời Lượng',
                         'Nguyên Nhân Kỹ Thuật', 'Biện Pháp Xử Lý'
                     ]
@@ -4707,7 +4827,7 @@ elif selected_menu == NAV_OPTIONS[8]:
             # --- SUBTAB 4: XUẤT BÁO CÁO EXCEL ---
             with t_excel:
                 st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
-                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 3 Sheet: **Tổng Quan Thiết Bị**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
+                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 3 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
 
                 col_x1, col_x2 = st.columns([2.5, 2.5])
                 with col_x1:
@@ -4721,5 +4841,6 @@ elif selected_menu == NAV_OPTIONS[8]:
                         use_container_width=True
                     )
                 with col_x2:
-                    st.info(f"Tệp bao gồm: **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+
 
