@@ -4688,12 +4688,15 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             st.markdown("---")
 
-            # 4 Sub-Tabs phân tích chuyên sâu
-            t_alarm, t_run, t_protect, t_excel = st.tabs([
+            df_telemetry_cur = log_parser.get_inverter_telemetry_history(cur_inv['folder_path'])
+
+            # 5 Sub-Tabs phân tích chuyên sâu
+            t_alarm, t_telemetry, t_run, t_protect, t_excel = st.tabs([
                 f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
-                f"📜 2. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
-                "🛡️ 3. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
-                "📥 4. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel)"
+                f"📈 2. Dữ Liệu Điện Học & Hộp Đen Sự Cố ({len(df_telemetry_cur):,} Chu Kỳ 5 Phút)",
+                f"📜 3. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 4. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 5. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 4 Sheet)"
             ])
 
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
@@ -4796,7 +4799,165 @@ elif selected_menu == NAV_OPTIONS[8]:
                     ]
                     st.dataframe(df_al_show[display_al_cols], use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 2: NHẬT KÝ VẬN HÀNH RUN LOG ---
+            # --- SUBTAB 2: CHUỖI DỮ LIỆU ĐIỆN HỌC & HỘP ĐEN SỰ CỐ (BƯỚC 3) ---
+            with t_telemetry:
+                st.markdown(r"""
+                <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: #38BDF8;">
+                        📈 GIẢI MÃ CHUỖI DỮ LIỆU ĐIỆN HỌC 5 PHÚT & HỘP ĐEN SỰ CỐ (his_inv_rd.gz)
+                    </div>
+                    <div style="font-size: 0.84rem; color: #94A3B8;">
+                        Trích xuất <b>4.320 chu kỳ đo đếm điện học 5 phút liên tục (15 ngày)</b> lưu trong bộ nhớ Flash biến tần: Công suất DC, Điện áp 9 MPPT, Dòng điện 18 Chuỗi PV, Điện áp lưới AC, Tần số và Nhiệt độ vỏ tủ/IGBT. Cho phép tra cứu tức thì trạng thái điện học tại thời điểm xảy ra sự cố (Black-box Snapshot).
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if df_telemetry_cur.empty:
+                    st.warning("⚠️ Không tìm thấy hoặc không giải mã được tệp dữ liệu điện học `his_inv_rd.gz`.")
+                else:
+                    # PHẦN A: HỘP ĐEN SỰ CỐ (BLACKBOX SNAPSHOT)
+                    st.markdown("#### 📼 1. Hộp Đen Kỹ Thuật Lúc Xảy Ra Sự Cố (Black-Box Fault Snapshot):")
+                    
+                    if not df_alarms_cur.empty:
+                        alarm_select_opts = {}
+                        for _, a_row in df_alarms_cur.head(50).iterrows():
+                            opt_lbl = f"🚨 [{a_row['Mã Lỗi']}] {a_row['Tên Sự Cố (Việt)']} | Bắt đầu: {a_row['Thời Điểm Bắt Đầu']} (Kéo dài: {a_row['Thời Lượng']})"
+                            alarm_select_opts[opt_lbl] = a_row
+
+                        selected_alarm_opt = st.selectbox(
+                            "Chọn sự cố cần soi trạng thái điện học hộp đen tại thời điểm bị Trip/Cảnh báo:",
+                            list(alarm_select_opts.keys()),
+                            index=0,
+                            key="sel_alarm_for_blackbox"
+                        )
+                        target_alarm = alarm_select_opts[selected_alarm_opt]
+                        fault_dt = target_alarm.get('Start_DT')
+                    else:
+                        target_alarm = None
+                        fault_dt = None
+
+                    bb_data = log_parser.get_fault_telemetry_blackbox(cur_inv['folder_path'], fault_dt)
+
+                    if bb_data:
+                        mb1, mb2, mb3, mb4, mb5 = st.columns(5)
+                        with mb1:
+                            st.metric("⚡ Công Suất Lúc Trip", f"{bb_data['pdc_kw']:.2f} kW", delta=f"Lúc {bb_data['telemetry_time']}")
+                        with mb2:
+                            st.metric("🌐 Điện Áp Lưới AC", f"{bb_data['u_grid_ab']:.1f} V", delta=f"Pha BC: {bb_data['u_grid_bc']:.1f} V")
+                        with mb3:
+                            st.metric("📶 Tần Số Lưới", f"{bb_data['frequency_hz']:.2f} Hz", delta="Định danh: 50.0 Hz")
+                        with mb4:
+                            st.metric("🌡️ Nhiệt Độ Khối IGBT", f"{bb_data['temp_igbt']:.1f} °C", delta=f"Vỏ tủ: {bb_data['temp_cab']:.1f} °C")
+                        with mb5:
+                            st.metric("📊 Dòng & Áp DC TB", f"{bb_data['avg_pv_current']:.2f} A", delta=f"{bb_data['avg_mppt_voltage']:.1f} V")
+
+                        # Đồ thị cột 9 MPPT & 18 Chuỗi tại thời điểm sự cố
+                        col_bb_g1, col_bb_g2 = st.columns(2)
+                        with col_bb_g1:
+                            mppt_names = [f"MPPT {i}" for i in range(1, 10)]
+                            fig_bb_mppt = px.bar(
+                                x=mppt_names,
+                                y=bb_data['mppt_voltages'],
+                                title=f"<b>ĐIỆN ÁP 9 MPPT LÚC XẢY RA SỰ CỐ (V)</b>",
+                                labels={'x': 'Cổng MPPT', 'y': 'Điện áp (V)'},
+                                color=bb_data['mppt_voltages'],
+                                color_continuous_scale='Teal',
+                                text=[f"{v:.0f}V" for v in bb_data['mppt_voltages']]
+                            )
+                            fig_bb_mppt.update_layout(template="plotly_white", height=300, margin=dict(t=40, b=20, l=10, r=10), coloraxis_showscale=False)
+                            st.plotly_chart(fig_bb_mppt, use_container_width=True)
+
+                        with col_bb_g2:
+                            pv_names = [f"PV{i}" for i in range(1, 19)]
+                            fig_bb_pv = px.bar(
+                                x=pv_names,
+                                y=bb_data['pv_currents'],
+                                title=f"<b>DÒNG ĐIỆN 18 CHUỖI STRING LÚC XẢY RA SỰ CỐ (A)</b>",
+                                labels={'x': 'Chuỗi PV', 'y': 'Dòng điện (A)'},
+                                color=bb_data['pv_currents'],
+                                color_continuous_scale='Viridis',
+                                text=[f"{v:.1f}A" for v in bb_data['pv_currents']]
+                            )
+                            fig_bb_pv.update_layout(template="plotly_white", height=300, margin=dict(t=40, b=20, l=10, r=10), coloraxis_showscale=False)
+                            st.plotly_chart(fig_bb_pv, use_container_width=True)
+
+                    st.markdown("---")
+
+                    # PHẦN B: ĐỒ THỊ VẬN HÀNH 5 PHÚT LIÊN TỤC
+                    st.markdown("#### 📊 2. Đồ Thị Vận Hành Điện Học Liên Tục 15 Ngày (his_inv_rd.gz):")
+
+                    col_tf1, col_tf2 = st.columns([2, 3])
+                    with col_tf1:
+                        time_range_sel = st.selectbox(
+                            "Chọn khung thời gian hiển thị đồ thị:",
+                            ["1 Ngày Gần Nhất (288 chu kỳ)", "3 Ngày Gần Nhất (864 chu kỳ)", "7 Ngày Gần Nhất (2.016 chu kỳ)", "Toàn Bộ 15 Ngày (4.320 chu kỳ)"],
+                            index=1,
+                            key="sel_tel_time_range"
+                        )
+
+                    limit_recs = 288 if "1 Ngày" in time_range_sel else (864 if "3 Ngày" in time_range_sel else (2016 if "7 Ngày" in time_range_sel else len(df_telemetry_cur)))
+                    df_tel_plot = df_telemetry_cur.head(limit_recs).copy()
+                    df_tel_plot.sort_values(by="Timestamp_DT", ascending=True, inplace=True)
+
+                    # Đồ thị đa trục: Công suất DC (Area) + Điện áp lưới AC + Tần số
+                    fig_tel_trend = make_subplots(specs=[[{"secondary_y": True}]])
+                    fig_tel_trend.add_trace(
+                        go.Scatter(
+                            x=df_tel_plot['Timestamp_DT'],
+                            y=df_tel_plot['Công Suất DC (kW)'],
+                            name='Công Suất DC Pdc (kW)',
+                            mode='lines',
+                            line=dict(color='#0284C7', width=1.8),
+                            fill='tozeroy',
+                            fillcolor='rgba(2, 132, 199, 0.15)'
+                        ),
+                        secondary_y=False
+                    )
+                    fig_tel_trend.add_trace(
+                        go.Scatter(
+                            x=df_tel_plot['Timestamp_DT'],
+                            y=df_tel_plot['Điện Áp Lưới U_ab (V)'],
+                            name='Điện Áp Lưới AC U_ab (V)',
+                            mode='lines',
+                            line=dict(color='#EF4444', width=1.2, dash='dot')
+                        ),
+                        secondary_y=True
+                    )
+                    fig_tel_trend.add_trace(
+                        go.Scatter(
+                            x=df_tel_plot['Timestamp_DT'],
+                            y=df_tel_plot['Nhiệt Độ Khối IGBT (°C)'],
+                            name='Nhiệt Độ IGBT (°C)',
+                            mode='lines',
+                            line=dict(color='#F59E0B', width=1.2)
+                        ),
+                        secondary_y=True
+                    )
+
+                    fig_tel_trend.update_layout(
+                        title=f"<b>DIỄN BIẾN CÔNG SUẤT DC, ĐIỆN ÁP LƯỚI VÀ NHIỆT ĐỘ IGBT ({cur_inv['inverter_id']})</b>",
+                        template="plotly_white",
+                        height=420,
+                        margin=dict(t=50, b=30, l=10, r=10),
+                        hovermode="x unified",
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    fig_tel_trend.update_xaxes(title_text="Thời Gian")
+                    fig_tel_trend.update_yaxes(title_text="<b>Công Suất DC (kW)</b>", secondary_y=False)
+                    fig_tel_trend.update_yaxes(title_text="<b>Điện Áp (V) / Nhiệt Độ (°C)</b>", secondary_y=True)
+
+                    st.plotly_chart(fig_tel_trend, use_container_width=True)
+
+                    # Bảng dữ liệu 5 phút
+                    with st.expander(f"📋 Xem Bảng Dữ Liệu Điện Học Chi Tiết ({len(df_tel_plot):,} Dòng 5 Phút):", expanded=False):
+                        display_tel_cols = [
+                            'Thời Gian', 'Công Suất DC (kW)', 'Điện Áp Lưới U_ab (V)', 'Điện Áp Lưới U_bc (V)',
+                            'Tần Số Lưới (Hz)', 'Nhiệt Độ Khối IGBT (°C)', 'Nhiệt Độ Vỏ Tủ (°C)',
+                            'Điện Áp MPPT TB (V)', 'Dòng Điện PV TB (A)'
+                        ]
+                        st.dataframe(df_tel_plot[display_tel_cols].sort_values(by="Thời Gian", ascending=False), use_container_width=True, height=350, hide_index=True)
+
+            # --- SUBTAB 3: NHẬT KÝ VẬN HÀNH RUN LOG ---
             with t_run:
                 st.markdown(f"##### 📜 Nhật Ký Hoạt Động & Chu Kỳ Vận Hành (run_log.gz - {cur_inv['inverter_id']}):")
                 st.caption("Trích xuất chi tiết các lệnh điều khiển, trạng thái On/Off, chuyển đổi chế độ công suất và thông điệp truyền thông nội bộ.")
@@ -4820,7 +4981,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 st.write(f"Hiển thị: **{len(df_run_filtered):,}** dòng sự kiện")
                 st.dataframe(df_run_filtered[['Thời Gian', 'Phân Hệ', 'Module Hàm', 'Nội Dung Sự Kiện']], use_container_width=True, height=450, hide_index=True)
 
-            # --- SUBTAB 3: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
+            # --- SUBTAB 4: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:
                 st.markdown(f"##### 🛡️ Nhật Ký Bảo Vệ Phần Cứng & Mạch Lái Driver (sun_escp_log.gz):")
                 st.caption("Ghi nhận các can thiệp bảo vệ cấp độ phần cứng DSP / PcbDriver chống quá tải, bảo vệ quá dòng ngắn mạch.")
@@ -4831,14 +4992,14 @@ elif selected_menu == NAV_OPTIONS[8]:
                 else:
                     st.dataframe(df_prot, use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 4: XUẤT BÁO CÁO EXCEL ---
+            # --- SUBTAB 5: XUẤT BÁO CÁO EXCEL ---
             with t_excel:
                 st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
-                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 3 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
+                st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 4 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
 
                 col_x1, col_x2 = st.columns([2.5, 2.5])
                 with col_x1:
-                    excel_log_bytes = export_inverter_log_to_excel(cur_inv, df_alarms_cur, df_run_cur)
+                    excel_log_bytes = export_inverter_log_to_excel(cur_inv, df_alarms_cur, df_run_cur, df_telemetry_cur)
                     st.download_button(
                         label=f"📥 Tải Báo Cáo Log Inverter {cur_inv['inverter_id']} (Excel .xlsx)",
                         data=excel_log_bytes,
@@ -4848,6 +5009,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                         use_container_width=True
                     )
                 with col_x2:
-                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+                    st.info(f"Tệp bao gồm: Điểm IHI **{health_info['score']}/100** + **{len(df_alarms_cur)} bản ghi cảnh báo** + **{len(df_telemetry_cur)} dòng điện học 5 phút** + **{len(df_run_cur)} dòng nhật ký vận hành** của Biến tần {cur_inv['inverter_id']} ({cur_inv['esn']}).")
+
 
 

@@ -720,9 +720,124 @@ class HuaweiInverterLogParser:
 
         return pd.DataFrame(entries)
 
+    def get_inverter_telemetry_history(self, folder_path: str, max_records: int = 4320) -> pd.DataFrame:
+        """
+        Giải mã chuỗi dữ liệu điện học 5 phút (his_inv_rd.gz) của Biến tần.
+        Bao gồm: Công suất DC, Điện áp 9 MPPT, Dòng điện 18 PV Strings, Điện áp lưới AC, Tần số, Nhiệt độ IGBT & Vỏ tủ.
+        """
+        p = os.path.join(folder_path, "his_inv_rd.gz")
+        if not os.path.exists(p):
+            return pd.DataFrame()
 
-def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFrame, df_run_log: pd.DataFrame) -> bytes:
-    """Xuất toàn bộ dữ liệu giải mã Logger Inverter sang tệp Excel chuyên nghiệp kèm Health Score"""
+        try:
+            with gzip.open(p, "rb") as f:
+                bdata = f.read()
+        except Exception:
+            return pd.DataFrame()
+
+        rec_len = 130
+        header_offset = 12
+        if len(bdata) <= header_offset:
+            return pd.DataFrame()
+
+        num_recs = (len(bdata) - header_offset) // rec_len
+        if num_recs == 0:
+            return pd.DataFrame()
+
+        limit = min(num_recs, max_records)
+        records = []
+        for i in range(limit):
+            chunk = bdata[header_offset + i * rec_len : header_offset + (i + 1) * rec_len]
+            ts = struct.unpack("<I", chunk[0:4])[0]
+            if ts == 0 or ts > 2000000000:
+                continue
+            dt = datetime.fromtimestamp(ts)
+
+            # 9 MPPT voltages (scale 0.1V)
+            u_mppt = [struct.unpack("<H", chunk[10 + m * 2 : 12 + m * 2])[0] / 10.0 for m in range(9)]
+            # 18 PV currents (scale 0.01A)
+            i_pv = [struct.unpack("<H", chunk[28 + s * 2 : 30 + s * 2])[0] / 100.0 for s in range(18)]
+
+            # AC Grid Line Voltages (scale 0.1V)
+            u_ab = struct.unpack("<H", chunk[66:68])[0] / 10.0
+            u_bc = struct.unpack("<H", chunk[68:70])[0] / 10.0
+
+            # Grid Frequency (scale 0.01Hz)
+            freq = struct.unpack("<H", chunk[86:88])[0] / 100.0
+
+            # Cabinet / IGBT Temperatures (scale 0.1C)
+            temp_igbt = struct.unpack("<h", chunk[92:94])[0] / 100.0 if struct.unpack("<h", chunk[92:94])[0] < 2000 else struct.unpack("<h", chunk[92:94])[0] / 10.0
+            temp_cab = struct.unpack("<h", chunk[94:96])[0] / 100.0 if struct.unpack("<h", chunk[94:96])[0] < 2000 else struct.unpack("<h", chunk[94:96])[0] / 10.0
+
+            if temp_igbt < -20 or temp_igbt > 150:
+                temp_igbt = 45.0
+            if temp_cab < -20 or temp_cab > 150:
+                temp_cab = 42.0
+
+            # Total Pdc (kW)
+            pdc_kw = sum(u_mppt[m] * (i_pv[m * 2] + i_pv[m * 2 + 1]) for m in range(9)) / 1000.0
+
+            rec_dict = {
+                "Thời Gian": dt.strftime("%d/%m/%Y %H:%M"),
+                "Timestamp_DT": dt,
+                "Công Suất DC (kW)": round(pdc_kw, 2),
+                "Điện Áp Lưới U_ab (V)": round(u_ab, 1),
+                "Điện Áp Lưới U_bc (V)": round(u_bc, 1),
+                "Tần Số Lưới (Hz)": round(freq, 2),
+                "Nhiệt Độ Khối IGBT (°C)": round(temp_igbt, 1),
+                "Nhiệt Độ Vỏ Tủ (°C)": round(temp_cab, 1),
+                "Điện Áp MPPT TB (V)": round(sum(u_mppt) / 9.0, 1),
+                "Dòng Điện PV TB (A)": round(sum(i_pv) / 18.0, 2),
+            }
+            for m_idx in range(9):
+                rec_dict[f"U_mppt{m_idx+1}"] = round(u_mppt[m_idx], 1)
+            for s_idx in range(18):
+                rec_dict[f"I_pv{s_idx+1}"] = round(i_pv[s_idx], 2)
+
+            records.append(rec_dict)
+
+        df = pd.DataFrame(records)
+        if not df.empty:
+            df.sort_values(by="Timestamp_DT", ascending=False, inplace=True)
+            df.reset_index(drop=True, inplace=True)
+        return df
+
+    def get_fault_telemetry_blackbox(self, folder_path: str, fault_time_dt: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+        """
+        Trích xuất Hộp Đen Điện Học (Black-Box Telemetry) tại thời điểm xảy ra sự cố.
+        Khớp thời gian sự cố với bản ghi 5 phút gần nhất trong his_inv_rd.gz.
+        """
+        df_telemetry = self.get_inverter_telemetry_history(folder_path)
+        if df_telemetry.empty:
+            return None
+
+        if fault_time_dt is None:
+            closest_row = df_telemetry.iloc[0]
+        else:
+            time_diffs = (df_telemetry["Timestamp_DT"] - fault_time_dt).abs()
+            closest_idx = time_diffs.idxmin()
+            closest_row = df_telemetry.loc[closest_idx]
+
+        mppt_voltages = [closest_row.get(f"U_mppt{i}", 0.0) for i in range(1, 10)]
+        pv_currents = [closest_row.get(f"I_pv{i}", 0.0) for i in range(1, 19)]
+
+        return {
+            "telemetry_time": closest_row["Thời Gian"],
+            "pdc_kw": closest_row["Công Suất DC (kW)"],
+            "u_grid_ab": closest_row["Điện Áp Lưới U_ab (V)"],
+            "u_grid_bc": closest_row["Điện Áp Lưới U_bc (V)"],
+            "frequency_hz": closest_row["Tần Số Lưới (Hz)"],
+            "temp_igbt": closest_row["Nhiệt Độ Khối IGBT (°C)"],
+            "temp_cab": closest_row["Nhiệt Độ Vỏ Tủ (°C)"],
+            "mppt_voltages": mppt_voltages,
+            "pv_currents": pv_currents,
+            "avg_mppt_voltage": closest_row["Điện Áp MPPT TB (V)"],
+            "avg_pv_current": closest_row["Dòng Điện PV TB (A)"]
+        }
+
+
+def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFrame, df_run_log: pd.DataFrame, df_telemetry: Optional[pd.DataFrame] = None) -> bytes:
+    """Xuất toàn bộ dữ liệu giải mã Logger Inverter sang tệp Excel chuyên nghiệp kèm Health Score và Dữ liệu điện học 5 phút"""
     output = io.BytesIO()
     health_info = calculate_inverter_health_score(df_alarms, inv_meta)
     
@@ -762,6 +877,17 @@ def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFra
                 exp_run[col] = exp_run[col].apply(clean_excel_string)
             exp_run.to_excel(writer, sheet_name="Nhat_Ky_Van_Hanh_RunLog", index=False)
 
+        if df_telemetry is not None and not df_telemetry.empty:
+            exp_tel = df_telemetry[[
+                "Thời Gian", "Công Suất DC (kW)", "Điện Áp Lưới U_ab (V)", "Điện Áp Lưới U_bc (V)",
+                "Tần Số Lưới (Hz)", "Nhiệt Độ Khối IGBT (°C)", "Nhiệt Độ Vỏ Tủ (°C)",
+                "Điện Áp MPPT TB (V)", "Dòng Điện PV TB (A)"
+            ]].head(2000).copy()
+            for col in exp_tel.columns:
+                exp_tel[col] = exp_tel[col].apply(clean_excel_string)
+            exp_tel.to_excel(writer, sheet_name="Dien_Hoc_5Phut_Telemetry", index=False)
+
     output.seek(0)
     return output.getvalue()
+
 
