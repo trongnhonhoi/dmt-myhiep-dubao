@@ -1270,27 +1270,33 @@ def export_inverter_log_to_excel(inv_meta: Dict[str, Any], df_alarms: pd.DataFra
         df_sum.to_excel(writer, sheet_name="Tong_Quan_Inverter", index=False)
 
         if not df_alarms.empty:
-            exp_alarm = df_alarms[[
+            target_alarm_cols = [
                 "STT", "Mã Lỗi", "Tên Sự Cố (Việt)", "Tên Sự Cố (Anh)", "Nhóm Nguyên Nhân", "Mức Độ",
                 "Thời Điểm Bắt Đầu", "Thời Điểm Kết Thúc", "Thời Lượng",
                 "Nguyên Nhân Kỹ Thuật", "Biện Pháp Xử Lý"
-            ]].copy()
+            ]
+            alarm_cols = [c for c in target_alarm_cols if c in df_alarms.columns]
+            exp_alarm = df_alarms[alarm_cols].copy()
             for col in exp_alarm.columns:
                 exp_alarm[col] = exp_alarm[col].apply(clean_excel_string)
             exp_alarm.to_excel(writer, sheet_name="Lich_Su_Canh_Bao_Alarm", index=False)
 
         if not df_run_log.empty:
-            exp_run = df_run_log[["Thời Gian", "Phân Hệ", "Module Hàm", "Nội Dung Sự Kiện"]].head(2000).copy()
+            target_run_cols = ["Thời Gian", "Phân Hệ", "Module Hàm (File/Line)", "Module Hàm", "Nội Dung Sự Kiện", "Ý Nghĩa Kỹ Thuật"]
+            run_cols = [c for c in target_run_cols if c in df_run_log.columns]
+            exp_run = df_run_log[run_cols].head(2000).copy()
             for col in exp_run.columns:
                 exp_run[col] = exp_run[col].apply(clean_excel_string)
             exp_run.to_excel(writer, sheet_name="Nhat_Ky_Van_Hanh_RunLog", index=False)
 
         if df_telemetry is not None and not df_telemetry.empty:
-            exp_tel = df_telemetry[[
+            target_tel_cols = [
                 "Thời Gian", "Công Suất DC (kW)", "Điện Áp Lưới U_ab (V)", "Điện Áp Lưới U_bc (V)",
                 "Tần Số Lưới (Hz)", "Nhiệt Độ Khối IGBT (°C)", "Nhiệt Độ Vỏ Tủ (°C)",
                 "Điện Áp MPPT TB (V)", "Dòng Điện PV TB (A)"
-            ]].head(2000).copy()
+            ]
+            tel_cols = [c for c in target_tel_cols if c in df_telemetry.columns]
+            exp_tel = df_telemetry[tel_cols].head(2000).copy()
             for col in exp_tel.columns:
                 exp_tel[col] = exp_tel[col].apply(clean_excel_string)
             exp_tel.to_excel(writer, sheet_name="Dien_Hoc_5Phut_Telemetry", index=False)
