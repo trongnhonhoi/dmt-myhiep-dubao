@@ -4569,6 +4569,7 @@ elif selected_menu == NAV_OPTIONS[8]:
             # 1. Trích xuất thông tin cảnh báo và vận hành
             st.markdown("---")
             df_alarms_cur = log_parser.get_inverter_alarm_history(cur_inv['folder_path'])
+            df_telemetry_cur = log_parser.get_inverter_5min_telemetry(cur_inv['folder_path'])
             df_run_cur = log_parser.get_inverter_run_logs(cur_inv['folder_path'])
 
             if not df_alarms_cur.empty:
