@@ -5061,14 +5061,37 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             # --- SUBTAB 5: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:
-                st.markdown(f"##### 🛡️ Nhật Ký Bảo Vệ Phần Cứng & Mạch Lái Driver (sun_escp_log.gz):")
-                st.caption("Ghi nhận các can thiệp bảo vệ cấp độ phần cứng DSP / PcbDriver chống quá tải, bảo vệ quá dòng ngắn mạch.")
+                st.markdown(r"""
+                <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
+                    <div style="font-weight: 700; font-size: 1.1rem; color: #38BDF8;">
+                        🛡️ NHẬT KÝ BẢO VỆ PHẦN CỨNG & MẠCH LÁI DRIVER (sun_escp_log.gz)
+                    </div>
+                    <div style="font-size: 0.84rem; color: #94A3B8;">
+                        Tệp <code>sun_escp_log.gz</code> (<b>E</b>mergency <b>S</b>hutdown & <b>C</b>ircuit <b>P</b>rotection) ghi lại các can thiệp ở tầng điều khiển phần cứng cấp thấp (Low-level Hardware Driver): Mạch kích lái công suất (PcbDriver), Bus truyền thông nội bộ (CAN Driver) và Lệnh khởi động lại trình điều khiển (I2C Driver Reboot).
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
                 df_prot = log_parser.get_inverter_protection_logs(cur_inv['folder_path'])
                 if df_prot.empty:
-                    st.info("ℹ️ Không có bản ghi bảo vệ bất thường nào trong tệp `sun_escp_log.gz`.")
+                    st.info("ℹ️ Không có bản ghi bảo vệ phần cứng nào trong tệp `sun_escp_log.gz`.")
                 else:
-                    st.dataframe(df_prot, use_container_width=True, height=420, hide_index=True)
+                    col_p_kpi1, col_p_kpi2, col_p_kpi3 = st.columns(3)
+                    with col_p_kpi1:
+                        st.metric("📦 Tổng Sự Kiện Bảo Vệ", f"{len(df_prot):,} Bản Ghi")
+                    with col_p_kpi2:
+                        n_pcb = len(df_prot[df_prot['Phân Hệ Phần Cứng'].str.contains('PCB', na=False)])
+                        st.metric("⚡ Mạch Lực PcbDriver", f"{n_pcb} Lần", delta="Chuyển trạng thái On/Off")
+                    with col_p_kpi3:
+                        n_can = len(df_prot[df_prot['Phân Hệ Phần Cứng'].str.contains('CAN', na=False)])
+                        st.metric("📶 Bus Truyền Thông CAN", f"{n_can} Lần", delta="Đồng bộ chu kỳ ARM/DSP")
+
+                    st.markdown("##### 📋 Bảng Chi Tiết Sự Kiện Can Thiệp Bảo Vệ Phần Cứng:")
+                    display_prot_cols = [
+                        'Thời Gian', 'Phân Hệ Phần Cứng', 'Mã Trình Điều Khiển (Driver)',
+                        'Tham Số / Cờ Thanh Ghi', 'Diễn Giải Kỹ Thuật O&M', 'Đánh Giá'
+                    ]
+                    st.dataframe(df_prot[display_prot_cols], use_container_width=True, height=420, hide_index=True)
 
             # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
             with t_excel:

@@ -1025,25 +1025,78 @@ class HuaweiInverterLogParser:
         return pd.DataFrame(parsed_rows)
 
     def get_inverter_protection_logs(self, folder_path: str) -> pd.DataFrame:
-        """Đọc tệp nhật ký bảo vệ phần cứng sun_escp_log.gz"""
+        """
+        Đọc và giải mã tệp nhật ký bảo vệ phần cứng sun_escp_log.gz
+        (Emergency Hardware Protection / Driver Circuit Safety Log của Huawei SUN2000)
+        """
         prot_p = os.path.join(folder_path, "sun_escp_log.gz")
         if not os.path.exists(prot_p):
             return pd.DataFrame()
 
         try:
             with gzip.open(prot_p, "rt", encoding="utf-8", errors="ignore") as gz:
-                text = gz.read()
+                lines = [l.strip() for l in gz if l.strip()]
         except Exception:
             return pd.DataFrame()
 
-        entries = []
-        chunks = text.split("\n\n") if "\n\n" in text else text.splitlines()
-        for c in chunks:
-            c_clean = clean_excel_string(c.strip())
-            if c_clean:
-                entries.append({"Nội Dung Log Bảo Vệ": c_clean})
+        rows = []
+        cur_time = None
+        counter_header = None
 
-        return pd.DataFrame(entries)
+        for l in lines:
+            clean_l = clean_excel_string(l)
+            if not clean_l:
+                continue
+
+            # Dòng đầu tiên thường là mã đếm số thứ tự hoặc header
+            if re.match(r"^\d+$", clean_l) and not counter_header:
+                counter_header = clean_l
+                continue
+
+            # Nhận diện dòng thời gian YYYY/MM/DD HH:MM:SS
+            m_time = re.match(r"^(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})$", clean_l)
+            if m_time:
+                cur_time = m_time.group(1)
+                continue
+
+            # Nhận diện dòng sự kiện phần cứng Driver
+            parts = clean_l.split(maxsplit=1)
+            drv_tag = parts[0] if parts else clean_l
+            extra = parts[1] if len(parts) > 1 else "-"
+
+            # Phân loại và diễn giải kỹ thuật O&M
+            if "PcbDri" in drv_tag:
+                subsys = "Bo Mạch Lực (PCB Driver)"
+                desc = "Chuyển mạch điều khiển kích lái công suất / Latch bảo vệ rơle AC khi chuyển chế độ Standby hoặc phát điện."
+                eval_stat = "🟢 Bình Thường (Chuyển trạng thái máy)"
+            elif "CanDri" in drv_tag:
+                subsys = "Giao Tiếp Nội Bộ (CAN Bus)"
+                desc = "Đồng bộ truyền thông CAN nội bộ giữa chip chủ ARM và chip DSP xử lý tín hiệu."
+                eval_stat = "🟢 Bình Thường (Đồng bộ nhịp chu kỳ)"
+            elif "I2cDri" in drv_tag:
+                subsys = "Bộ Nhớ & Quản Trị Hệ Thống (I2C)"
+                desc = "Khởi động lại trình điều khiển hệ thống phần cứng (DRV_SysReboot) khi bắt đầu chu kỳ phát điện mới."
+                eval_stat = "🔵 Khởi Động Chu Kỳ (System Reboot)"
+            else:
+                subsys = "Phần Cứng Khác"
+                desc = f"Sự kiện can thiệp bảo vệ phần cứng ({clean_l})"
+                eval_stat = "🟡 Cần Theo Dõi"
+
+            rows.append({
+                "Thời Gian": cur_time if cur_time else "Hệ thống",
+                "Phân Hệ Phần Cứng": subsys,
+                "Mã Trình Điều Khiển (Driver)": drv_tag,
+                "Tham Số / Cờ Thanh Ghi": extra,
+                "Diễn Giải Kỹ Thuật O&M": desc,
+                "Đánh Giá": eval_stat,
+                "Raw_Line": clean_l
+            })
+
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            df.sort_values(by="Thời Gian", ascending=False, inplace=True)
+            df.reset_index(drop=True, inplace=True)
+        return df
 
     def get_inverter_telemetry_history(self, folder_path: str, max_records: int = 4320) -> pd.DataFrame:
         """
