@@ -5651,16 +5651,16 @@ elif selected_menu == NAV_OPTIONS[9]:
                 with kpi_r3:
                     st.metric("⚡ Dạng Sự Cố", flt_info.get("fault_phase", "L2-N"), delta=f"Vị trí: {floc.get('dist_km')} km ({floc.get('dist_pct')}%)")
                 with kpi_r4:
-                    st.metric("🎯 Bảo Vệ Khởi Phát", flt_info.get("trigger_signal", "87L"), delta="87L So lệch pha B")
+                    st.metric("🎯 Bảo Vệ Khởi Phát", flt_info.get("trigger_signal", "--"), delta=f"{flt_info.get('fault_phase')}")
                 with kpi_r5:
                     st.metric("⏱️ Thời Gian Loại Trừ", f"{flt_info.get('total_fault_clearing_time_ms', 32)} ms", delta=f"Rơ le: {flt_info.get('relay_operating_time_ms')}ms | MC: {flt_info.get('breaker_opening_time_ms')}ms")
 
                 # BANNER ĐÁNH GIÁ CHUYÊN MÔN CỦA KỸ SƯ RƠ LE
-                st.markdown(r"""
+                st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border-radius: 12px; padding: 18px 22px; margin-top: 15px; margin-bottom: 20px; border: 1px solid #334155; border-left: 6px solid #10B981;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
                         <div style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;">
-                            🩺 ĐÁNH GIÁ KỸ THUẬT VẬN HÀNH RƠ LE & THỜI GIAN LOẠI TRỪ SỰ CỐ
+                            🩺 ĐÁNH GIÁ KỸ THUẬT VẬN HÀNH RƠ LE & THỜI GIAN LOẠI TRỪ SỰ CỐ (BẢN GHI #{dev_info.get('recording_number')})
                         </div>
                         <div>
                             <span style="background: #10B98122; color: #10B981; border: 1px solid #10B981; padding: 4px 14px; border-radius: 20px; font-weight: 700; font-size: 0.9rem;">
@@ -5670,16 +5670,16 @@ elif selected_menu == NAV_OPTIONS[9]:
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; font-size: 0.85rem; color: #CBD5E1;">
                         <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
-                            <div style="color: #38BDF8; font-weight: 700;">1. Nguyên lý tác động 87L:</div>
-                            <div style="margin-top: 3px;">Dòng so lệch pha B đạt <b>4.220 A</b> (vượt xa dòng hãm 3.821 A), rơ le phát lệnh cắt chỉ sau <b>5 ms</b> kể từ khi nhận biết sự cố.</div>
+                            <div style="color: #38BDF8; font-weight: 700;">1. Khởi phát bảo vệ:</div>
+                            <div style="margin-top: 3px;">Tín hiệu <b>{flt_info.get('trigger_signal')}</b> tác động kích hoạt cắt máy cắt sau <b>{flt_info.get('relay_operating_time_ms')} ms</b> ({flt_info.get('fault_phase')}).</div>
                         </div>
                         <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
                             <div style="color: #F59E0B; font-weight: 700;">2. Thời gian cắt máy cắt 171:</div>
-                            <div style="margin-top: 3px;">Máy cắt 110kV (QA1) mở dập hồ quang hoàn tất sau <b>27 ms</b>. Tổng thời gian cô lập hoàn toàn điểm sự cố là <b>32 ms</b>.</div>
+                            <div style="margin-top: 3px;">Máy cắt 110kV (QA1) mở dập hồ quang sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b>. Tổng thời gian cô lập hoàn toàn sự cố: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>.</div>
                         </div>
                         <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
-                            <div style="color: #A78BFA; font-weight: 700;">3. Kênh truyền Inter-trip:</div>
-                            <div style="margin-top: 3px;">Gửi lệnh <i>L4C TR REMOTE</i> sang trạm đối diện qua cáp quang OPGW sau <b>18 ms</b>, kích hoạt tự đóng lại 79 chuẩn quy trình.</div>
+                            <div style="color: #A78BFA; font-weight: 700;">3. Định vị điểm sự cố:</div>
+                            <div style="margin-top: 3px;">Điểm ngắn mạch tại <b>{floc.get('dist_km')} km</b> ({floc.get('dist_pct')}% tuyến), nằm tại <b>{floc.get('tower_range')}</b>.</div>
                         </div>
                     </div>
                 </div>
@@ -5699,13 +5699,13 @@ elif selected_menu == NAV_OPTIONS[9]:
 
                 # --- SUBTAB 1: ĐỊNH VỊ ĐIỂM SỰ CỐ & SƠ ĐỒ TUYẾN (FAULT LOCATION) ---
                 with t_floc:
-                    st.markdown(r"""
+                    st.markdown(f"""
                     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
                         <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
-                            📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV (FAULT LOCATION - FLOC)
+                            📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
                         </div>
                         <div style="font-size: 0.85rem; color: #CBD5E1;">
-                            Ứng dụng thuật toán điện kháng (Reactance Method / Takagi Algorithm) khử sai số điện trở hồ quang và bù trừ dòng thứ tự không k₀ để xác định chính xác khoảng cách từ TBA ĐMT Mỹ Hiệp đến điểm ngắn mạch chạm đất pha B.
+                            Nguồn định vị: <b>{floc.get('dist_source')}</b>. Tuyến đường dây 110kV Lộ 171 ĐMT Mỹ Hiệp - Phù Mỹ: dài <b>14.8 km</b> với <b>51 vị trí cột</b>.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -5717,7 +5717,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                     with kpi_f2:
                         st.metric("🗼 Vị Trí Cột Sự Cố", f"Cột #{floc.get('start_tower')} - #{floc.get('end_tower')}", delta="Xuất tuyến 171 (Tổng 51 cột)")
                     with kpi_f3:
-                        st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_mag_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
+                        st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_loop_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
                     with kpi_f4:
                         st.metric("🔥 Điện Trở Hồ Quang Rf", f"~{floc.get('r_arc_ohm')} Ω", delta="Chạm đất có điện trở trung bình")
 
@@ -5725,17 +5725,18 @@ elif selected_menu == NAV_OPTIONS[9]:
                     fig_floc = create_fault_location_diagram(floc)
                     st.plotly_chart(fig_floc, use_container_width=True)
 
-                    # GIẢI TRÌNH KỸ THUẬT TẠI SAO RƠ LE HIỂN THỊ ERROR TRONG BẢN GHI GỐC
-                    with st.expander("❓ Giải Trình Kỹ Thuật: Tại Sao Rơ Le RED670 Báo 'Fault location: Not Applicable / Error'?", expanded=True):
-                        st.markdown(r"""
+                    # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
+                    with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=True):
+                        st.markdown(f"""
                         <div style="background: #1E293B; border-radius: 8px; padding: 16px 20px; border-left: 4px solid #F59E0B; margin-bottom: 12px;">
                             <div style="font-weight: 700; color: #F59E0B; font-size: 0.95rem; margin-bottom: 8px;">
-                                ⚠️ NGUYÊN NHÂN RƠ LE IED BÁO 'NOT APPLICABLE':
+                                ⚠️ PHÂN TÍCH TÌNH TRẠNG ĐỊNH VỊ IED ({floc.get('ied_report_status')}):
                             </div>
                             <div style="font-size: 0.86rem; color: #E2E8F0; line-height: 1.6;">
-                                1. <b>Nguyên lý bảo vệ chính là So Lệch Dọc 87L:</b> Rơ le ABB RED670 tại ngăn lộ 171 được cấu hình chức năng chính là bảo vệ so lệch dòng điện đường dây (Line Differential - 87L) trao đổi dữ liệu qua kênh cáp quang OPGW. Bảo vệ 87L tác động tức thời sau <b>5 ms</b> chỉ dựa trên so sánh dòng vi sai \(I_d = 4.220\text{ A}\) và dòng hãm \(I_b = 3.821\text{ A}\), hoàn toàn không phụ thuộc vào tính toán trở kháng hay khoảng cách.<br><br>
-                                2. <b>Khối chức năng RFLO (Fault Locator) chưa nạp tham số:</b> Trong phần mềm kỹ thuật <i>PCM600</i> của ABB, khối thuật toán định vị sự cố (RFLO) yêu cầu cài đặt ma trận tham số đường dây (\(R_1, X_1, R_0, X_0, L_{\text{km}}\)). Do cấu hình IED xuất xưởng chưa kích hoạt tính năng tự động ghi nhận FLOC khi trip 87L, rơ le trả về cờ trạng thái <code>Status of fault calculation: Error / Fault location: Not Applicable</code>.<br><br>
-                                3. <b>Giải pháp tính toán độc lập:</b> Dựa trên các kênh đo sóng tương tự (Analog Disturbance Waveforms) được rơ le ghi lại với độ chính xác cao (\(U_{L2} = 7.38\text{ kV} \angle 330.3^\circ, I_{L2} = 548.2\text{ A} \angle 297.5^\circ, 3I_0 = 1.643\text{ A} \angle 297.5^\circ\)), hệ thống áp dụng công thức giải tích chuẩn Takagi xác định chính xác điểm sự cố tại vị trí <b>5.31 km</b> (tương ứng <b>35.9%</b> tuyến đường dây 14.8 km, nằm tại khoảng néo cột <b>#18 đến #19</b>, cách cột #18 ~278m).
+                                • <b>Đánh giá trạng thái rơ le:</b> {floc.get('root_cause_ied_error')}<br>
+                                • <b>Phương thức xác định vị trí:</b> {floc.get('dist_source')}.<br>
+                                • <b>Thông số ngắn mạch trích xuất:</b> Điện áp pha sự cố {floc.get('fault_phase_letter')}: <code>{floc.get('u_fault_v')} V ∠ {floc.get('u_fault_ang')}°</code> | Dòng pha sự cố {floc.get('fault_phase_letter')}: <code>{floc.get('i_fault_a')} A ∠ {floc.get('i_fault_ang')}°</code> | Dòng 3I0: <code>{floc.get('i_3i0_a')} A ∠ {floc.get('i_3i0_ang')}°</code>.<br>
+                                • <b>Khuyến nghị O&M:</b> Tập trung kiểm tra chuỗi sứ và hành lang tuyến tại <b>{floc.get('tower_range')}</b>.
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -5744,14 +5745,14 @@ elif selected_menu == NAV_OPTIONS[9]:
                     st.markdown("##### 📐 Bảng Tham Số Tính Toán Định Vị Chi Tiết (Fault Calculation Parameters):")
                     df_calc = pd.DataFrame([
                         {"Tham Số Tính Toán": "Loại đường dây & Chiều dài", "Ký Hiệu": "ACSR 240/32 - L", "Giá Trị": "14.8 km (51 vị trí cột)", "Đơn Vị": "km / cột", "Ghi Chú": "Đường dây 110kV ĐMT Mỹ Hiệp - Phù Mỹ (khoảng vượt TB ~296m)"},
-                        {"Tham Số Tính Toán": "Điện kháng thứ tự thuận (đơn vị)", "Ký Hiệu": "x1", "Giá Trị": f"{floc.get('line_params', {}).get('x1', 0.405):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Tham số dây dẫn nhôm lõi thép tiêu chuẩn"},
-                        {"Tham Số Tính Toán": "Điện trở thứ tự thuận (đơn vị)", "Ký Hiệu": "r1", "Giá Trị": f"{floc.get('line_params', {}).get('r1', 0.120):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Nhiệt độ môi trường vận hành 30°C"},
-                        {"Tham Số Tính Toán": "Hệ số bù thứ tự không", "Ký Hiệu": "k0 = (Z0 - Z1) / 3Z1", "Giá Trị": f"{floc.get('line_params', {}).get('k0_mag', 0.69):.2f} ∠ {floc.get('line_params', {}).get('k0_ang', 7.1):.1f}°", "Đơn Vị": "--", "Ghi Chú": "Bù trừ dòng chạm đất qua đất/dây chống sét"},
-                        {"Tham Số Tính Toán": "Điện áp pha sự cố B (L2)", "Ký Hiệu": "U_L2", "Giá Trị": "7,382.4 ∠ 330.3°", "Đơn Vị": "V / độ", "Ghi Chú": "Sụt áp nghiêm trọng còn 11.6% định mức"},
-                        {"Tham Số Tính Toán": "Dòng điện pha sự cố B (L2)", "Ký Hiệu": "I_L2", "Giá Trị": "548.2 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng sự cố phía nguồn Mỹ Hiệp phát ra"},
-                        {"Tham Số Tính Toán": "Dòng điện thứ tự không 3I0", "Ký Hiệu": "3I0", "Giá Trị": "1,643.4 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng hồi lưu qua điểm tiếp địa"},
-                        {"Tham Số Tính Toán": "Tổng trở vòng lặp ngắn mạch", "Ký Hiệu": "Z_loop = U_L2 / (I_L2 + k0*3I0)", "Giá Trị": f"{floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} (Z = {floc.get('z_mag_ohm')} ∠ {floc.get('z_ang_deg')}°)", "Đơn Vị": "Ω", "Ghi Chú": "Trở kháng nhìn từ rơ le đến điểm ngắn mạch"},
-                        {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d = X_loop / x1", "Giá Trị": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": "Khoảng cột #18 - #19 (khoảng cách từ Cột #18 ~278m)"}
+                        {"Tham Số Tính Toán": "Điện kháng thứ tự thuận (đơn vị)", "Ký Hiệu": "x1", "Giá Trị": "0.405", "Đơn Vị": "Ω/km", "Ghi Chú": "Tham số dây dẫn nhôm lõi thép tiêu chuẩn"},
+                        {"Tham Số Tính Toán": "Điện trở thứ tự thuận (đơn vị)", "Ký Hiệu": "r1", "Giá Trị": "0.120", "Đơn Vị": "Ω/km", "Ghi Chú": "Nhiệt độ môi trường vận hành 30°C"},
+                        {"Tham Số Tính Toán": "Hệ số bù thứ tự không", "Ký Hiệu": "k0 = (Z0 - Z1) / 3Z1", "Giá Trị": "0.69 ∠ 7.1°", "Đơn Vị": "--", "Ghi Chú": "Bù trừ dòng chạm đất qua đất/dây chống sét"},
+                        {"Tham Số Tính Toán": f"Điện áp pha sự cố {floc.get('fault_phase_letter')}", "Ký Hiệu": f"U_{floc.get('fault_phase_letter')}", "Giá Trị": f"{floc.get('u_fault_v')} ∠ {floc.get('u_fault_ang')}°", "Đơn Vị": "V / độ", "Ghi Chú": "Điện áp tức thời tại thời điểm ngắn mạch"},
+                        {"Tham Số Tính Toán": f"Dòng điện pha sự cố {floc.get('fault_phase_letter')}", "Ký Hiệu": f"I_{floc.get('fault_phase_letter')}", "Giá Trị": f"{floc.get('i_fault_a')} ∠ {floc.get('i_fault_ang')}°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng sự cố phía nguồn Mỹ Hiệp phát ra"},
+                        {"Tham Số Tính Toán": "Dòng điện thứ tự không 3I0", "Ký Hiệu": "3I0", "Giá Trị": f"{floc.get('i_3i0_a')} ∠ {floc.get('i_3i0_ang')}°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng hồi lưu qua điểm tiếp địa"},
+                        {"Tham Số Tính Toán": "Tổng trở vòng lặp ngắn mạch", "Ký Hiệu": "Z_loop = U_fault / (I_fault + k0*3I0)", "Giá Trị": f"{floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} (Z = {floc.get('z_loop_ohm')} ∠ {floc.get('z_ang_deg')}°)", "Đơn Vị": "Ω", "Ghi Chú": "Trở kháng nhìn từ rơ le đến điểm ngắn mạch"},
+                        {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d", "Giá Trị": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": floc.get('tower_range')}
                     ])
                     st.dataframe(df_calc, use_container_width=True, hide_index=True)
 

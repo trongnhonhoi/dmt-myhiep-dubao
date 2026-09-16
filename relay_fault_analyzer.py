@@ -253,104 +253,105 @@ class RelayFaultAnalyzer:
                 except Exception:
                     pages_images_b64.append("")
 
+            p1 = pages_text[0] if len(pages_text) >= 1 else ""
+            p3 = pages_text[2] if len(pages_text) >= 3 else ""
+
             # 1. Device Information
             device_info = {
                 "station_name": "NM ĐMT MỸ HIỆP (110kV)",
-                "ied_type": self._extract_regex(full_text, r"IED type\s+([^\n]+)", "RED670"),
-                "ied_version": self._extract_regex(full_text, r"IED version\s+([^\n]+)", "2.2.3"),
-                "object_name": self._extract_regex(full_text, r"Object name\s+([^\n]+)", "RED670-C42X00"),
-                "ied_name": self._extract_regex(full_text, r"IED name\s+([^\n]+)", "F87L"),
-                "bay_name": "Ngăn Lộ 171 - Đường dây 110kV ĐMT Mỹ Hiệp đi TBA 110kV Phù Mỹ",
-                "recorder_id": self._extract_regex(full_text, r"Recorder ID\s+([^\n]+)", "1"),
-                "recording_number": self._extract_regex(full_text, r"Recording number\s+([^\n]+)", "339"),
+                "ied_type": self._extract_regex(p1, r"IED type\s*\n\s*([^\n]+)", "RED670"),
+                "ied_version": self._extract_regex(p1, r"IED version\s*\n\s*([^\n]+)", "2.2.3"),
+                "object_name": self._extract_regex(p1, r"Object name\s*\n\s*([^\n]+)", "RED670-C42X00"),
+                "ied_name": self._extract_regex(p1, r"IED name\s*\n\s*([^\n]+)", "F87L"),
+                "bay_name": "Ngăn Lộ 171 - Đường dây 110kV ĐMT Mỹ Hiệp đi TBA 220kV Phù Mỹ",
+                "recorder_id": self._extract_regex(p1, r"Recorder ID\s*\n\s*([^\n]+)", "1"),
+                "recording_number": self._extract_regex(p1, r"Recording number\s*\n\s*([^\n]+)", "339"),
             }
 
             # 2. Fault Information
-            trig_time = self._extract_regex(full_text, r"Trig date and time\s+([^\n]+)", "11/6/2025 17:47:59.449")
-            trig_signal = self._extract_regex(full_text, r"Trigger signal name\s+([^\n]+)", "L4CPDIF TR L2")
-            total_rec_time = self._extract_regex(full_text, r"Total recording time\s+([^\n]+)", "4086 ms")
-            pre_trig_time = self._extract_regex(full_text, r"Pre-trig recording time\s+([^\n]+)", "1000 ms")
-            post_trig_time = self._extract_regex(full_text, r"Post trig recording time\s+([^\n]+)", "3000 ms")
-            sampling_freq = self._extract_regex(full_text, r"Sampling frequency\s+([^\n]+)", "1 kHz")
-            sys_freq = self._extract_regex(full_text, r"System frequency\s+([^\n]+)", "50 Hz")
+            trig_time = self._extract_regex(p1, r"Trig date and time\s*\n\s*([^\n]+)", "")
+            trig_signal = self._extract_regex(p1, r"Trigger signal name\s*\n\s*([^\n]+)", "")
+            total_rec_time = self._extract_regex(p1, r"Total recording time\s*\n\s*([^\n]+)", "4000 ms")
+            pre_trig_time = self._extract_regex(p1, r"Pre-trig recording time\s*\n\s*([^\n]+)", "1000 ms")
+            post_trig_time = self._extract_regex(p1, r"Post trig recording time\s*\n\s*([^\n]+)", "3000 ms")
+            sampling_freq = self._extract_regex(p1, r"Sampling frequency\s*\n\s*([^\n]+)", "1 kHz")
+            sys_freq = self._extract_regex(p1, r"System frequency\s*\n\s*([^\n]+)", "50 Hz")
 
-            fault_type = self._extract_regex(full_text, r"Fault type\s+([^\n]+)", "L2-N")
-            fault_loop = self._extract_regex(full_text, r"Fault loop type\s+([^\n]+)", "L2-N")
+            fault_type = self._extract_regex(p1, r"Fault type\s*\n\s*([^\n]+)", "L2-N")
+            fault_loop = self._extract_regex(p1, r"Fault loop type\s*\n\s*([^\n]+)", "L2-N")
+            floc_raw = self._extract_regex(p1, r"Fault location\s*\n\s*([^\n]+)", "Not Applicable")
+            status_calc = self._extract_regex(p1, r"Status of fault calculation\s*\n\s*([^\n]+)", "Error")
 
-            # 3. Vector Diagrams (Currents & Voltages)
-            currents = [
-                {"no": 1, "name": "LINE CT IL1 (Pha A)", "rms": 547.88, "unit": "A", "angle": 297.6, "phase": "A"},
-                {"no": 2, "name": "LINE CT IL2 (Pha B - Sự cố)", "rms": 548.24, "unit": "A", "angle": 297.5, "phase": "B"},
-                {"no": 3, "name": "LINE CT IL3 (Pha C)", "rms": 547.25, "unit": "A", "angle": 297.5, "phase": "C"},
-                {"no": 4, "name": "LINE CT IN (Dòng 3I0)", "rms": 1643.37, "unit": "A", "angle": 297.5, "phase": "N"},
-                {"no": 5, "name": "L4C IBIAS L1 (Dòng hãm pha A)", "rms": 400.15, "unit": "A", "angle": 19.6, "phase": "A"},
-                {"no": 6, "name": "L4C IBIAS L2 (Dòng hãm pha B)", "rms": 3821.21, "unit": "A", "angle": 20.5, "phase": "B"},
-                {"no": 7, "name": "L4C IDL1 MAG (Dòng so lệch Id A)", "rms": 4.21, "unit": "A", "angle": 140.3, "phase": "A"},
-                {"no": 8, "name": "L4C IDL2 MAG (Dòng so lệch Id B - CẮT)", "rms": 4219.99, "unit": "A", "angle": 20.5, "phase": "B"},
-                {"no": 9, "name": "L4C IDL3 MAG (Dòng so lệch Id C)", "rms": 1.82, "unit": "A", "angle": 290.3, "phase": "C"}
-            ]
+            fault_phase_vi = "Pha A (L1-N Chạm Đất)" if "L1" in fault_type else ("Pha B (L2-N Chạm Đất)" if "L2" in fault_type else ("Pha C (L3-N Chạm Đất)" if "L3" in fault_type else fault_type))
 
-            voltages = [
-                {"no": 1, "name": "LINE VT UL1 (Pha A)", "rms_v": 65255.5, "rms_kv": 65.26, "angle": 130.2, "phase": "A", "status": "Bình Thường (65.3 kV)"},
-                {"no": 2, "name": "LINE VT UL2 (Pha B - Sự cố)", "rms_v": 7382.4, "rms_kv": 7.38, "angle": 330.3, "phase": "B", "status": "🔴 SỤT ÁP NẶNG (7.38 kV)"},
-                {"no": 3, "name": "LINE VT UL3 (Pha C)", "rms_v": 65625.3, "rms_kv": 65.63, "angle": 256.8, "phase": "C", "status": "Bình Thường (65.6 kV)"},
-                {"no": 4, "name": "LINE VT UN (Điện áp 3U0)", "rms_v": 54026.2, "rms_kv": 54.03, "angle": 199.0, "phase": "N", "status": "🚨 ĐIỆN ÁP TRUNG TÍNH DÂNG CAO"},
-                {"no": 5, "name": "WA1 VT UL2 (Thanh Cái)", "rms_v": 7415.6, "rms_kv": 7.42, "angle": 330.1, "phase": "B", "status": "Sụt Áp Thanh Cái (7.42 kV)"}
-            ]
+            # 3. Vector Diagrams (Currents & Voltages parsed dynamically from Page 3)
+            currents = []
+            c_matches = re.findall(r'(\d+)\s+([A-Z0-9\s_]+)\s+([\d\.]+)\(A\)\s+([\d\.\-]+)[\xb0\?°]', p3)
+            for num, name, rms, ang in c_matches:
+                name = name.strip()
+                ph = 'A' if 'L1' in name else ('B' if 'L2' in name else ('C' if 'L3' in name else ('N' if 'IN' in name else 'A')))
+                currents.append({
+                    "no": int(num),
+                    "name": name,
+                    "rms": float(rms),
+                    "unit": "A",
+                    "angle": float(ang),
+                    "phase": ph
+                })
 
-            # 4. Sequence of Events (SoE) from Page 3 & Page 4
-            events_raw = [
-                (53, "EF4PTOC 2HRM", "On", "11/6/2025 17:47:59.444", 444),
-                (37, "L4C STR L2", "On", "11/6/2025 17:47:59.447", 447),
-                (34, "L4CPDIF TR L2", "On", "11/6/2025 17:47:59.449", 449),
-                (44, "L4C TR LOCAL", "On", "11/6/2025 17:47:59.449", 449),
-                (97, "QA1 EXE OP", "On", "11/6/2025 17:47:59.452", 452),
-                (112, "QA1 PTRC TRL3", "On", "11/6/2025 17:47:59.452", 452),
-                (110, "QA1 PTRC TRL1", "On", "11/6/2025 17:47:59.452", 452),
-                (111, "QA1 PTRC TRL2", "On", "11/6/2025 17:47:59.452", 452),
-                (39, "L4C STR UNRES", "On", "11/6/2025 17:47:59.452", 452),
-                (95, "QA1 RSYN AUSC", "Off", "11/6/2025 17:47:59.452", 452),
-                (51, "EF4PTOC ST FW", "On", "11/6/2025 17:47:59.452", 452),
-                (80, "ZCPSCH CR", "On", "11/6/2025 17:47:59.460", 460),
-                (50, "EF4PTOC STR", "On", "11/6/2025 17:47:59.460", 460),
-                (53, "EF4PTOC 2HRM", "Off", "11/6/2025 17:47:59.460", 460),
-                (91, "QA1 RREC STR", "On", "11/6/2025 17:47:59.460", 460),
-                (45, "L4C TR REMOTE", "On", "11/6/2025 17:47:59.462", 462),
-                (83, "ZCRW TRWEI", "On", "11/6/2025 17:47:59.473", 473),
-                (5, "QA1 POS CLS", "Off", "11/6/2025 17:47:59.476", 476),
-                (82, "ZCPSCH CS", "On", "11/6/2025 17:47:59.476", 476),
-                (21, "OC4PTOC STR", "On", "11/6/2025 17:47:59.476", 476),
-                (50, "EF4PTOC STR", "Off", "11/6/2025 17:47:59.500", 500),
-                (53, "EF4PTOC 2HRM", "On", "11/6/2025 17:47:59.500", 500),
-                (37, "L4C STR L2", "Off", "11/6/2025 17:47:59.507", 507),
-                (83, "ZCRW TRWEI", "Off", "11/6/2025 17:47:59.512", 512),
-                (39, "L4C STR UNRES", "Off", "11/6/2025 17:47:59.512", 512),
-                (44, "L4C TR LOCAL", "Off", "11/6/2025 17:47:59.512", 512),
-                (51, "EF4PTOC ST FW", "Off", "11/6/2025 17:47:59.516", 516),
-                (53, "EF4PTOC 2HRM", "Off", "11/6/2025 17:47:59.516", 516),
-                (21, "OC4PTOC STR", "Off", "11/6/2025 17:47:59.532", 532),
-                (34, "L4CPDIF TR L2", "Off", "11/6/2025 17:47:59.535", 535),
-                (45, "L4C TR REMOTE", "Off", "11/6/2025 17:47:59.535", 535),
-                (80, "ZCPSCH CR", "Off", "11/6/2025 17:47:59.569", 569),
-                (91, "QA1 RREC STR", "Off", "11/6/2025 17:47:59.596", 596),
-                (97, "QA1 EXE OP", "Off", "11/6/2025 17:47:59.605", 605),
-                (110, "QA1 PTRC TRL1", "Off", "11/6/2025 17:47:59.605", 605),
-                (111, "QA1 PTRC TRL2", "Off", "11/6/2025 17:47:59.605", 605),
-                (112, "QA1 PTRC TRL3", "Off", "11/6/2025 17:47:59.605", 605),
-                (82, "ZCPSCH CS", "Off", "11/6/2025 17:47:59.626", 626)
-            ]
+            voltages = []
+            v_matches = re.findall(r'(\d+)\s+([A-Z0-9\s_]+)\s+([\d\.]+)\(V\)\s+([\d\.\-]+)[\xb0\?°]', p3)
+            for num, name, rms, ang in v_matches:
+                name = name.strip()
+                v_val = float(rms)
+                v_kv = round(v_val / 1000.0, 2)
+                ph = 'A' if 'L1' in name else ('B' if 'L2' in name else ('C' if 'L3' in name else ('N' if 'UN' in name else 'A')))
+                if ph == 'N':
+                    stat = "🚨 ĐIỆN ÁP TRUNG TÍNH DÂNG CAO" if v_kv > 10.0 else "Điện Áp Trung Tính Bình Thường"
+                else:
+                    stat = f"🔴 SỤT ÁP NẶNG ({v_kv:.2f} kV)" if v_kv < 50.0 else f"Bình Thường ({v_kv:.2f} kV)"
+
+                voltages.append({
+                    "no": int(num),
+                    "name": name,
+                    "rms_v": v_val,
+                    "rms_kv": v_kv,
+                    "angle": float(ang),
+                    "phase": ph,
+                    "status": stat
+                })
+
+            # 4. Sequence of Events (SoE) parsed dynamically from Page 3 and Page 4
+            events_raw = []
+            for p_idx in range(len(pages_text)):
+                if p_idx >= 2:
+                    p_txt = pages_text[p_idx]
+                    ev_matches = re.findall(r'(\d+)\s+([A-Z0-9\s_]+)\s+(On|Off)\s+(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}:\d{2}\.(\d+))', p_txt)
+                    for ch, sname, st, ts, ms_str in ev_matches:
+                        events_raw.append((int(ch), sname.strip(), st, ts, int(ms_str)))
 
             soe_records = []
-            base_ms = 444
+            base_ms = events_raw[0][4] if events_raw else 0
+            t_trip_ms = 5
+            t_breaker_open_ms = 32
+
             for ch_num, sig_name, status, t_str, ms_val in events_raw:
                 meta = RELAY_SIGNAL_DICTIONARY.get(sig_name, {
                     "ansi": "--",
                     "name_vi": sig_name,
-                    "meaning": "Tín hiệu bảo vệ nội bộ IED.",
+                    "meaning": "Tín hiệu bảo vệ / trạng thái logic nội bộ IED.",
                     "category": "INTERNAL",
                     "severity": "INFO"
                 })
                 delta_ms = ms_val - base_ms
+                if delta_ms < 0:
+                    delta_ms += 1000
+
+                if ("TR" in sig_name or "TRIP" in sig_name) and status == "On" and t_trip_ms == 5:
+                    t_trip_ms = delta_ms
+                if ("QA1 POS CLS" in sig_name or "POS CLS" in sig_name) and status == "Off":
+                    t_breaker_open_ms = delta_ms
+
                 soe_records.append({
                     "Kênh (Ch)": ch_num,
                     "Tín Hiệu (Signal Name)": sig_name,
@@ -366,10 +367,7 @@ class RelayFaultAnalyzer:
                 })
 
             df_soe = pd.DataFrame(soe_records)
-
-            t_trip_ms = 5   # L4CPDIF TR L2 at 449ms (+5ms from start)
-            t_breaker_open_ms = 32  # QA1 POS CLS Off at 476ms (+32ms from start)
-            t_total_clearing_ms = 32
+            t_total_clearing_ms = max(t_trip_ms, t_breaker_open_ms)
 
             return {
                 "device_info": device_info,
@@ -378,14 +376,16 @@ class RelayFaultAnalyzer:
                     "trigger_signal": trig_signal,
                     "fault_type": fault_type,
                     "fault_loop": fault_loop,
-                    "fault_phase": "Pha B (L2 - Chạm Đất)",
+                    "fault_phase": fault_phase_vi,
+                    "fault_location_raw": floc_raw,
+                    "status_fault_calc": status_calc,
                     "total_recording_time": total_rec_time,
                     "pre_trig_time": pre_trig_time,
                     "post_trig_time": post_trig_time,
                     "sampling_freq": sampling_freq,
                     "system_freq": sys_freq,
                     "relay_operating_time_ms": t_trip_ms,
-                    "breaker_opening_time_ms": t_breaker_open_ms - t_trip_ms,
+                    "breaker_opening_time_ms": max(1, t_breaker_open_ms - t_trip_ms),
                     "total_fault_clearing_time_ms": t_total_clearing_ms
                 },
                 "df_currents": pd.DataFrame(currents),
@@ -399,7 +399,7 @@ class RelayFaultAnalyzer:
             return {"error": str(e)}
 
     def _extract_regex(self, text: str, pattern: str, default: str = "") -> str:
-        m = re.search(pattern, text)
+        m = re.search(pattern, text, re.IGNORECASE)
         return m.group(1).strip() if m else default
 
 
@@ -418,32 +418,55 @@ def calculate_fault_location(
     để loại trừ sai số do điện trở tiếp xúc hồ quang Rf.
     Đường dây 110kV Lộ 171 ĐMT Mỹ Hiệp - Phù Mỹ: Chiều dài 14.8 km, 51 vị trí cột.
     """
-    # Phasor values extracted from event recording
-    u_mag = 7382.395
-    u_ang = 330.3
-    i_mag = 548.240
-    i_ang = 297.5
-    i_n_mag = 1643.368
-    i_n_ang = 297.5
+    flt_info = fault_data.get("fault_info", {})
+    df_u = fault_data.get("df_voltages", pd.DataFrame())
+    df_i = fault_data.get("df_currents", pd.DataFrame())
 
-    U_L2 = cmath.rect(u_mag, np.radians(u_ang))
-    I_L2 = cmath.rect(i_mag, np.radians(i_ang))
+    floc_raw = flt_info.get("fault_location_raw", "Not Applicable")
+    status_calc = flt_info.get("status_fault_calc", "Error")
+    fault_type = flt_info.get("fault_type", "L2-N")
+
+    # Xác định pha bị ngắn mạch sự cố: 'A', 'B', hoặc 'C'
+    fault_phase_letter = 'A' if 'L1' in fault_type else ('B' if 'L2' in fault_type else ('C' if 'L3' in fault_type else 'B'))
+
+    # Trích xuất vector Phasor của pha sự cố
+    u_row = df_u[df_u["phase"] == fault_phase_letter] if not df_u.empty else pd.DataFrame()
+    i_row = df_i[df_i["phase"] == fault_phase_letter] if not df_i.empty else pd.DataFrame()
+    in_row = df_i[df_i["phase"] == "N"] if not df_i.empty else pd.DataFrame()
+
+    u_mag = float(u_row.iloc[0]["rms_v"]) if not u_row.empty and "rms_v" in u_row.columns else 7382.4
+    u_ang = float(u_row.iloc[0]["angle"]) if not u_row.empty and "angle" in u_row.columns else 330.3
+    i_mag = float(i_row.iloc[0]["rms"]) if not i_row.empty and "rms" in i_row.columns else 548.24
+    i_ang = float(i_row.iloc[0]["angle"]) if not i_row.empty and "angle" in i_row.columns else 297.5
+    i_n_mag = float(in_row.iloc[0]["rms"]) if not in_row.empty and "rms" in in_row.columns else 1643.37
+    i_n_ang = float(in_row.iloc[0]["angle"]) if not in_row.empty and "angle" in in_row.columns else 297.5
+
+    U_fault = cmath.rect(u_mag, np.radians(u_ang))
+    I_fault = cmath.rect(i_mag, np.radians(i_ang))
     I_3I0 = cmath.rect(i_n_mag, np.radians(i_n_ang))
 
     Z1_km = complex(r1_per_km, x1_per_km)
     Z0_km = complex(r0_per_km, x0_per_km)
     k0 = (Z0_km - Z1_km) / (3.0 * Z1_km)
 
-    I_comp = I_L2 + k0 * I_3I0
-    Z_loop = U_L2 / I_comp
+    I_comp = I_fault + k0 * I_3I0
+    Z_loop = U_fault / I_comp if abs(I_comp) > 0 else complex(1.0, 1.0)
 
     r_loop = float(Z_loop.real)
     x_loop = float(Z_loop.imag)
     z_mag = float(abs(Z_loop))
     z_ang_deg = float(np.degrees(cmath.phase(Z_loop)))
 
-    # Distance by reactance method (eliminates Rf)
-    dist_km = max(0.1, round(x_loop / x1_per_km, 2))
+    # Kiểm tra xem rơ le IED có xuất trực tiếp kết quả định vị hợp lệ (Status: Ok) không
+    m_ied_dist = re.search(r'([\d\.]+)\s*km', floc_raw, re.IGNORECASE)
+    if m_ied_dist and "ok" in status_calc.lower():
+        dist_km = float(m_ied_dist.group(1))
+        dist_source = f"Giá trị định vị từ Rơ le IED (Khối RFLO/ZMF: {dist_km:.2f} km)"
+    else:
+        # Distance by reactance method (eliminates Rf)
+        dist_km = max(0.1, round(x_loop / x1_per_km, 2)) if x_loop > 0 else 0.5
+        dist_source = f"Tính toán độc lập bằng phương pháp điện kháng Takagi ({dist_km:.2f} km)"
+
     dist_pct = min(100.0, round((dist_km / line_length_km) * 100.0, 1))
 
     # Calculate exact tower span with 51 towers across 14.8 km
@@ -454,7 +477,7 @@ def calculate_fault_location(
     
     km_start_t = (start_tower - 1) * avg_span_km
     km_end_t = (end_tower - 1) * avg_span_km
-    dist_from_start_t = (dist_km - km_start_t) * 1000
+    dist_from_start_t = max(0.0, (dist_km - km_start_t) * 1000)
 
     tower_range = f"Khoảng cột #{start_tower} - #{end_tower} (km {km_start_t:.2f} - km {km_end_t:.2f}, cách Cột #{start_tower} ~{dist_from_start_t:.0f}m)"
 
@@ -465,22 +488,30 @@ def calculate_fault_location(
     return {
         "dist_km": dist_km,
         "dist_pct": dist_pct,
+        "dist_source": dist_source,
         "line_length_km": line_length_km,
         "total_towers": total_towers,
         "avg_span_m": round(avg_span_km * 1000, 1),
         "start_tower": start_tower,
         "end_tower": end_tower,
         "tower_range": tower_range,
+        "fault_phase_letter": fault_phase_letter,
         "z_loop_ohm": round(z_mag, 2),
         "r_loop_ohm": round(r_loop, 2),
         "x_loop_ohm": round(x_loop, 2),
         "z_ang_deg": round(z_ang_deg, 1),
         "r_arc_ohm": r_fault_arc,
+        "u_fault_v": round(u_mag, 1),
+        "u_fault_ang": round(u_ang, 1),
+        "i_fault_a": round(i_mag, 1),
+        "i_fault_ang": round(i_ang, 1),
+        "i_3i0_a": round(i_n_mag, 1),
+        "i_3i0_ang": round(i_n_ang, 1),
         "line_type": "Đường dây 110kV mạch đơn ACSR 240/32",
         "substation_from": "TBA 110kV ĐMT Mỹ Hiệp (Ngăn 171)",
         "substation_to": "TBA 220kV Phù Mỹ (Ngăn 171/172)",
-        "ied_report_status": "Status of fault calculation: Error / Fault location: Not Applicable",
-        "root_cause_ied_error": "Chức năng RFLO (Fault Locator) trong cấu hình PCM600 chưa được nhập ma trận tham số tổng trở đường dây (R1, X1, R0, X0) hoặc do bảo vệ 87L là bảo vệ chính tác động độc lập không phụ thuộc khoảng cách."
+        "ied_report_status": f"Status: {status_calc} / Fault location: {floc_raw}",
+        "root_cause_ied_error": "Chức năng RFLO (Fault Locator) trong cấu hình PCM600 chưa được nhập ma trận tham số tổng trở đường dây (R1, X1, R0, X0) hoặc do bảo vệ 87L là bảo vệ chính tác động độc lập không phụ thuộc khoảng cách." if "error" in status_calc.lower() else "Rơ le IED tính toán định vị sự cố thành công (Status: Ok)."
     }
 
 
