@@ -28,11 +28,14 @@ SUBSTATION_MY_HIEP = {
 
 SUBSTATION_PHU_MY = {
     "name": "TBA 220kV Phù Mỹ",
+    "location_name": "Thôn Trinh Vân Bắc, Xã Mỹ Trinh (Phù Mỹ Tây), Bình Định",
     "bay": "Ngăn lộ 171 / 172",
-    "lat": 14.24850,
-    "lon": 109.07200,
+    "lat": 14.231814,  # 14°13'54.5"N
+    "lon": 109.057191,  # 109°3'25.9"E
+    "dms": "14°13'54.5\"N 109°3'25.9\"E",
+    "plus_code": "63J4+PV8",
     "km": 14.800,
-    "desc": "Trạm biến áp 220kV nút lưới điện Quốc gia (Khu vực Phù Mỹ - Bình Định)"
+    "desc": "Trạm biến áp 220kV nút lưới điện Quốc gia (Thôn Trinh Vân Bắc, Xã Mỹ Trinh / Phù Mỹ Tây - 14°13'54.5\"N 109°3'25.9\"E | Plus Code: 63J4+PV8)"
 }
 
 def _generate_51_towers() -> List[Dict[str, Any]]:
@@ -460,7 +463,7 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     sub_lons = [SUBSTATION_MY_HIEP["lon"], SUBSTATION_PHU_MY["lon"]]
     sub_texts = [
         f"🏢 TBA 110kV NMĐMT MỸ HIỆP (km 0.0)<br>• Tọa độ: {SUBSTATION_MY_HIEP['dms']} (Plus Code: {SUBSTATION_MY_HIEP['plus_code']})",
-        "🏢 TBA 220kV PHÙ MỸ (km 14.8)"
+        f"🏢 TBA 220kV PHÙ MỸ (km 14.8)<br>• Tọa độ: {SUBSTATION_PHU_MY['dms']} (Plus Code: {SUBSTATION_PHU_MY['plus_code']})<br>• Vị trí: {SUBSTATION_PHU_MY['location_name']}"
     ]
 
     fig.add_trace(ScatterMapTrace(
@@ -697,8 +700,18 @@ def render_google_maps_html(floc: Dict[str, Any], height: int = 520) -> str:
                 weight: 2.5,
                 fillOpacity: 1
             }}).addTo(map);
-            subPhuMy.bindPopup("<b>🏢 TBA 220kV PHÙ MỸ</b><br>Lộ 171/172 (Điểm cuối km 14.80)", {{ className: 'custom-popup' }});
-            subPhuMy.bindTooltip("🏢 TBA 220kV Phù Mỹ (km 14.8)", {{ permanent: true, direction: 'bottom' }});
+            subPhuMy.bindPopup(`
+                <div style="font-size:13px; line-height:1.5;">
+                    <b style="color:#A78BFA; font-size:14px;">🏢 {SUBSTATION_PHU_MY['name']}</b><br>
+                    • <b>Vị trí:</b> {SUBSTATION_PHU_MY['location_name']}<br>
+                    • <b>Ngăn lộ đấu nối:</b> {SUBSTATION_PHU_MY['bay']}<br>
+                    • <b>Tọa độ DMS:</b> <b>{SUBSTATION_PHU_MY['dms']}</b><br>
+                    • <b>Tọa độ thập phân:</b> <code>{SUBSTATION_PHU_MY['lat']:.6f}, {SUBSTATION_PHU_MY['lon']:.6f}</code><br>
+                    • <b>Google Plus Code:</b> <b>{SUBSTATION_PHU_MY['plus_code']}</b><br>
+                    • <b>Lý trình:</b> Điểm cuối km {SUBSTATION_PHU_MY['km']:.2f}
+                </div>
+            `, {{ className: 'custom-popup' }});
+            subPhuMy.bindTooltip("🏢 TBA 220kV Phù Mỹ (14°13'54.5\"N 109°3'25.9\"E)", {{ permanent: true, direction: 'bottom' }});
 
             // 5. Fault Location Marker (Pulsing Red)
             const faultIcon = L.divIcon({{
