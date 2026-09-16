@@ -544,6 +544,29 @@ NAV_OPTIONS = [
     "🛡️ 10. Phân Tích Sự Cố Rơ Le Bảo Vệ (D:\\PT_RL)"
 ]
 
+# =========================================================================
+# KHỞI TẠO VÀ QUÉT MÁY CHỦ SCADA (D:\DATA SERVER PV 01)
+# =========================================================================
+@st.cache_resource
+def get_harvester():
+    return DataHarvester(DEFAULT_SERVER_PATH)
+
+harvester = get_harvester()
+server_connected = harvester.check_server_connection()
+
+if server_connected:
+    available_dates = harvester.scan_available_dates()
+    latest_entry = harvester.get_latest_date_entry()
+    latest_date_str = latest_entry['date_str'] if latest_entry else "26/08/2026"
+else:
+    available_dates = []
+    latest_entry = None
+    latest_date_str = "26/08/2026"
+
+# Quản lý Session State ngày đang chọn
+if 'active_date_entry' not in st.session_state and latest_entry:
+    st.session_state.active_date_entry = latest_entry
+
 # --- SIDEBAR CẤU HÌNH & MENU ĐIỀU HÀNH HÀNG DỌC (BOOTSTRAP THEME) ---
 with st.sidebar:
     if os.path.exists(LOGO_PATH):
@@ -565,8 +588,31 @@ with st.sidebar:
         key="app_vertical_navigation"
     )
     
-    st.markdown("<hr style='margin: 0.9rem 0; opacity: 0.15;'>", unsafe_allow_html=True)
-    
+    st.markdown("<hr style='margin: 0.8rem 0; opacity: 0.15;'>", unsafe_allow_html=True)
+
+    # Khung chọn ngày SCADA tích hợp gọn gàng trong Sidebar
+    with st.expander("📂 Chọn Ngày Dữ Liệu SCADA", expanded=False):
+        if available_dates:
+            date_options = {d['date_str']: d for d in reversed(available_dates)}
+            current_sel_idx = 0
+            if st.session_state.get('active_date_entry'):
+                active_str = st.session_state.active_date_entry.get('date_str', '')
+                if active_str in list(date_options.keys()):
+                    current_sel_idx = list(date_options.keys()).index(active_str)
+            
+            selected_date_str = st.selectbox(
+                "Ngày SCADA:",
+                list(date_options.keys()),
+                index=current_sel_idx,
+                key="sb_scada_date_select"
+            )
+            if st.button("🔄 Nạp Dữ Liệu Ngày Này", type="primary", use_container_width=True, key="btn_load_date_sb"):
+                st.session_state.active_date_entry = date_options[selected_date_str]
+                st.rerun()
+        if st.button("⚡ Quét Lại Server", use_container_width=True, key="btn_rescan_sb"):
+            harvester.scan_available_dates(force_rescan=True)
+            st.rerun()
+
     with st.expander("⚙️ Cấu Hình Thông Số Kỹ Thuật (50MWp / 40.075MW)", expanded=False):
         st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")
         
@@ -660,63 +706,8 @@ banner_html = f"""
 st.markdown(banner_html, unsafe_allow_html=True)
 
 
-# =========================================================================
-# KHỞI TẠO VÀ QUÉT MÁY CHỦ SCADA (D:\DATA SERVER PV 01)
-# =========================================================================
-@st.cache_resource
-def get_harvester():
-    return DataHarvester(DEFAULT_SERVER_PATH)
 
-harvester = get_harvester()
-server_connected = harvester.check_server_connection()
-
-if server_connected:
-    available_dates = harvester.scan_available_dates()
-    latest_entry = harvester.get_latest_date_entry()
-    latest_date_str = latest_entry['date_str'] if latest_entry else "26/08/2026"
-    
-    st.markdown(f"""
-    <div class="alert alert-success d-flex align-items-center shadow-sm py-2 px-3 mb-3 border-0 border-start border-4 border-success">
-        <div class="fs-4 me-3 text-success"><i class="bi bi-hdd-network-fill"></i></div>
-        <div class="flex-grow-1">
-            <div class="fw-bold text-dark"><i class="bi bi-check-circle-fill text-success me-1"></i> Máy Chủ SCADA Đang Hoạt Động: <code>{DEFAULT_SERVER_PATH}</code></div>
-            <div class="text-muted small mt-1">
-                <span class="badge bg-primary me-2"><i class="bi bi-calendar3"></i> {len(available_dates):,} ngày đo đếm (2020 - 2026)</span>
-                <span class="badge bg-info text-dark"><i class="bi bi-clock-history"></i> Mới nhất: {latest_date_str} (W.txt & P.txt)</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    available_dates = []
-    latest_entry = None
-
-
-# Quản lý Session State ngày đang chọn
-if 'active_date_entry' not in st.session_state and latest_entry:
-    st.session_state.active_date_entry = latest_entry
-
-with st.expander("📂 Chọn Ngày Dữ Liệu Lịch Sử Từ Server SCADA", expanded=False):
-    col_sc1, col_sc2 = st.columns([3, 1])
-    with col_sc1:
-        if available_dates:
-            date_options = {d['date_str']: d for d in reversed(available_dates)}
-            selected_date_str = st.selectbox(
-                "Chọn ngày dữ liệu SCADA từ máy chủ:",
-                list(date_options.keys()),
-                index=0
-            )
-            if st.button("🔄 Nạp Dữ Liệu Ngày Này", type="primary"):
-                st.session_state.active_date_entry = date_options[selected_date_str]
-                st.success(f"✅ Đã nạp dữ liệu ngày **{selected_date_str}**!")
-    with col_sc2:
-        st.write("")
-        st.write("")
-        if st.button("⚡ Quét Lại Server"):
-            harvester.scan_available_dates(force_rescan=True)
-            st.rerun()
-
-st.markdown("---")
+# Tải dữ liệu ngày đang chọn từ Server
 
 # Tải dữ liệu ngày đang chọn từ Server
 current_day_data = None
