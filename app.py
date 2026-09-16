@@ -59,16 +59,7 @@ from relay_fault_analyzer import (
 from transmission_line_171 import (
     get_towers_dataframe,
     find_fault_span_and_towers,
-    create_transmission_line_gis_map,
-    export_patrol_order_to_excel,
-    update_single_tower,
-    save_custom_towers,
-    reset_custom_towers,
-    export_towers_template_excel,
-    import_towers_from_excel,
-    parse_coords_string,
-    render_google_maps_html,
-    render_google_maps_iframe
+    export_patrol_order_to_excel
 )
 
 from scada_map_builder import (
@@ -5715,27 +5706,18 @@ elif selected_menu == NAV_OPTIONS[9]:
                     "📥 6. Xuất Báo Cáo Sự Cố Rơ Le (Excel 4 Sheet)"
                 ])
 
-                # --- SUBTAB 1: ĐỊNH VỊ ĐIỂM SỰ CỐ & SƠ ĐỒ TUYẾN (FAULT LOCATION) ---
+                # --- SUBTAB 1: ĐỊNH VỊ ĐIỂM SỰ CỐ & SƠ ĐỒ NGUYÊN LÝ TUYẾN 110kV ---
                 with t_floc:
                     f_km_val = floc.get('dist_km', 5.31)
                     span_info = find_fault_span_and_towers(f_km_val, radius_km=1.5)
 
                     st.markdown(f"""
                     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                            <div>
-                                <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
-                                    📍 ĐỊNH VỊ ĐIỂM SỰ CỐ & BẢN ĐỒ TRẮC ĐỊA 51 CỘT ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
-                                </div>
-                                <div style="font-size: 0.85rem; color: #CBD5E1;">
-                                    Tuyến 110kV Lộ 171 Mỹ Hiệp - 220kV Phù Mỹ (<b>14.8 km - 51 Vị Trí Cột</b>). Nguồn định vị: <b>{floc.get('dist_source')}</b>.
-                                </div>
-                            </div>
-                            <div style="margin-top: 8px;">
-                                <a href="{span_info['fault_gmap_link']}" target="_blank" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; background: #EF4444; color: white; padding: 7px 16px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
-                                    🗺️ Mở Tọa Độ Điểm Sự Cố Trên Google Maps ↗
-                                </a>
-                            </div>
+                        <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
+                            📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
+                        </div>
+                        <div style="font-size: 0.85rem; color: #CBD5E1;">
+                            Tuyến 110kV Lộ 171 ĐMT Mỹ Hiệp - 220kV Phù Mỹ (Chiều dài: <b>14.8 km</b> | Tổng số: <b>51 vị trí cột</b>). Nguồn định vị: <b>{floc.get('dist_source')}</b>.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -5749,38 +5731,12 @@ elif selected_menu == NAV_OPTIONS[9]:
                     with kpi_f3:
                         st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_loop_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
                     with kpi_f4:
-                        st.metric("🌐 Tọa Độ GPS Điểm Sự Cố", f"{span_info['fault_lat']:.4f}°N", delta=f"{span_info['fault_lon']:.4f}°E")
+                        st.metric("🔥 Điện Trở Hồ Quang Rf", f"~{floc.get('r_arc_ohm')} Ω", delta="Chạm đất có điện trở trung bình")
 
-                    # LỰA CHỌN CHẾ ĐỘ HIỂN THỊ BẢN ĐỒ / SƠ ĐỒ
-                    map_view_mode = st.radio(
-                        "Chế độ hiển thị bản đồ trực quan tuyến 110kV:",
-                        [
-                            "🛰️ Bản Đồ Google Maps Trực Tiếp (Vệ Tinh Hybrid & Giao Thông Tương Tác 51 Cột)",
-                            "🌐 Bản Đồ Số GIS Plotly (OpenStreetMap)",
-                            "📐 Sơ Đồ Nguyên Lý Khoảng Vượt (Single Line)",
-                            "🗺️ Khung Nhúng Google Maps Chính Thức (IFrame)"
-                        ],
-                        index=0,
-                        horizontal=True,
-                        key="radio_map_view_mode"
-                    )
-
-                    if "Google Maps Trực Tiếp" in map_view_mode:
-                        gmap_html = render_google_maps_html(floc, height=520)
-                        components.html(gmap_html, height=540)
-                    elif "Bản Đồ Số GIS Plotly" in map_view_mode:
-                        fig_gis = create_transmission_line_gis_map(floc)
-                        st.plotly_chart(fig_gis, use_container_width=True)
-                    elif "Google Maps Chính Thức" in map_view_mode:
-                        col_g_type, _ = st.columns([2, 3])
-                        with col_g_type:
-                            g_embed_type = st.selectbox("Kiểu lớp bản đồ Google:", ["🛰️ Ảnh Vệ Tinh (Satellite)", "🗺️ Bản Đồ Đường (Roadmap)"], index=0, key="sel_g_embed_type")
-                        t_type_val = "k" if "Vệ Tinh" in g_embed_type else "m"
-                        g_iframe = render_google_maps_iframe(span_info['fault_lat'], span_info['fault_lon'], height=480, map_type=t_type_val)
-                        components.html(g_iframe, height=500)
-                    else:
-                        fig_floc = create_fault_location_diagram(floc)
-                        st.plotly_chart(fig_floc, use_container_width=True)
+                    # SƠ ĐỒ NGUYÊN LÝ TRẮC DỌC TUYẾN ĐƯỜNG DÂY 110kV (SINGLE LINE DIAGRAM)
+                    st.markdown("##### 📐 Sơ Đồ Nguyên Lý Trắc Dọc Tuyến Đường Dây 110kV (Lộ 171: 14.8 km - 51 Vị Trí Cột):")
+                    fig_floc = create_fault_location_diagram(floc)
+                    st.plotly_chart(fig_floc, use_container_width=True)
 
                     # KHUYẾN NGHỊ VÀ HƯỚNG DẪN ĐỘI TUẦN TRA HIỆN TRƯỜNG O&M
                     col_patrol_box1, col_patrol_box2 = st.columns([3, 2])
@@ -5791,10 +5747,9 @@ elif selected_menu == NAV_OPTIONS[9]:
                                 🎯 CHỈ ĐẠO TUẦN TRA HIỆN TRƯỜNG O&M ĐƯỜNG DÂY 110kV LỘ 171:
                             </div>
                             <div style="font-size: 0.85rem; color: #E2E8F0; line-height: 1.6;">
-                                • <b>Khoảng cột trọng điểm:</b> Khoảng cột <b>#{span_info['start_tower']} - #{span_info['end_tower']}</b> (từ km {span_info['start_tower_km']:.2f} đến km {span_info['end_tower_km']:.2f}).<br>
-                                • <b>Vị trí tương đối:</b> Cách chân Cột #{span_info['start_tower']} khoảng <b>~{span_info['offset_from_start_m']:.0f} m</b>; cách chân Cột #{span_info['end_tower']} khoảng <b>~{span_info['offset_to_end_m']:.0f} m</b>.<br>
-                                • <b>Tọa độ định vị GPS:</b> <code>{span_info['fault_lat']:.6f}, {span_info['fault_lon']:.6f}</code> (Hệ tọa độ WGS84).<br>
-                                • <b>Nội dung kiểm tra bắt buộc:</b> Kiểm tra phóng điện chuỗi sứ đỡ/néo pha sự cố ({flt_info.get('fault_phase')}), vết cháy nám hồ quang trên dây ACSR 240/32, đứt sợi dây chống sét OPGW và vi phạm khoảng cách an toàn cây rừng keo.
+                                • <b>Khoảng cột trọng điểm cần rà soát:</b> Khoảng cột <b>#{span_info['start_tower']} - #{span_info['end_tower']}</b> (từ km {span_info['start_tower_km']:.2f} đến km {span_info['end_tower_km']:.2f}).<br>
+                                • <b>Vị trí tương đối tính từ chân cột:</b> Cách chân Cột #{span_info['start_tower']} khoảng <b>~{span_info['offset_from_start_m']:.0f} m</b>; cách chân Cột #{span_info['end_tower']} khoảng <b>~{span_info['offset_to_end_m']:.0f} m</b>.<br>
+                                • <b>Nội dung kiểm tra bắt buộc:</b> 1) Kiểm tra dấu vết phóng điện chuỗi sứ cách điện pha sự cố ({flt_info.get('fault_phase')}). 2) Kiểm tra dây dẫn ACSR 240/32 có vết cháy nám hồ quang hoặc đứt tao. 3) Phát hiện cây cối vi phạm khoảng cách an toàn tĩnh trong hành lang. 4) Kiểm tra dây chống sét OPGW và tiếp địa chân cột.
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -5807,7 +5762,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                                 📋 XUẤT PHIẾU GIAO VIỆC O&M:
                             </div>
                             <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 10px;">
-                                Tạo tự động Phiếu công tác hiện trường 3 Sheet (Phiếu giao việc + Danh sách cột kiểm tra trọng điểm + Toàn bộ 51 cột có tọa độ GPS).
+                                Tạo tự động Phiếu công tác hiện trường 3 Sheet theo sơ đồ nguyên lý (Phiếu giao việc + Danh sách cột kiểm tra trọng điểm + Toàn bộ 51 cột).
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -5821,8 +5776,8 @@ elif selected_menu == NAV_OPTIONS[9]:
                             use_container_width=True
                         )
 
-                    # BẢNG DỮ LIỆU TRẮC ĐỊA 51 VỊ TRÍ CỘT TUYẾN 171
-                    st.markdown("##### 🗼 Bảng Dữ Liệu Trắc Địa Tuyến 110kV Lộ 171 (14.8 km - 51 Vị Trí Cột):")
+                    # BẢNG DANH MỤC 51 VỊ TRÍ CỘT TUYẾN 171 (NGUYÊN LÝ KHOẢNG VƯỢT & LÝ TRÌNH)
+                    st.markdown("##### 🗼 Bảng Danh Mục 51 Vị Trí Cột Tuyến 110kV Lộ 171 (14.8 km - 50 Khoảng Vượt):")
                     col_filt1, col_filt2 = st.columns([3, 2])
                     with col_filt1:
                         tower_view_filter = st.radio(
@@ -5847,169 +5802,20 @@ elif selected_menu == NAV_OPTIONS[9]:
 
                     # Format bảng hiển thị
                     disp_t_df = df_show_towers.copy()
-                    disp_t_df["Loại Cột"] = disp_t_df.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
-                    disp_t_df["Tọa Độ GPS (WGS84)"] = disp_t_df.apply(lambda r: f"{r['lat']:.5f}, {r['lon']:.5f}", axis=1)
+                    disp_t_df["Loại Kết Cấu"] = disp_t_df.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
                     disp_t_df["Lý Trình"] = disp_t_df["km_marker"].apply(lambda k: f"{k:.3f} km")
                     disp_t_df["Khoảng Vượt"] = disp_t_df["span_m"].apply(lambda s: f"{s} m" if s > 0 else "--")
                     
-                    show_cols = ["tower_no", "tower_name", "Loại Cột", "Lý Trình", "Khoảng Vượt", "Tọa Độ GPS (WGS84)", "terrain_note", "gmap_link"]
+                    show_cols = ["tower_no", "tower_name", "Loại Kết Cấu", "tower_code", "Lý Trình", "Khoảng Vượt", "terrain_note"]
                     disp_t_df = disp_t_df[show_cols]
-                    disp_t_df.columns = ["Số Cột", "Tên Cột", "Loại Cột", "Lý Trình", "Khoảng Vượt", "Tọa Độ GPS", "Ghi Chú Địa Hình / Giao Chéo", "Link Chỉ Đường Google Maps"]
+                    disp_t_df.columns = ["Số Cột", "Tên Cột", "Phân Loại Cột", "Mã Hiệu Cột", "Lý Trình Tích Lũy", "Khoảng Vượt", "Ghi Chú Vị Trí / Giao Chéo"]
 
                     st.dataframe(
                         disp_t_df,
                         use_container_width=True,
-                        height=260,
-                        hide_index=True,
-                        column_config={
-                            "Link Chỉ Đường Google Maps": st.column_config.LinkColumn(
-                                "Google Maps",
-                                help="Bấm để mở vị trí cột trên Google Maps",
-                                validate="^https://",
-                                max_chars=100,
-                                display_text="📍 Xem Bản Đồ"
-                            )
-                        }
+                        height=280,
+                        hide_index=True
                     )
-
-                    # --- KHU VỰC HIỆU CHỈNH & LƯU TỌA ĐỘ TRỰC TIẾP TRÊN BẢN ĐỒ ---
-                    with st.expander("🛠️ HIỆU CHỈNH & LƯU TỌA ĐỘ 51 VỊ TRÍ CỘT TRỰC TIẾP (CẬP NHẬT HOÀN CÔNG)", expanded=False):
-                        st.markdown("""
-                        <div style="background: #1E293B; border-radius: 8px; padding: 12px 18px; border-left: 4px solid #38BDF8; margin-bottom: 14px; font-size: 0.85rem; color: #CBD5E1;">
-                            💡 <b>Hướng dẫn hiệu chỉnh</b>: Bạn có thể chọn từng cột để chỉnh sửa tọa độ GPS chính xác (hoặc dán link Google Maps), sửa trực tiếp trên bảng tính Excel-like, hoặc tải lên file Excel trắc địa hoàn công. Toàn bộ thay đổi sẽ được lưu vĩnh viễn vào hệ thống và tự động cập nhật lại bản đồ GIS.
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        tab_ed_single, tab_ed_grid, tab_ed_excel = st.tabs([
-                            "🎯 1. Chọn & Sửa Từng Cột Đơn Lẻ",
-                            "📊 2. Sửa Trực Tiếp Toàn Tuyến 51 Cột (Bảng Tính)",
-                            "📁 3. Nhập / Xuất File Excel Tọa Độ"
-                        ])
-
-                        # TAB 1: CHỈNH SỬA TỪNG CỘT ĐƠN LẺ
-                        with tab_ed_single:
-                            t_options = {f"Cột {r['tower_no']:02d} ({'Néo' if r['is_tension'] else 'Đỡ'} {r['tower_code']} - km {r['km_marker']:.2f})": int(r['tower_no']) for _, r in df_all_towers.iterrows()}
-                            sel_t_lbl = st.selectbox("Chọn cột điện cần hiệu chỉnh vị trí:", list(t_options.keys()), index=0, key="sel_edit_single_tower")
-                            sel_t_no = t_options[sel_t_lbl]
-                            cur_t_row = df_all_towers[df_all_towers["tower_no"] == sel_t_no].iloc[0]
-
-                            col_paste, col_gmap_btn = st.columns([3.5, 1.5])
-                            with col_paste:
-                                quick_paste_coords = st.text_input(
-                                    f"Dán nhanh Tọa độ GPS hoặc Link Google Maps cho Cột #{sel_t_no:02d}:",
-                                    placeholder="Ví dụ: 14.15546, 109.04269 hoặc https://maps.google.com/?q=14.15546,109.04269",
-                                    key="txt_quick_paste_coords"
-                                )
-                            with col_gmap_btn:
-                                st.write("")
-                                st.markdown(f"""
-                                <a href="{cur_t_row['gmap_link']}" target="_blank" style="display: block; text-align: center; background: #0284C7; color: white; padding: 7px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.82rem; margin-top: 5px;">
-                                    📍 Xem Vị Trí Cũ Trên Maps ↗
-                                </a>
-                                """, unsafe_allow_html=True)
-
-                            parsed_coords = parse_coords_string(quick_paste_coords)
-                            init_lat = parsed_coords[0] if parsed_coords else float(cur_t_row["lat"])
-                            init_lon = parsed_coords[1] if parsed_coords else float(cur_t_row["lon"])
-
-                            col_inp1, col_inp2, col_inp3, col_inp4 = st.columns(4)
-                            with col_inp1:
-                                edit_lat = st.number_input("Vĩ độ (Latitude WGS84):", value=init_lat, format="%.6f", step=0.00001, key=f"num_lat_{sel_t_no}")
-                            with col_inp2:
-                                edit_lon = st.number_input("Kinh độ (Longitude WGS84):", value=init_lon, format="%.6f", step=0.00001, key=f"num_lon_{sel_t_no}")
-                            with col_inp3:
-                                edit_span = st.number_input("Khoảng vượt tới cột sau (m):", value=int(cur_t_row.get("span_m", 296)), min_value=0, max_value=1500, step=10, key=f"num_span_{sel_t_no}")
-                            with col_inp4:
-                                edit_is_tension = st.selectbox("Phân loại kết cấu cột:", ["Cột Đỡ Thẳng", "Cột Néo Góc / Néo Hãm"], index=1 if cur_t_row.get("is_tension") else 0, key=f"sel_tens_{sel_t_no}") == "Cột Néo Góc / Néo Hãm"
-
-                            col_inp5, col_inp6 = st.columns([1.5, 3.5])
-                            with col_inp5:
-                                edit_code = st.text_input("Mã hiệu cột (Tower Code):", value=str(cur_t_row.get("tower_code", "Đ111")), key=f"txt_code_{sel_t_no}")
-                            with col_inp6:
-                                edit_note = st.text_input("Ghi chú địa hình / giao chéo:", value=str(cur_t_row.get("terrain_note", "")), key=f"txt_note_{sel_t_no}")
-
-                            col_btn_sv1, col_btn_sv2 = st.columns([2, 3])
-                            with col_btn_sv1:
-                                if st.button(f"💾 Lưu Cập Nhật Cột #{sel_t_no:02d} Vào Hệ Thống", type="primary", use_container_width=True, key=f"btn_save_t_{sel_t_no}"):
-                                    success = update_single_tower(
-                                        tower_no=sel_t_no,
-                                        lat=edit_lat,
-                                        lon=edit_lon,
-                                        span_m=edit_span,
-                                        is_tension=edit_is_tension,
-                                        tower_code=edit_code,
-                                        terrain_note=edit_note
-                                    )
-                                    if success:
-                                        st.success(f"✅ Đã lưu thành công tọa độ Cột #{sel_t_no:02d} ({edit_lat:.6f}, {edit_lon:.6f})! Bản đồ đang được làm mới...")
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ Không thể lưu dữ liệu. Vui lòng kiểm tra lại quyền ghi tệp.")
-
-                        # TAB 2: CHỈNH SỬA DẠNG BẢNG TÍNH TOÀN BỘ 51 CỘT (DATA EDITOR)
-                        with tab_ed_grid:
-                            st.caption("Chỉnh sửa trực tiếp trên bảng bên dưới (sửa ô bất kỳ) sau đó nhấn nút 'Lưu Toàn Bộ 51 Vị Trí Cột'.")
-                            edit_df_source = df_all_towers[["tower_no", "tower_name", "tower_code", "is_tension", "span_m", "lat", "lon", "terrain_note"]].copy()
-                            edited_df = st.data_editor(
-                                edit_df_source,
-                                use_container_width=True,
-                                height=360,
-                                hide_index=True,
-                                column_config={
-                                    "tower_no": st.column_config.NumberColumn("Số Cột", disabled=True),
-                                    "tower_name": st.column_config.TextColumn("Tên Cột", disabled=True),
-                                    "tower_code": st.column_config.TextColumn("Mã Cột"),
-                                    "is_tension": st.column_config.CheckboxColumn("Cột Néo?"),
-                                    "span_m": st.column_config.NumberColumn("Khoảng Vượt (m)", min_value=0, max_value=1500),
-                                    "lat": st.column_config.NumberColumn("Vĩ Độ (Lat)", format="%.6f", min_value=10.0, max_value=25.0),
-                                    "lon": st.column_config.NumberColumn("Kinh Độ (Lon)", format="%.6f", min_value=100.0, max_value=115.0),
-                                    "terrain_note": st.column_config.TextColumn("Ghi Chú Địa Hình / Giao Chéo", width="large")
-                                },
-                                key="data_editor_51_towers"
-                            )
-
-                            if st.button("💾 Lưu Toàn Bộ Bảng Tọa Độ 51 Cột Đã Chỉnh Sửa", type="primary", use_container_width=True, key="btn_save_all_towers_grid"):
-                                recs = edited_df.to_dict(orient="records")
-                                if save_custom_towers(recs):
-                                    st.success("✅ Đã lưu thành công toàn bộ 51 vị trí cột vào cơ sở dữ liệu! Bản đồ đang được cập nhật...")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Lỗi khi lưu dữ liệu bảng.")
-
-                        # TAB 3: NHẬP / XUẤT FILE EXCEL HOÀN CÔNG
-                        with tab_ed_excel:
-                            col_ex_dl, col_ex_up = st.columns(2)
-                            with col_ex_dl:
-                                st.markdown("###### 📥 1. Tải File Excel Mẫu:")
-                                st.caption("Tải file Excel mẫu gồm đầy đủ 51 cột để nhập tọa độ đo đạc thực tế từ hồ sơ hoàn công.")
-                                t_excel_bytes = export_towers_template_excel()
-                                st.download_button(
-                                    label="📥 Tải File Mẫu Excel Tọa Độ Tuyến 171 (.xlsx)",
-                                    data=t_excel_bytes,
-                                    file_name="Bang_Toa_Do_51_Cot_Tuyen_110kV_171_MyHiep.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True,
-                                    key="btn_dl_tower_template_excel"
-                                )
-
-                            with col_ex_up:
-                                st.markdown("###### 📤 2. Tải Lên File Excel Hoàn Công:")
-                                st.caption("Tải lên file Excel hoàn công (đã điền Vĩ độ, Kinh độ, Khoảng vượt) để cập nhật toàn tuyến.")
-                                up_t_excel = st.file_uploader("Chọn file Excel hoàn công (.xlsx, .xls):", type=["xlsx", "xls"], key="up_tower_excel_file")
-                                if up_t_excel:
-                                    if st.button("✅ Xác Nhận Nạp File Excel Này Vào Hệ Thống", type="primary", use_container_width=True, key="btn_confirm_import_excel"):
-                                        ok_imp, msg_imp = import_towers_from_excel(up_t_excel.getvalue())
-                                        if ok_imp:
-                                            st.success(f"✅ {msg_imp}")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"❌ {msg_imp}")
-
-                            st.markdown("---")
-                            if st.button("🔄 Khôi Phục Tọa Độ Thiết Kế Mặc Định (Reset To Default)", help="Xóa dữ liệu tùy chỉnh và đặt lại tọa độ mẫu ban đầu", key="btn_reset_default_towers"):
-                                reset_custom_towers()
-                                st.success("✅ Đã khôi phục bảng tọa độ thiết kế mặc định ban đầu!")
-                                st.rerun()
 
                     # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
                     with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=False):

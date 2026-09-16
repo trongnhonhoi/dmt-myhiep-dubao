@@ -787,7 +787,7 @@ def render_google_maps_iframe(lat: float, lon: float, height: int = 480, map_typ
 
 
 def export_patrol_order_to_excel(fault_data: Dict[str, Any], floc: Dict[str, Any]) -> bytes:
-    """Xuất Phiếu Giao Việc Tuần Tra Tuyến Sự Cố O&M chi tiết ra file Excel"""
+    """Xuất Phiếu Giao Việc Tuần Tra Tuyến Sự Cố O&M chi tiết ra file Excel theo sơ đồ nguyên lý 51 cột"""
     output = io.BytesIO()
     f_km = floc.get("dist_km", 5.31)
     span_info = find_fault_span_and_towers(f_km, radius_km=2.0)
@@ -798,14 +798,14 @@ def export_patrol_order_to_excel(fault_data: Dict[str, Any], floc: Dict[str, Any
         # Sheet 1: Phiếu Giao Việc Tuần Tra Sự Cố
         order_rows = [
             {"Hạng Mục": "Tên Đơn Vị Quản Lý Vận Hành", "Nội Dung": "Đội QLVH Đường Dây & Trạm 110kV - NM ĐMT Mỹ Hiệp"},
-            {"Hạng Mục": "Tên Đường Dây / Xuất Tuyến", "Nội Dung": "Đường dây 110kV Lộ 171 Mỹ Hiệp - 220kV Phù Mỹ (14.8 km, 51 Cột)"},
+            {"Hạng Mục": "Tên Đường Dây / Xuất Tuyến", "Nội Dung": "Đường dây 110kV Lộ 171 Mỹ Hiệp - 220kV Phù Mỹ (14.8 km, 51 Vị Trí Cột)"},
             {"Hạng Mục": "Bản Ghi Sự Cố Rơ Le", "Nội Dung": f"Bản ghi #{dev.get('recording_number', '339')} ({dev.get('ied_type', 'RED670')})"},
             {"Hạng Mục": "Thời Điểm Xuất Hiện Sự Cố", "Nội Dung": flt.get("trigger_time", "--")},
             {"Hạng Mục": "Dạng Sự Cố / Pha Ngắn Mạch", "Nội Dung": flt.get("fault_phase", "L2-N")},
-            {"Hạng Mục": "Khoảng Cách Sự Cố Tính Toán", "Nội Dung": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}% tuyến)"},
-            {"Hạng Mục": "Khoảng Cột Trọng Tâm Cần Tuần Tra", "Nội Dung": f"Khoảng cột #{span_info['start_tower']} đến #{span_info['end_tower']} (Cách Cột #{span_info['start_tower']} ~{span_info['offset_from_start_m']:.0f}m)"},
-            {"Hạng Mục": "Tọa Độ GPS Điểm Sự Cố", "Nội Dung": f"{span_info['fault_lat']:.6f}, {span_info['fault_lon']:.6f}"},
-            {"Hạng Mục": "Đường Dẫn Google Maps Chỉ Đường", "Nội Dung": span_info["fault_gmap_link"]},
+            {"Hạng Mục": "Khoảng Cách Sự Cố Tính Toán", "Nội Dung": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}% chiều dài tuyến 14.8 km)"},
+            {"Hạng Mục": "Khoảng Cột Trọng Tâm Cần Tuần Tra", "Nội Dung": f"Khoảng cột #{span_info['start_tower']} đến #{span_info['end_tower']} (Từ km {span_info['start_tower_km']:.2f} đến km {span_info['end_tower_km']:.2f}, cách Cột #{span_info['start_tower']} ~{span_info['offset_from_start_m']:.0f}m)"},
+            {"Hạng Mục": "Tổng Trở Vòng Lặp Ngắn Mạch", "Nội Dung": f"Z = {floc.get('z_loop_ohm')} Ω (R = {floc.get('r_loop_ohm')} Ω, X = {floc.get('x_loop_ohm')} Ω)"},
+            {"Hạng Mục": "Điện Trở Hồ Quang Rf", "Nội Dung": f"~{floc.get('r_arc_ohm')} Ω"},
             {"Hạng Mục": "Nội Dung Công Tác Kiểm Tra", "Nội Dung": "1) Kiểm tra phóng điện chuỗi sứ cách điện pha sự cố. 2) Kiểm tra dây dẫn có vết phóng hồ quang hoặc đứt tao. 3) Phát hiện cây cối vi phạm khoảng cách an toàn tĩnh. 4) Kiểm tra tiếp địa chân cột và dây chống sét OPGW."},
             {"Hạng Mục": "Thời Gian Yêu Cầu Hoàn Thành", "Nội Dung": "Trong vòng 02 giờ kể từ khi nhận lệnh điều độ."},
             {"Hạng Mục": "Người Lập Phiếu / Kỹ Sư Rơ Le", "Nội Dung": "Kỹ Sư Phương Thức & Bảo Vệ Rơ Le NM ĐMT Mỹ Hiệp"}
@@ -814,12 +814,16 @@ def export_patrol_order_to_excel(fault_data: Dict[str, Any], floc: Dict[str, Any
 
         # Sheet 2: Danh sách các cột cần kiểm tra trọng điểm (trong bán kính ±2km)
         df_patrol = span_info["df_patrol_towers"].copy()
-        df_patrol.columns = ["Số Cột", "Tên Cột", "Mã Cột", "Loại Cột", "Cột Néo?", "Lý Trình (km)", "Khoảng Vượt (m)", "Vĩ Độ (Lat)", "Kinh Độ (Lon)", "Ghi Chú Địa Hình", "Link Google Maps"]
-        df_patrol.to_excel(writer, sheet_name="2_Danh_Sach_Cot_Kiem_Tra", index=False)
+        df_patrol["Loại Kết Cấu"] = df_patrol.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
+        df_patrol_export = df_patrol[["tower_no", "tower_name", "Loại Kết Cấu", "tower_code", "km_marker", "span_m", "terrain_note"]].copy()
+        df_patrol_export.columns = ["Số Cột", "Tên Cột", "Phân Loại Cột", "Mã Cột", "Lý Trình (km)", "Khoảng Vượt (m)", "Ghi Chú Địa Hình / Giao Chéo"]
+        df_patrol_export.to_excel(writer, sheet_name="2_Danh_Sach_Cot_Kiem_Tra", index=False)
 
         # Sheet 3: Toàn bộ 51 vị trí cột tuyến 171
         df_all = get_towers_dataframe().copy()
-        df_all.columns = ["Số Cột", "Tên Cột", "Mã Cột", "Loại Cột", "Cột Néo?", "Lý Trình (km)", "Khoảng Vượt (m)", "Vĩ Độ (Lat)", "Kinh Độ (Lon)", "Ghi Chú Địa Hình", "Link Google Maps"]
-        df_all.to_excel(writer, sheet_name="3_Toan_Bo_51_Cot_Tuyen_171", index=False)
+        df_all["Loại Kết Cấu"] = df_all.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
+        df_all_export = df_all[["tower_no", "tower_name", "Loại Kết Cấu", "tower_code", "km_marker", "span_m", "terrain_note"]].copy()
+        df_all_export.columns = ["Số Cột", "Tên Cột", "Phân Loại Cột", "Mã Cột", "Lý Trình (km)", "Khoảng Vượt (m)", "Ghi Chú Địa Hình / Giao Chéo"]
+        df_all_export.to_excel(writer, sheet_name="3_Toan_Bo_51_Cot_Tuyen_171", index=False)
 
     return output.getvalue()
