@@ -45,6 +45,8 @@ importlib.reload(relay_fault_analyzer)
 
 from relay_fault_analyzer import (
     RelayFaultAnalyzer,
+    calculate_fault_location,
+    create_fault_location_diagram,
     create_relay_phasor_diagram,
     create_soe_timeline_figure,
     export_relay_fault_report_to_excel,
@@ -5635,9 +5637,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                 dev_info = fault_data.get("device_info", {})
                 flt_info = fault_data.get("fault_info", {})
                 df_u = fault_data.get("df_voltages", pd.DataFrame())
-                df_i = fault_data.get("df_currents", pd.DataFrame())
-                df_soe = fault_data.get("df_soe", pd.DataFrame())
-                page_imgs = fault_data.get("page_images", [])
+                floc = calculate_fault_location(fault_data)
 
                 # 5 Thẻ KPI Tổng Quan Sự Cố
                 kpi_r1, kpi_r2, kpi_r3, kpi_r4, kpi_r5 = st.columns(5)
@@ -5646,7 +5646,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                 with kpi_r2:
                     st.metric("⏱️ Thời Điểm Sự Cố", flt_info.get("trigger_time", "--"), delta=f"Bản ghi #{dev_info.get('recording_number')}")
                 with kpi_r3:
-                    st.metric("⚡ Dạng Sự Cố", flt_info.get("fault_phase", "L2-N"), delta="Chạm đất 1 pha")
+                    st.metric("⚡ Dạng Sự Cố", flt_info.get("fault_phase", "L2-N"), delta=f"Vị trí: {floc.get('dist_km')} km ({floc.get('dist_pct')}%)")
                 with kpi_r4:
                     st.metric("🎯 Bảo Vệ Khởi Phát", flt_info.get("trigger_signal", "87L"), delta="87L So lệch pha B")
                 with kpi_r5:
@@ -5684,16 +5684,75 @@ elif selected_menu == NAV_OPTIONS[9]:
 
                 st.markdown("---")
 
-                # 5 Sub-Tabs phân tích chuyên sâu rơ le
-                t_phasor, t_soe, t_eval, t_pdf, t_rl_excel = st.tabs([
-                    "📈 1. Thông Số Điện Học & Vector Phasor",
-                    f"⏱️ 2. Trình Tự Sự Kiện SoE ({len(df_soe)} Sự Kiện)",
-                    "🔬 3. Chẩn Đoán Kỹ Thuật & Đánh Giá Tác Động",
-                    f"📄 4. Bản Ghi Sóng & Báo Cáo Gốc IED ({len(page_imgs)} Trang)",
-                    "📥 5. Xuất Báo Cáo Sự Cố Rơ Le (Excel 4 Sheet)"
+                # 6 Sub-Tabs phân tích chuyên sâu rơ le
+                t_floc, t_phasor, t_soe, t_eval, t_pdf, t_rl_excel = st.tabs([
+                    "📍 1. Định Vị Điểm Sự Cố & Sơ Đồ Tuyến (FLOC)",
+                    "📈 2. Thông Số Điện Học & Vector Phasor",
+                    f"⏱️ 3. Trình Tự Sự Kiện SoE ({len(df_soe)} Sự Kiện)",
+                    "🔬 4. Chẩn Đoán Kỹ Thuật & Đánh Giá Tác Động",
+                    f"📄 5. Bản Ghi Sóng & Báo Cáo Gốc IED ({len(page_imgs)} Trang)",
+                    "📥 6. Xuất Báo Cáo Sự Cố Rơ Le (Excel 4 Sheet)"
                 ])
 
-                # --- SUBTAB 1: THÔNG SỐ ĐIỆN HỌC & VECTOR PHASOR ---
+                # --- SUBTAB 1: ĐỊNH VỊ ĐIỂM SỰ CỐ & SƠ ĐỒ TUYẾN (FAULT LOCATION) ---
+                with t_floc:
+                    st.markdown(r"""
+                    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
+                        <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
+                            📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV (FAULT LOCATION - FLOC)
+                        </div>
+                        <div style="font-size: 0.85rem; color: #CBD5E1;">
+                            Ứng dụng thuật toán điện kháng (Reactance Method / Takagi Algorithm) khử sai số điện trở hồ quang và bù trừ dòng thứ tự không k₀ để xác định chính xác khoảng cách từ TBA ĐMT Mỹ Hiệp đến điểm ngắn mạch chạm đất pha B.
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # 4 Thẻ KPI Định Vị
+                    kpi_f1, kpi_f2, kpi_f3, kpi_f4 = st.columns(4)
+                    with kpi_f1:
+                        st.metric("📍 Khoảng Cách Sự Cố", f"{floc.get('dist_km')} km", delta=f"{floc.get('dist_pct')}% chiều dài tuyến (12.5 km)")
+                    with kpi_f2:
+                        st.metric("🗼 Khoảng Cột Dự Kiến", floc.get("tower_range"), delta="Xuất tuyến 171 Mỹ Hiệp - Phù Mỹ")
+                    with kpi_f3:
+                        st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_mag_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
+                    with kpi_f4:
+                        st.metric("🔥 Điện Trở Hồ Quang Rf", f"~{floc.get('r_arc_ohm')} Ω", delta="Chạm đất có điện trở trung bình")
+
+                    # SƠ ĐỒ TRỰC QUAN HOÁ ĐƯỜNG DÂY 110kV & VỊ TRÍ ĐIỂM SỰ CỐ
+                    fig_floc = create_fault_location_diagram(floc)
+                    st.plotly_chart(fig_floc, use_container_width=True)
+
+                    # GIẢI TRÌNH KỸ THUẬT TẠI SAO RƠ LE HIỂN THỊ ERROR TRONG BẢN GHI GỐC
+                    with st.expander("❓ Giải Trình Kỹ Thuật: Tại Sao Rơ Le RED670 Báo 'Fault location: Not Applicable / Error'?", expanded=True):
+                        st.markdown(r"""
+                        <div style="background: #1E293B; border-radius: 8px; padding: 16px 20px; border-left: 4px solid #F59E0B; margin-bottom: 12px;">
+                            <div style="font-weight: 700; color: #F59E0B; font-size: 0.95rem; margin-bottom: 8px;">
+                                ⚠️ NGUYÊN NHÂN RƠ LE IED BÁO 'NOT APPLICABLE':
+                            </div>
+                            <div style="font-size: 0.86rem; color: #E2E8F0; line-height: 1.6;">
+                                1. <b>Nguyên lý bảo vệ chính là So Lệch Dọc 87L:</b> Rơ le ABB RED670 tại ngăn lộ 171 được cấu hình chức năng chính là bảo vệ so lệch dòng điện đường dây (Line Differential - 87L) trao đổi dữ liệu qua kênh cáp quang OPGW. Bảo vệ 87L tác động tức thời sau <b>5 ms</b> chỉ dựa trên so sánh dòng vi sai \(I_d = 4.220\text{ A}\) và dòng hãm \(I_b = 3.821\text{ A}\), hoàn toàn không phụ thuộc vào tính toán trở kháng hay khoảng cách.<br><br>
+                                2. <b>Khối chức năng RFLO (Fault Locator) chưa nạp tham số:</b> Trong phần mềm kỹ thuật <i>PCM600</i> của ABB, khối thuật toán định vị sự cố (RFLO) yêu cầu cài đặt ma trận tham số đường dây (\(R_1, X_1, R_0, X_0, L_{\text{km}}\)). Do cấu hình IED xuất xưởng chưa kích hoạt tính năng tự động ghi nhận FLOC khi trip 87L, rơ le trả về cờ trạng thái <code>Status of fault calculation: Error / Fault location: Not Applicable</code>.<br><br>
+                                3. <b>Giải pháp tính toán độc lập:</b> Dựa trên các kênh đo sóng tương tự (Analog Disturbance Waveforms) được rơ le ghi lại với độ chính xác cao (\(U_{L2} = 7.38\text{ kV} \angle 330.3^\circ, I_{L2} = 548.2\text{ A} \angle 297.5^\circ, 3I_0 = 1.643\text{ A} \angle 297.5^\circ\)), hệ thống đã áp dụng công thức giải tích chuẩn Takagi để xác định chính xác điểm sự cố tại vị trí <b>5.31 km</b> (khoảng cột <b>#17 đến #19</b>).
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # BẢNG THAM SỐ ĐIỆN HỌC CHI TIẾT CỦA VÒNG LẶP SỰ CỐ
+                    st.markdown("##### 📐 Bảng Tham Số Tính Toán Định Vị Chi Tiết (Fault Calculation Parameters):")
+                    df_calc = pd.DataFrame([
+                        {"Tham Số Tính Toán": "Loại đường dây & Chiều dài", "Ký Hiệu": "ACSR 240/32 - L", "Giá Trị": "12.5 km", "Đơn Vị": "km", "Ghi Chú": "Đường dây 110kV ĐMT Mỹ Hiệp - Phù Mỹ"},
+                        {"Tham Số Tính Toán": "Điện kháng thứ tự thuận (đơn vị)", "Ký Hiệu": "x1", "Giá Trị": f"{floc.get('line_params', {}).get('x1', 0.405):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Tham số dây dẫn nhôm lõi thép tiêu chuẩn"},
+                        {"Tham Số Tính Toán": "Điện trở thứ tự thuận (đơn vị)", "Ký Hiệu": "r1", "Giá Trị": f"{floc.get('line_params', {}).get('r1', 0.120):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Nhiệt độ môi trường vận hành 30°C"},
+                        {"Tham Số Tính Toán": "Hệ số bù thứ tự không", "Ký Hiệu": "k0 = (Z0 - Z1) / 3Z1", "Giá Trị": f"{floc.get('line_params', {}).get('k0_mag', 0.69):.2f} ∠ {floc.get('line_params', {}).get('k0_ang', 7.1):.1f}°", "Đơn Vị": "--", "Ghi Chú": "Bù trừ dòng chạm đất qua đất/dây chống sét"},
+                        {"Tham Số Tính Toán": "Điện áp pha sự cố B (L2)", "Ký Hiệu": "U_L2", "Giá Trị": "7,382.4 ∠ 330.3°", "Đơn Vị": "V / độ", "Ghi Chú": "Sụt áp nghiêm trọng còn 11.6% định mức"},
+                        {"Tham Số Tính Toán": "Dòng điện pha sự cố B (L2)", "Ký Hiệu": "I_L2", "Giá Trị": "548.2 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng sự cố phía nguồn Mỹ Hiệp phát ra"},
+                        {"Tham Số Tính Toán": "Dòng điện thứ tự không 3I0", "Ký Hiệu": "3I0", "Giá Trị": "1,643.4 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng hồi lưu qua điểm tiếp địa"},
+                        {"Tham Số Tính Toán": "Tổng trở vòng lặp ngắn mạch", "Ký Hiệu": "Z_loop = U_L2 / (I_L2 + k0*3I0)", "Giá Trị": f"{floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} (Z = {floc.get('z_mag_ohm')} ∠ {floc.get('z_ang_deg')}°)", "Đơn Vị": "Ω", "Ghi Chú": "Trở kháng nhìn từ rơ le đến điểm ngắn mạch"},
+                        {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d = X_loop / x1", "Giá Trị": f"{floc.get('dist_km')} ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": "Khuyến nghị tuần tra khoảng cột #17 - #19"}
+                    ])
+                    st.dataframe(df_calc, use_container_width=True, hide_index=True)
+
+                # --- SUBTAB 2: THÔNG SỐ ĐIỆN HỌC & VECTOR PHASOR ---
                 with t_phasor:
                     st.markdown("##### 📈 Phân Tích Thông Số Điện Áp, Dòng Điện & Vector Phasor Lúc Xảy Ra Sự Cố:")
                     st.caption("Khoảng thời gian tính toán vector: từ `-4 ms` đến `+15 ms` (ngay tại thời điểm dòng so lệch vượt ngưỡng tác động).")
@@ -5716,7 +5775,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                             show_i.columns = ['Đại Lượng Đo Lường', 'Giá Trị RMS', 'Đơn Vị', 'Góc Pha (°)']
                             st.dataframe(show_i, use_container_width=True, height=240, hide_index=True)
 
-                # --- SUBTAB 2: TRÌNH TỰ DÒNG SỰ KIỆN SOE ---
+                # --- SUBTAB 3: TRÌNH TỰ DÒNG SỰ KIỆN SOE ---
                 with t_soe:
                     st.markdown(f"##### ⏱️ Trình Tự Sự Kiện Tác Động Của Rơ Le (Sequence of Events - SoE) - {len(df_soe)} Sự Kiện:")
                     st.caption("Dữ liệu được trích xuất từ bộ nhớ lưu trữ sự kiện độ phân giải 1 mili-giây của rơ le ABB RED670.")
@@ -5754,7 +5813,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                     disp_soe_cols = ['Thời Điểm (Timestamp)', 'Thời Gian Tương Đối', 'Mã ANSI', 'Tín Hiệu (Signal Name)', 'Trạng Thái', 'Tên Chức Năng', 'Ý Nghĩa Kỹ Thuật O&M']
                     st.dataframe(df_soe_show[disp_soe_cols], use_container_width=True, height=450, hide_index=True)
 
-                # --- SUBTAB 3: CHẨN ĐOÁN KỸ THUẬT & ĐÁNH GIÁ TÁC ĐỘNG ---
+                # --- SUBTAB 4: CHẨN ĐOÁN KỸ THUẬT & ĐÁNH GIÁ TÁC ĐỘNG ---
                 with t_eval:
                     st.markdown("##### 🔬 Báo Cáo Phân Tích Kỹ Thuật Chuyên Sâu Của Kỹ Sư Bảo Vệ Rơ Le:")
                     
@@ -5797,7 +5856,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                         </div>
                         """, unsafe_allow_html=True)
 
-                # --- SUBTAB 4: BẢN GHI SÓNG & BÁO CÁO GỐC IED (PDF VIEWER) ---
+                # --- SUBTAB 5: BẢN GHI SÓNG & BÁO CÁO GỐC IED (PDF VIEWER) ---
                 with t_pdf:
                     st.markdown(f"##### 📄 Bản Ghi Sóng & Báo Cáo Sự Cố Gốc Của Rơ Le (ABB RED670 - {cur_rl_file['file_name']}):")
                     st.caption("Xem trực tiếp các trang báo cáo chi tiết bao gồm đồ thị sóng tương tự (Analog Time Diagram), đồ thị trạng thái nhị phân (Binary Time Diagram) và danh mục sự kiện từ IED.")
@@ -5815,14 +5874,14 @@ elif selected_menu == NAV_OPTIONS[9]:
                         p_num = int(sel_p_idx.split(' ')[1]) - 1
                         st.image(page_imgs[p_num], use_container_width=True, caption=f"Trang {p_num+1} / {len(page_imgs)} - Báo Cáo Sự Cố Rơ Le {dev_info.get('ied_type')}")
 
-                # --- SUBTAB 5: XUẤT BÁO CÁO EXCEL ---
+                # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
                 with t_rl_excel:
                     st.markdown("##### 📥 Xuất Báo Cáo Kỹ Thuật Phân Tích Sự Cố Rơ Le Bảo Vệ (Excel .xlsx):")
                     st.caption("Xuất tệp báo cáo kỹ thuật hoàn chỉnh 4 Sheet phục vụ lưu trữ hồ sơ vận hành, báo cáo Điều độ Hệ thống điện (A3/A0) hoặc nghiệm thu kỹ thuật.")
 
                     col_rx_btn1, col_rx_btn2 = st.columns([2.5, 2.5])
                     with col_rx_btn1:
-                        excel_rl_bytes = export_relay_fault_report_to_excel(fault_data)
+                        excel_rl_bytes = export_relay_fault_report_to_excel(fault_data, floc)
                         st.download_button(
                             label=f"📥 Tải Báo Cáo Sự Cố Rơ Le {dev_info.get('ied_type')}_{dev_info.get('ied_name')} (Excel .xlsx)",
                             data=excel_rl_bytes,
@@ -5832,7 +5891,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                             use_container_width=True
                         )
                     with col_rx_btn2:
-                        st.info(f"Tệp bao gồm: **Tổng quan thiết bị IED & Sự cố**, **Thông số điện áp & dòng điện RMS**, **Nhật ký 38 sự kiện SoE (mili-giây)** và **Đánh giá tác động & Khuyến nghị O&M** của Rơ le {dev_info.get('ied_type')} Ngăn 171 ĐMT Mỹ Hiệp.")
+                        st.info(f"Tệp bao gồm: **Định vị điểm sự cố FLOC ({floc.get('dist_km')} km)**, **Tổng quan thiết bị IED & Sự cố**, **Thông số điện áp & dòng điện RMS**, **Nhật ký 38 sự kiện SoE (mili-giây)** và **Đánh giá tác động & Khuyến nghị O&M** của Rơ le {dev_info.get('ied_type')} Ngăn 171 ĐMT Mỹ Hiệp.")
 
 
 
