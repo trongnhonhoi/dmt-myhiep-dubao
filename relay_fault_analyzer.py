@@ -568,8 +568,9 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
         y=[0],
         mode="markers+text",
         name="TBA 110kV ĐMT Mỹ Hiệp",
-        text=["🏢 TBA 110kV ĐMT Mỹ Hiệp<br>(Ngăn 171 - Cột #1 - km 0.0)"],
+        text=["🏢 TBA 110kV ĐMT Mỹ Hiệp<br><b>(Cột #01 - km 0.0)</b>"],
         textposition="bottom center",
+        textfont=dict(size=11, color="#0369A1"),
         marker=dict(size=18, color="#0284C7", symbol="square", line=dict(width=2, color="#FFFFFF")),
         hoverinfo="text",
         hovertext="<b>🏢 ĐẦU TUYẾN: TBA 110kV ĐMT MỸ HIỆP</b><br>Xuất tuyến ngăn lộ 171 (Rơ le ABB RED670)"
@@ -581,8 +582,9 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
         y=[0],
         mode="markers+text",
         name="TBA 220kV Phù Mỹ",
-        text=[f"🏢 TBA 220kV Phù Mỹ<br>(Cột #{n_towers} - km {line_len:.1f})"],
+        text=[f"🏢 TBA 220kV Phù Mỹ<br><b>(Cột #{n_towers} - km {line_len:.1f})</b>"],
         textposition="bottom center",
+        textfont=dict(size=11, color="#6D28D9"),
         marker=dict(size=18, color="#6D28D9", symbol="square", line=dict(width=2, color="#FFFFFF")),
         hoverinfo="text",
         hovertext=f"<b>🏢 CUỐI TUYẾN: TBA 220kV PHÙ MỸ</b><br>Trạm đầu đối diện (Khoảng cách {line_len:.1f} km)"
@@ -609,13 +611,14 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
         x=[f_km],
         y=[0],
         mode="markers+text",
-        name="⚡ VỊ TRÍ ĐIỂM SỰ CỐ PHA B",
-        text=[f"⚡ <b>ĐIỂM SỰ CỐ PHA B</b><br><b>{f_km:.2f} km</b> ({f_pct:.1f}% tuyến)"],
+        name=f"⚡ VỊ TRÍ ĐIỂM SỰ CỐ PHA {floc.get('fault_phase_letter', 'B')}",
+        text=[f"⚡ <b>ĐIỂM SỰ CỐ PHA {floc.get('fault_phase_letter', 'B')}</b><br><b>{f_km:.2f} km</b> ({f_pct:.1f}% tuyến)"],
         textposition="top center",
+        textfont=dict(size=12, color="#DC2626"),
         marker=dict(size=24, color="#EF4444", symbol="star", line=dict(width=3, color="#FEF08A")),
         hoverinfo="text",
         hovertext=(
-            f"<b>⚡ ĐỊNH VỊ ĐIỂM SỰ CỐ NGẮN MẠCH PHA B (L2-N)</b><br>"
+            f"<b>⚡ ĐỊNH VỊ ĐIỂM SỰ CỐ NGẮN MẠCH PHA {floc.get('fault_phase_letter', 'B')}</b><br>"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br>"
             f"• <b>Khoảng cách:</b> <b>{f_km:.2f} km</b> từ TBA ĐMT Mỹ Hiệp<br>"
             f"• <b>Tỷ lệ tuyến:</b> {f_pct:.1f}% chiều dài đường dây ({line_len:.1f} km)<br>"
@@ -627,23 +630,41 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
     ))
 
     fig.update_layout(
-        title=f"<b>SƠ ĐỒ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN TUYẾN ĐƯỜNG DÂY 110kV ({f_km:.2f} km / {line_len:.1f} km - 51 VỊ TRÍ CỘT)</b>",
+        title=dict(
+            text=f"<b>SƠ ĐỒ TRẮC DỌC ĐỊNH VỊ ĐIỂM SỰ CỐ TRÊN TUYẾN ĐƯỜNG DÂY 110kV LỘ 171</b><br><span style='font-size:12px;color:#64748B;'>Vị trí: <b>{f_km:.2f} km</b> ({f_pct:.1f}% tuyến) | Khoảng cột trọng điểm: <b>#{st_t} - #{en_t}</b> | Tổng chiều dài: <b>{line_len:.1f} km (51 cột)</b></span>",
+            font=dict(size=14, color="#0F172A"),
+            x=0.01,
+            y=0.96,
+            xanchor="left",
+            yanchor="top"
+        ),
         template="plotly_white",
-        height=300,
-        margin=dict(t=50, b=20, l=20, r=20),
+        height=380,
+        margin=dict(t=80, b=85, l=60, r=60),
         xaxis=dict(
             title="<b>Khoảng Cách Từ TBA 110kV ĐMT Mỹ Hiệp (km)</b>",
-            range=[-1.0, line_len + 1.0],
+            range=[-2.2, line_len + 2.2],
             dtick=1.0,
-            showgrid=True
+            showgrid=True,
+            zeroline=False
         ),
         yaxis=dict(
             showgrid=False,
             zeroline=False,
             showticklabels=False,
-            range=[-0.8, 1.2]
+            range=[-0.95, 0.95]
         ),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1)
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.35,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=11),
+            bgcolor="rgba(255, 255, 255, 0.9)",
+            bordercolor="#CBD5E1",
+            borderwidth=1
+        )
     )
 
     return fig
