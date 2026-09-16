@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, time
 import os
 import io
 import re
+import json
 
 import base64
 import importlib
@@ -612,6 +613,50 @@ with st.sidebar:
         if st.button("⚡ Quét Lại Server", use_container_width=True, key="btn_rescan_sb"):
             harvester.scan_available_dates(force_rescan=True)
             st.rerun()
+
+    # Khung Trạng Thái Tự Động Cập Nhật Ngầm (08:00 Sáng Hàng Ngày)
+    sync_status_file = os.path.join(os.path.dirname(__file__), "auto_harvest_status.json")
+    sync_meta = {}
+    if os.path.exists(sync_status_file):
+        try:
+            with open(sync_status_file, "r", encoding="utf-8") as f:
+                sync_meta = json.load(f)
+        except Exception:
+            pass
+
+    with st.expander("🤖 Tự Động Đồng Bộ (08:00 Sáng)", expanded=False):
+        st.markdown("""
+        <div class="p-2 mb-2 rounded border bg-light">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="badge bg-success"><i class="bi bi-clock-history"></i> Lịch: 08:00 Sáng</span>
+                <span class="badge bg-primary">Windows Task Scheduler</span>
+            </div>
+            <div class="small text-muted">Hệ thống tự động đồng bộ SCADA, NWP, String, Meter kể cả khi phần mềm tắt.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        last_sync_ts = sync_meta.get("timestamp", "Chưa thực hiện")
+        sync_st = sync_meta.get("status", "READY")
+        st.caption(f"⏱️ **Lần đồng bộ gần nhất:** `{last_sync_ts}`")
+        if sync_st == "SUCCESS":
+            st.success("✅ Trạng thái: Hoàn tất trọn vẹn")
+        elif sync_st == "ERROR":
+            st.error("⚠️ Trạng thái: Có lỗi xảy ra")
+        else:
+            st.info(f"ℹ️ Trạng thái: {sync_st}")
+            
+        if sync_meta.get("duration_seconds"):
+            st.caption(f"⚡ Thời gian xử lý: `{sync_meta.get('duration_seconds')}s`")
+            
+        if st.button("🚀 Kích Hoạt Đồng Bộ Ngay", type="secondary", use_container_width=True, key="btn_manual_sync_now"):
+            with st.spinner("Đang chạy đồng bộ toàn diện SCADA, NWP, Inverter, Meter, Relay..."):
+                try:
+                    import daily_sync_worker
+                    sync_res = daily_sync_worker.run_daily_harvest()
+                    st.success(f"Đã hoàn thành đồng bộ trong {sync_res.get('duration_seconds', 0)}s!")
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Lỗi khi đồng bộ: {ex}")
 
     with st.expander("⚙️ Cấu Hình Thông Số Kỹ Thuật (50MWp / 40.075MW)", expanded=False):
         st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")

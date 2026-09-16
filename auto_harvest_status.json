@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-09-16 12:37:57",
+  "status": "SUCCESS",
+  "scada_server": {
+    "connected": true,
+    "path": "D:\\DATA SERVER PV 01",
+    "total_dates": 1648,
+    "latest_date": "15/09/2026"
+  },
+  "weather_nwp": {
+    "success": true,
+    "forecast_days": 7,
+    "intervals_15min": 669,
+    "today_expected_energy_mwh": 0.0
+  },
+  "string_diagnostics": {
+    "total_inverters": 229,
+    "work_orders_count": 31,
+    "total_pdc_kw": 27752.5,
+    "total_loss_kw": 2202.1
+  },
+  "meters": {
+    "meters_count": 1032,
+    "history_records": 2115
+  },
+  "relay_faults": {
+    "scanned_files": 4
+  },
+  "forecast_96_cycles": {},
+  "errors": [],
+  "duration_seconds": 6.55
+}
