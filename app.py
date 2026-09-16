@@ -57,7 +57,6 @@ from relay_fault_analyzer import (
 )
 
 from transmission_line_171 import (
-    get_towers_dataframe,
     find_fault_span_and_towers,
     export_patrol_order_to_excel
 )
@@ -5775,47 +5774,6 @@ elif selected_menu == NAV_OPTIONS[9]:
                             type="secondary",
                             use_container_width=True
                         )
-
-                    # BẢNG DANH MỤC 51 VỊ TRÍ CỘT TUYẾN 171 (NGUYÊN LÝ KHOẢNG VƯỢT & LÝ TRÌNH)
-                    st.markdown("##### 🗼 Bảng Danh Mục 51 Vị Trí Cột Tuyến 110kV Lộ 171 (14.8 km - 50 Khoảng Vượt):")
-                    col_filt1, col_filt2 = st.columns([3, 2])
-                    with col_filt1:
-                        tower_view_filter = st.radio(
-                            "Phạm vi xem danh sách cột:",
-                            [
-                                f"🎯 Cột trọng tâm bán kính ±1.5 km quanh điểm sự cố ({len(span_info['df_patrol_towers'])} Cột)",
-                                "🗼 Toàn bộ 51 vị trí cột (Tuyến 14.8 km)",
-                                "⚡ Chỉ xem 10 cột néo góc (Tension Towers)"
-                            ],
-                            index=0,
-                            horizontal=True,
-                            key="radio_tower_view_filter"
-                        )
-
-                    df_all_towers = get_towers_dataframe()
-                    if "trọng tâm bán kính" in tower_view_filter:
-                        df_show_towers = span_info["df_patrol_towers"].copy()
-                    elif "Toàn bộ" in tower_view_filter:
-                        df_show_towers = df_all_towers.copy()
-                    else:
-                        df_show_towers = df_all_towers[df_all_towers["is_tension"]].copy()
-
-                    # Format bảng hiển thị
-                    disp_t_df = df_show_towers.copy()
-                    disp_t_df["Loại Kết Cấu"] = disp_t_df.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
-                    disp_t_df["Lý Trình"] = disp_t_df["km_marker"].apply(lambda k: f"{k:.3f} km")
-                    disp_t_df["Khoảng Vượt"] = disp_t_df["span_m"].apply(lambda s: f"{s} m" if s > 0 else "--")
-                    
-                    show_cols = ["tower_no", "tower_name", "Loại Kết Cấu", "tower_code", "Lý Trình", "Khoảng Vượt", "terrain_note"]
-                    disp_t_df = disp_t_df[show_cols]
-                    disp_t_df.columns = ["Số Cột", "Tên Cột", "Phân Loại Cột", "Mã Hiệu Cột", "Lý Trình Tích Lũy", "Khoảng Vượt", "Ghi Chú Vị Trí / Giao Chéo"]
-
-                    st.dataframe(
-                        disp_t_df,
-                        use_container_width=True,
-                        height=280,
-                        hide_index=True
-                    )
 
                     # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
                     with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=False):
