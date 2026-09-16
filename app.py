@@ -635,7 +635,7 @@ else:
 if 'active_date_entry' not in st.session_state and latest_entry:
     st.session_state.active_date_entry = latest_entry
 
-with st.expander("📂 Chọn Ngày Dữ Liệu Lịch Sử Từ Server SCADA / Tải File Ngoài", expanded=False):
+with st.expander("📂 Chọn Ngày Dữ Liệu Lịch Sử Từ Server SCADA", expanded=False):
     col_sc1, col_sc2 = st.columns([3, 1])
     with col_sc1:
         if available_dates:
