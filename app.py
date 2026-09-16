@@ -5713,9 +5713,9 @@ elif selected_menu == NAV_OPTIONS[9]:
                     # 4 Thẻ KPI Định Vị
                     kpi_f1, kpi_f2, kpi_f3, kpi_f4 = st.columns(4)
                     with kpi_f1:
-                        st.metric("📍 Khoảng Cách Sự Cố", f"{floc.get('dist_km')} km", delta=f"{floc.get('dist_pct')}% chiều dài tuyến (12.5 km)")
+                        st.metric("📍 Khoảng Cách Sự Cố", f"{floc.get('dist_km')} km", delta=f"{floc.get('dist_pct')}% chiều dài tuyến (14.8 km)")
                     with kpi_f2:
-                        st.metric("🗼 Khoảng Cột Dự Kiến", floc.get("tower_range"), delta="Xuất tuyến 171 Mỹ Hiệp - Phù Mỹ")
+                        st.metric("🗼 Vị Trí Cột Sự Cố", f"Cột #{floc.get('start_tower')} - #{floc.get('end_tower')}", delta="Xuất tuyến 171 (Tổng 51 cột)")
                     with kpi_f3:
                         st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_mag_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
                     with kpi_f4:
@@ -5735,7 +5735,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                             <div style="font-size: 0.86rem; color: #E2E8F0; line-height: 1.6;">
                                 1. <b>Nguyên lý bảo vệ chính là So Lệch Dọc 87L:</b> Rơ le ABB RED670 tại ngăn lộ 171 được cấu hình chức năng chính là bảo vệ so lệch dòng điện đường dây (Line Differential - 87L) trao đổi dữ liệu qua kênh cáp quang OPGW. Bảo vệ 87L tác động tức thời sau <b>5 ms</b> chỉ dựa trên so sánh dòng vi sai \(I_d = 4.220\text{ A}\) và dòng hãm \(I_b = 3.821\text{ A}\), hoàn toàn không phụ thuộc vào tính toán trở kháng hay khoảng cách.<br><br>
                                 2. <b>Khối chức năng RFLO (Fault Locator) chưa nạp tham số:</b> Trong phần mềm kỹ thuật <i>PCM600</i> của ABB, khối thuật toán định vị sự cố (RFLO) yêu cầu cài đặt ma trận tham số đường dây (\(R_1, X_1, R_0, X_0, L_{\text{km}}\)). Do cấu hình IED xuất xưởng chưa kích hoạt tính năng tự động ghi nhận FLOC khi trip 87L, rơ le trả về cờ trạng thái <code>Status of fault calculation: Error / Fault location: Not Applicable</code>.<br><br>
-                                3. <b>Giải pháp tính toán độc lập:</b> Dựa trên các kênh đo sóng tương tự (Analog Disturbance Waveforms) được rơ le ghi lại với độ chính xác cao (\(U_{L2} = 7.38\text{ kV} \angle 330.3^\circ, I_{L2} = 548.2\text{ A} \angle 297.5^\circ, 3I_0 = 1.643\text{ A} \angle 297.5^\circ\)), hệ thống đã áp dụng công thức giải tích chuẩn Takagi để xác định chính xác điểm sự cố tại vị trí <b>5.31 km</b> (khoảng cột <b>#17 đến #19</b>).
+                                3. <b>Giải pháp tính toán độc lập:</b> Dựa trên các kênh đo sóng tương tự (Analog Disturbance Waveforms) được rơ le ghi lại với độ chính xác cao (\(U_{L2} = 7.38\text{ kV} \angle 330.3^\circ, I_{L2} = 548.2\text{ A} \angle 297.5^\circ, 3I_0 = 1.643\text{ A} \angle 297.5^\circ\)), hệ thống áp dụng công thức giải tích chuẩn Takagi xác định chính xác điểm sự cố tại vị trí <b>5.31 km</b> (tương ứng <b>35.9%</b> tuyến đường dây 14.8 km, nằm tại khoảng néo cột <b>#18 đến #19</b>, cách cột #18 ~278m).
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -5743,7 +5743,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                     # BẢNG THAM SỐ ĐIỆN HỌC CHI TIẾT CỦA VÒNG LẶP SỰ CỐ
                     st.markdown("##### 📐 Bảng Tham Số Tính Toán Định Vị Chi Tiết (Fault Calculation Parameters):")
                     df_calc = pd.DataFrame([
-                        {"Tham Số Tính Toán": "Loại đường dây & Chiều dài", "Ký Hiệu": "ACSR 240/32 - L", "Giá Trị": "12.5 km", "Đơn Vị": "km", "Ghi Chú": "Đường dây 110kV ĐMT Mỹ Hiệp - Phù Mỹ"},
+                        {"Tham Số Tính Toán": "Loại đường dây & Chiều dài", "Ký Hiệu": "ACSR 240/32 - L", "Giá Trị": "14.8 km (51 vị trí cột)", "Đơn Vị": "km / cột", "Ghi Chú": "Đường dây 110kV ĐMT Mỹ Hiệp - Phù Mỹ (khoảng vượt TB ~296m)"},
                         {"Tham Số Tính Toán": "Điện kháng thứ tự thuận (đơn vị)", "Ký Hiệu": "x1", "Giá Trị": f"{floc.get('line_params', {}).get('x1', 0.405):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Tham số dây dẫn nhôm lõi thép tiêu chuẩn"},
                         {"Tham Số Tính Toán": "Điện trở thứ tự thuận (đơn vị)", "Ký Hiệu": "r1", "Giá Trị": f"{floc.get('line_params', {}).get('r1', 0.120):.3f}", "Đơn Vị": "Ω/km", "Ghi Chú": "Nhiệt độ môi trường vận hành 30°C"},
                         {"Tham Số Tính Toán": "Hệ số bù thứ tự không", "Ký Hiệu": "k0 = (Z0 - Z1) / 3Z1", "Giá Trị": f"{floc.get('line_params', {}).get('k0_mag', 0.69):.2f} ∠ {floc.get('line_params', {}).get('k0_ang', 7.1):.1f}°", "Đơn Vị": "--", "Ghi Chú": "Bù trừ dòng chạm đất qua đất/dây chống sét"},
@@ -5751,7 +5751,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                         {"Tham Số Tính Toán": "Dòng điện pha sự cố B (L2)", "Ký Hiệu": "I_L2", "Giá Trị": "548.2 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng sự cố phía nguồn Mỹ Hiệp phát ra"},
                         {"Tham Số Tính Toán": "Dòng điện thứ tự không 3I0", "Ký Hiệu": "3I0", "Giá Trị": "1,643.4 ∠ 297.5°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng hồi lưu qua điểm tiếp địa"},
                         {"Tham Số Tính Toán": "Tổng trở vòng lặp ngắn mạch", "Ký Hiệu": "Z_loop = U_L2 / (I_L2 + k0*3I0)", "Giá Trị": f"{floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} (Z = {floc.get('z_mag_ohm')} ∠ {floc.get('z_ang_deg')}°)", "Đơn Vị": "Ω", "Ghi Chú": "Trở kháng nhìn từ rơ le đến điểm ngắn mạch"},
-                        {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d = X_loop / x1", "Giá Trị": f"{floc.get('dist_km')} ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": "Khuyến nghị tuần tra khoảng cột #17 - #19"}
+                        {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d = X_loop / x1", "Giá Trị": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": "Khoảng cột #18 - #19 (khoảng cách từ Cột #18 ~278m)"}
                     ])
                     st.dataframe(df_calc, use_container_width=True, hide_index=True)
 

@@ -405,7 +405,8 @@ class RelayFaultAnalyzer:
 
 def calculate_fault_location(
     fault_data: Dict[str, Any], 
-    line_length_km: float = 12.5, 
+    line_length_km: float = 14.8, 
+    total_towers: int = 51,
     x1_per_km: float = 0.405, 
     r1_per_km: float = 0.120,
     x0_per_km: float = 1.250,
@@ -415,6 +416,7 @@ def calculate_fault_location(
     Tính toán định vị chính xác khoảng cách điểm sự cố (Fault Location Engine)
     Sử dụng phương pháp Điện kháng ngắn mạch vòng lặp (Reactance Loop Method / Takagi)
     để loại trừ sai số do điện trở tiếp xúc hồ quang Rf.
+    Đường dây 110kV Lộ 171 ĐMT Mỹ Hiệp - Phù Mỹ: Chiều dài 14.8 km, 51 vị trí cột.
     """
     # Phasor values extracted from event recording
     u_mag = 7382.395
@@ -444,10 +446,17 @@ def calculate_fault_location(
     dist_km = max(0.1, round(x_loop / x1_per_km, 2))
     dist_pct = min(100.0, round((dist_km / line_length_km) * 100.0, 1))
 
-    # Estimated tower span (average 300m per tower span)
-    start_tower = int(dist_km * 1000 / 300)
-    end_tower = start_tower + 2
-    tower_range = f"Khoảng cột #{start_tower} đến #{end_tower} (Xuất tuyến 171)"
+    # Calculate exact tower span with 51 towers across 14.8 km
+    avg_span_km = line_length_km / max(1, (total_towers - 1))  # ~0.296 km (296m)
+    tower_float = 1.0 + (dist_km / avg_span_km)
+    start_tower = int(tower_float)
+    end_tower = min(total_towers, start_tower + 1)
+    
+    km_start_t = (start_tower - 1) * avg_span_km
+    km_end_t = (end_tower - 1) * avg_span_km
+    dist_from_start_t = (dist_km - km_start_t) * 1000
+
+    tower_range = f"Khoảng cột #{start_tower} - #{end_tower} (km {km_start_t:.2f} - km {km_end_t:.2f}, cách Cột #{start_tower} ~{dist_from_start_t:.0f}m)"
 
     # Estimated fault resistance Rf
     r_line_fault = dist_km * r1_per_km
@@ -457,6 +466,10 @@ def calculate_fault_location(
         "dist_km": dist_km,
         "dist_pct": dist_pct,
         "line_length_km": line_length_km,
+        "total_towers": total_towers,
+        "avg_span_m": round(avg_span_km * 1000, 1),
+        "start_tower": start_tower,
+        "end_tower": end_tower,
         "tower_range": tower_range,
         "z_loop_ohm": round(z_mag, 2),
         "r_loop_ohm": round(r_loop, 2),
@@ -473,9 +486,12 @@ def calculate_fault_location(
 
 def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
     """Tạo sơ đồ đồ họa trực quan mô phỏng vị trí điểm sự cố trên tuyến đường dây 110kV"""
-    line_len = floc.get("line_length_km", 12.5)
+    line_len = floc.get("line_length_km", 14.8)
+    n_towers = floc.get("total_towers", 51)
     f_km = floc.get("dist_km", 5.31)
-    f_pct = floc.get("dist_pct", 42.5)
+    f_pct = floc.get("dist_pct", 35.9)
+    st_t = floc.get("start_tower", 18)
+    en_t = floc.get("end_tower", 19)
 
     fig = go.Figure()
 
@@ -484,63 +500,80 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
         x=[0, line_len],
         y=[0, 0],
         mode="lines",
-        name="Tuyến Đường Dây 110kV (12.5 km)",
+        name=f"Tuyến Đường Dây 110kV ({line_len:.1f} km, {n_towers} Cột)",
         line=dict(color="#0284C7", width=8),
         hoverinfo="none"
     ))
 
-    # 2. Zone 1 & Zone 2 Protection Reach bands
+    # 2. Zone 1 Protection Reach band (80% Line)
     z1_km = line_len * 0.80
     fig.add_trace(go.Scatter(
         x=[0, z1_km],
         y=[0, 0],
         mode="lines",
-        name="Vùng 1 (Zone 1 - 80% Tuyến)",
+        name=f"Vùng 1 (Zone 1: 0 - {z1_km:.1f} km)",
         line=dict(color="#10B981", width=4),
         hoverinfo="text",
         hovertext=f"Vùng 1 (Zone 1): 0 - {z1_km:.1f} km (Bảo vệ cắt nhanh tức thời)"
     ))
 
-    # 3. Substation A Marker (TBA Mỹ Hiệp)
+    # 3. Fault Span Highlight (#18 - #19)
+    avg_span = line_len / max(1, (n_towers - 1))
+    sp_start = (st_t - 1) * avg_span
+    sp_end = (en_t - 1) * avg_span
+    fig.add_trace(go.Scatter(
+        x=[sp_start, sp_end],
+        y=[0, 0],
+        mode="lines",
+        name=f"Khoảng Cột Sự Cố (#{st_t} - #{en_t})",
+        line=dict(color="#EF4444", width=12),
+        hoverinfo="text",
+        hovertext=f"<b>KHOẢNG CỘT SỰ CỐ: CỘT #{st_t} ĐẾN CỘT #{en_t}</b><br>Km {sp_start:.2f} đến Km {sp_end:.2f}"
+    ))
+
+    # 4. Substation A Marker (TBA Mỹ Hiệp)
     fig.add_trace(go.Scatter(
         x=[0],
         y=[0],
         mode="markers+text",
         name="TBA 110kV ĐMT Mỹ Hiệp",
-        text=["🏢 TBA 110kV ĐMT Mỹ Hiệp<br>(Ngăn 171 - km 0.0)"],
+        text=["🏢 TBA 110kV ĐMT Mỹ Hiệp<br>(Ngăn 171 - Cột #1 - km 0.0)"],
         textposition="bottom center",
         marker=dict(size=18, color="#0284C7", symbol="square", line=dict(width=2, color="#FFFFFF")),
         hoverinfo="text",
         hovertext="<b>🏢 ĐẦU TUYẾN: TBA 110kV ĐMT MỸ HIỆP</b><br>Xuất tuyến ngăn lộ 171 (Rơ le ABB RED670)"
     ))
 
-    # 4. Substation B Marker (TBA 220kV Phù Mỹ)
+    # 5. Substation B Marker (TBA 220kV Phù Mỹ)
     fig.add_trace(go.Scatter(
         x=[line_len],
         y=[0],
         mode="markers+text",
         name="TBA 220kV Phù Mỹ",
-        text=[f"🏢 TBA 220kV Phù Mỹ<br>(km {line_len:.1f})"],
+        text=[f"🏢 TBA 220kV Phù Mỹ<br>(Cột #{n_towers} - km {line_len:.1f})"],
         textposition="bottom center",
         marker=dict(size=18, color="#6D28D9", symbol="square", line=dict(width=2, color="#FFFFFF")),
         hoverinfo="text",
         hovertext=f"<b>🏢 CUỐI TUYẾN: TBA 220kV PHÙ MỸ</b><br>Trạm đầu đối diện (Khoảng cách {line_len:.1f} km)"
     ))
 
-    # 5. Towers simulated dots along the line
-    tower_xs = list(np.arange(0.5, line_len, 0.6))
+    # 6. Towers actual 51 points along the line
+    tower_xs = [(i * avg_span) for i in range(n_towers)]
+    tower_colors = ["#EF4444" if (i+1 in [st_t, en_t]) else "#94A3B8" for i in range(n_towers)]
+    tower_sizes = [11 if (i+1 in [st_t, en_t]) else 6 for i in range(n_towers)]
+
     fig.add_trace(go.Scatter(
         x=tower_xs,
-        y=[0]*len(tower_xs),
+        y=[0]*n_towers,
         mode="markers",
-        name="Vị trí Cột Điện 110kV",
-        marker=dict(size=6, color="#94A3B8", symbol="cross"),
+        name=f"51 Vị Trí Cột 110kV",
+        marker=dict(size=tower_sizes, color=tower_colors, symbol="cross", line=dict(width=1.5)),
         hoverinfo="text",
-        hovertext=[f"Cột điện #{idx+1} (km {tx:.2f})" for idx, tx in enumerate(tower_xs)],
-        showlegend=False
+        hovertext=[f"<b>Cột điện #{i+1}</b> (km {tx:.2f})" + (" ⚡ [GẦN ĐIỂM SỰ CỐ]" if i+1 in [st_t, en_t] else "") for i, tx in enumerate(tower_xs)],
+        showlegend=True
     ))
 
-    # 6. FAULT LOCATION POINT (LIGHTNING/EXPLOSION MARKER)
+    # 7. FAULT LOCATION POINT (LIGHTNING/EXPLOSION MARKER)
     fig.add_trace(go.Scatter(
         x=[f_km],
         y=[0],
@@ -548,24 +581,24 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
         name="⚡ VỊ TRÍ ĐIỂM SỰ CỐ PHA B",
         text=[f"⚡ <b>ĐIỂM SỰ CỐ PHA B</b><br><b>{f_km:.2f} km</b> ({f_pct:.1f}% tuyến)"],
         textposition="top center",
-        marker=dict(size=22, color="#EF4444", symbol="star", line=dict(width=3, color="#FEF08A")),
+        marker=dict(size=24, color="#EF4444", symbol="star", line=dict(width=3, color="#FEF08A")),
         hoverinfo="text",
         hovertext=(
             f"<b>⚡ ĐỊNH VỊ ĐIỂM SỰ CỐ NGẮN MẠCH PHA B (L2-N)</b><br>"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br>"
             f"• <b>Khoảng cách:</b> <b>{f_km:.2f} km</b> từ TBA ĐMT Mỹ Hiệp<br>"
-            f"• <b>Tỷ lệ tuyến:</b> {f_pct:.1f}% chiều dài đường dây<br>"
-            f"• <b>Vị trí thực địa:</b> {floc.get('tower_range')}<br>"
+            f"• <b>Tỷ lệ tuyến:</b> {f_pct:.1f}% chiều dài đường dây ({line_len:.1f} km)<br>"
+            f"• <b>Vị trí cột:</b> Khoảng cột #{st_t} - #{en_t}<br>"
             f"• <b>Tổng trở vòng lặp:</b> Z = {floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} Ω<br>"
             f"• <b>Điện trở hồ quang Rf:</b> ~{floc.get('r_arc_ohm')} Ω<br>"
-            f"• <b>Khuyến nghị O&M:</b> Tuần tra khẩn cấp khoảng cột #{int(f_km*1000/300)} - #{int(f_km*1000/300)+2}"
+            f"• <b>Khuyến nghị O&M:</b> Tuần tra khẩn cấp chuỗi sứ cách điện khoảng cột #{st_t} đến #{en_t}"
         )
     ))
 
     fig.update_layout(
-        title=f"<b>SƠ ĐỒ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN TUYẾN ĐƯỜNG DÂY 110kV ({f_km:.2f} km / {line_len:.1f} km)</b>",
+        title=f"<b>SƠ ĐỒ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN TUYẾN ĐƯỜNG DÂY 110kV ({f_km:.2f} km / {line_len:.1f} km - 51 VỊ TRÍ CỘT)</b>",
         template="plotly_white",
-        height=280,
+        height=300,
         margin=dict(t=50, b=20, l=20, r=20),
         xaxis=dict(
             title="<b>Khoảng Cách Từ TBA 110kV ĐMT Mỹ Hiệp (km)</b>",
