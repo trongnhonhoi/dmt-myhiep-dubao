@@ -948,7 +948,7 @@ def create_fault_location_diagram(floc: Dict[str, Any]) -> go.Figure:
     return fig
 
 
-def create_transformer_fault_diagram(fault_data: Dict[str, Any]) -> go.Figure:
+def create_transformer_fault_diagram(fault_data: Dict[str, Any], floc: Optional[Dict[str, Any]] = None, *args, **kwargs) -> go.Figure:
     """Tạo sơ đồ nguyên lý không gian Máy Biến Áp T1 110kV/22kV (Ngăn 131) & Vùng bảo vệ F87T / REF"""
     flt_info = fault_data.get("fault_info", {})
     df_i = fault_data.get("df_currents", pd.DataFrame())
@@ -1098,9 +1098,20 @@ def create_transformer_fault_diagram(fault_data: Dict[str, Any]) -> go.Figure:
     return fig
 
 
-def create_relay_phasor_diagram(df_voltages: pd.DataFrame, df_currents: pd.DataFrame) -> go.Figure:
+def create_relay_phasor_diagram(arg1: Any, arg2: Any = None, mode: Optional[str] = None, *args, **kwargs) -> go.Figure:
     """Tạo biểu đồ Polar Phasor Vector biểu diễn dòng điện và điện áp các pha hoặc Vector 2 cuộn dây MBA"""
     fig = go.Figure()
+
+    if isinstance(arg1, dict):
+        df_voltages = arg1.get("df_voltages", pd.DataFrame())
+        df_currents = arg1.get("df_currents", pd.DataFrame())
+        if mode == "U":
+            df_currents = pd.DataFrame()
+        elif mode == "I":
+            df_voltages = pd.DataFrame()
+    else:
+        df_voltages = arg1 if isinstance(arg1, pd.DataFrame) else pd.DataFrame()
+        df_currents = arg2 if isinstance(arg2, pd.DataFrame) else pd.DataFrame()
 
     c_map = {
         "A": "#EF4444",  # Đỏ (Pha A / L1)
