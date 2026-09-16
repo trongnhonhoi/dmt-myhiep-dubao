@@ -1104,39 +1104,41 @@ def create_relay_phasor_diagram(df_voltages: pd.DataFrame, df_currents: pd.DataF
     # Trường hợp 1: Có điện áp (Thường là Ngăn 171 - Tuyến đường dây)
     if not df_voltages.empty:
         for _, r in df_voltages.iterrows():
-            ph = r.get("phase", "A")
-            u_kv = float(r.get("rms_kv", 0.0))
-            ang = float(r.get("angle", 0.0))
-            name_lbl = f"Điện Áp {r['name']} ({u_kv:.1f} kV, {ang:.1f}°)"
+            ph = r.get("phase", r.get("Pha", "A"))
+            u_kv = float(r.get("rms_kv", r.get("U_RMS_kV", 0.0)))
+            ang = float(r.get("angle", r.get("Goc_Deg", 0.0)))
+            u_name = r.get("name", r.get("Pha", f"U_{ph}"))
+            name_lbl = f"Điện Áp {u_name} ({u_kv:.1f} kV, {ang:.1f}°)"
 
             fig.add_trace(go.Scatterpolar(
                 r=[0, u_kv],
                 theta=[0, ang],
                 mode="lines+markers",
-                name=f"U: {r['name']}",
+                name=f"U: {u_name}",
                 line=dict(color=c_map.get(ph, "#38BDF8"), width=3),
                 marker=dict(size=8, symbol="arrow", angle=ang),
                 hovertemplate=f"<b>{name_lbl}</b><br>Độ lớn: {u_kv:.2f} kV<br>Góc pha: {ang:.1f}°<extra></extra>"
             ))
 
         if not df_currents.empty:
-            max_i = df_currents["rms"].max() if "rms" in df_currents.columns else 1000.0
+            max_i = df_currents["rms"].max() if "rms" in df_currents.columns else (df_currents["I_RMS_A"].max() if "I_RMS_A" in df_currents.columns else 1000.0)
             scale_factor = 60.0 / max(1.0, max_i)
             
             for _, r in df_currents.head(4).iterrows():
-                ph = r.get("phase", "A")
-                i_a = float(r.get("rms", 0.0))
-                ang = float(r.get("angle", 0.0))
+                ph = r.get("phase", r.get("Pha", "A"))
+                i_a = float(r.get("rms", r.get("I_RMS_A", 0.0)))
+                ang = float(r.get("angle", r.get("Goc_Deg", 0.0)))
+                i_name = r.get("name", r.get("Pha", f"I_{ph}"))
                 r_scaled = i_a * scale_factor
 
                 fig.add_trace(go.Scatterpolar(
                     r=[0, r_scaled],
                     theta=[0, ang],
                     mode="lines+markers",
-                    name=f"I: {r['name']}",
+                    name=f"I: {i_name}",
                     line=dict(color=c_map.get(ph, "#F97316"), width=2.5, dash="dot"),
                     marker=dict(size=7, symbol="diamond"),
-                    hovertemplate=f"<b>Dòng Điện: {r['name']}</b><br>Độ lớn: <b>{i_a:.1f} A</b><br>Góc pha: {ang:.1f}°<extra></extra>"
+                    hovertemplate=f"<b>Dòng Điện: {i_name}</b><br>Độ lớn: <b>{i_a:.1f} A</b><br>Góc pha: {ang:.1f}°<extra></extra>"
                 ))
 
         chart_title = "<b>BIỂU ĐỒ VECTOR PHASOR DÒNG ĐIỆN & ĐIỆN ÁP LÚC SỰ CỐ (NGĂN LỘ 171)</b>"

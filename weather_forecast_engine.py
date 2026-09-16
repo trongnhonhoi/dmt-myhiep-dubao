@@ -8,7 +8,7 @@ import urllib.request
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
 
 from solar_engine import MyHiepSolarPlantConfig
 
