@@ -16,11 +16,14 @@ import io
 # Tọa độ 2 đầu trạm biến áp
 SUBSTATION_MY_HIEP = {
     "name": "TBA 110kV ĐMT Mỹ Hiệp",
+    "plant_name": "NMĐMT Mỹ Hiệp (Phù Mỹ Nam)",
     "bay": "Ngăn lộ 171",
-    "lat": 14.15320,
-    "lon": 109.04180,
+    "lat": 14.117778,  # 14°7'4"N
+    "lon": 109.011111,  # 109°0'40"E
+    "dms": "14°7'4\"N 109°0'40\"E",
+    "plus_code": "4296+3F5",
     "km": 0.000,
-    "desc": "Trạm biến áp nâng áp Nhà máy ĐMT Mỹ Hiệp (50MWp)"
+    "desc": "Trạm biến áp nâng áp NMĐMT Mỹ Hiệp (50MWp) - Phù Mỹ Nam (14°7'4\"N 109°0'40\"E | Plus Code: 4296+3F5)"
 }
 
 SUBSTATION_PHU_MY = {
@@ -455,7 +458,10 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     # 5. Marker 2 Đầu Trạm Biến Áp
     sub_lats = [SUBSTATION_MY_HIEP["lat"], SUBSTATION_PHU_MY["lat"]]
     sub_lons = [SUBSTATION_MY_HIEP["lon"], SUBSTATION_PHU_MY["lon"]]
-    sub_texts = ["🏢 TBA 110kV ĐMT MỸ HIỆP (km 0.0)", "🏢 TBA 220kV PHÙ MỸ (km 14.8)"]
+    sub_texts = [
+        f"🏢 TBA 110kV NMĐMT MỸ HIỆP (km 0.0)<br>• Tọa độ: {SUBSTATION_MY_HIEP['dms']} (Plus Code: {SUBSTATION_MY_HIEP['plus_code']})",
+        "🏢 TBA 220kV PHÙ MỸ (km 14.8)"
+    ]
 
     fig.add_trace(ScatterMapTrace(
         lat=sub_lats,
@@ -463,9 +469,10 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
         mode="markers+text",
         name="Trạm Biến Áp 110kV / 220kV",
         marker=dict(size=18, color=["#0284C7", "#7C3AED"]),
-        text=sub_texts,
+        text=["🏢 TBA 110kV ĐMT MỸ HIỆP", "🏢 TBA 220kV PHÙ MỸ"],
         textposition="bottom right",
-        hovertemplate="<b>%{text}</b><extra></extra>"
+        hovertemplate="<b>%{customdata}</b><extra></extra>",
+        customdata=sub_texts
     ))
 
     # 6. Marker ĐIỂM SỰ CỐ NGẮN MẠCH (Fault Point Marker)
@@ -671,8 +678,17 @@ def render_google_maps_html(floc: Dict[str, Any], height: int = 520) -> str:
                 weight: 2.5,
                 fillOpacity: 1
             }}).addTo(map);
-            subMyHiep.bindPopup("<b>🏢 TBA 110kV ĐMT MỸ HIỆP</b><br>Lộ 171 (Điểm đầu km 0.00)", {{ className: 'custom-popup' }});
-            subMyHiep.bindTooltip("🏢 TBA 110kV Mỹ Hiệp (km 0.0)", {{ permanent: true, direction: 'bottom' }});
+            subMyHiep.bindPopup(`
+                <div style="font-size:13px; line-height:1.5;">
+                    <b style="color:#38BDF8; font-size:14px;">🏢 {SUBSTATION_MY_HIEP['plant_name']}</b><br>
+                    • <b>Trạm:</b> {SUBSTATION_MY_HIEP['name']} ({SUBSTATION_MY_HIEP['bay']})<br>
+                    • <b>Tọa độ DMS:</b> <b>{SUBSTATION_MY_HIEP['dms']}</b><br>
+                    • <b>Tọa độ thập phân:</b> <code>{SUBSTATION_MY_HIEP['lat']:.6f}, {SUBSTATION_MY_HIEP['lon']:.6f}</code><br>
+                    • <b>Google Plus Code:</b> <b>{SUBSTATION_MY_HIEP['plus_code']}</b> (Phù Mỹ, Bình Định)<br>
+                    • <b>Lý trình:</b> Điểm đầu km 0.00
+                </div>
+            `, {{ className: 'custom-popup' }});
+            subMyHiep.bindTooltip("🏢 NMĐMT Mỹ Hiệp (14°7'4\"N 109°0'40\"E)", {{ permanent: true, direction: 'bottom' }});
 
             const subPhuMy = L.circleMarker([{SUBSTATION_PHU_MY["lat"]}, {SUBSTATION_PHU_MY["lon"]}], {{
                 radius: 12,
