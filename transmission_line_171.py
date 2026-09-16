@@ -183,10 +183,13 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     f_km = floc.get("dist_km", 5.31)
     span_info = find_fault_span_and_towers(f_km)
 
+    # Tương thích Plotly v6+ (Scattermap/map) và Plotly v5 (Scattermapbox/mapbox)
+    ScatterMapTrace = getattr(go, "Scattermap", getattr(go, "Scattermapbox", None))
+
     fig = go.Figure()
 
     # 1. Đường dây 110kV Lộ 171 (Polyline nối 51 cột)
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=df["lat"],
         lon=df["lon"],
         mode="lines",
@@ -200,7 +203,7 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     en_t = span_info["end_tower"]
     df_span = df[(df["tower_no"] >= st_t) & (df["tower_no"] <= en_t)]
 
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=df_span["lat"],
         lon=df_span["lon"],
         mode="lines",
@@ -212,7 +215,7 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
 
     # 3. Các vị trí cột Đỡ (Suspension Towers)
     df_do = df[~df["is_tension"]]
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=df_do["lat"],
         lon=df_do["lon"],
         mode="markers",
@@ -231,12 +234,12 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
 
     # 4. Các vị trí cột Néo góc (Tension Towers)
     df_neo = df[df["is_tension"]]
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=df_neo["lat"],
         lon=df_neo["lon"],
         mode="markers+text",
         name="Cột Néo Góc 110kV (N111/N112/N113)",
-        marker=dict(size=12, color="#F59E0B", symbol="square"),
+        marker=dict(size=12, color="#F59E0B"),
         text=df_neo["tower_name"],
         textposition="top right",
         hovertemplate=(
@@ -254,7 +257,7 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     sub_lons = [SUBSTATION_MY_HIEP["lon"], SUBSTATION_PHU_MY["lon"]]
     sub_texts = ["🏢 TBA 110kV ĐMT MỸ HIỆP (km 0.0)", "🏢 TBA 220kV PHÙ MỸ (km 14.8)"]
 
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=sub_lats,
         lon=sub_lons,
         mode="markers+text",
@@ -266,7 +269,7 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     ))
 
     # 6. Marker ĐIỂM SỰ CỐ NGẮN MẠCH (Fault Point Marker)
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(ScatterMapTrace(
         lat=[span_info["fault_lat"]],
         lon=[span_info["fault_lon"]],
         mode="markers+text",
@@ -286,16 +289,29 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     ))
 
     # Căn chỉnh tâm bản đồ vào điểm sự cố
+    if hasattr(go, "Scattermap"):
+        map_config = dict(
+            map=dict(
+                style="open-street-map",
+                center=dict(lat=span_info["fault_lat"], lon=span_info["fault_lon"]),
+                zoom=12.2
+            )
+        )
+    else:
+        map_config = dict(
+            mapbox=dict(
+                style="open-street-map",
+                center=dict(lat=span_info["fault_lat"], lon=span_info["fault_lon"]),
+                zoom=12.2
+            )
+        )
+
     fig.update_layout(
         title=f"<b>BẢN ĐỒ SỐ TRẮC ĐỊA 51 CỘT ĐIỆN & ĐỊNH VỊ SỰ CỐ TUYẾN 110kV (LỘ 171: 14.8 km)</b>",
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=span_info["fault_lat"], lon=span_info["fault_lon"]),
-            zoom=12.2
-        ),
         margin=dict(t=45, b=10, l=10, r=10),
         height=480,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        **map_config
     )
 
     return fig
