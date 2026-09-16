@@ -16,6 +16,7 @@ import re
 
 import base64
 import importlib
+import streamlit.components.v1 as components
 
 import solar_engine
 import data_harvester
@@ -65,7 +66,9 @@ from transmission_line_171 import (
     reset_custom_towers,
     export_towers_template_excel,
     import_towers_from_excel,
-    parse_coords_string
+    parse_coords_string,
+    render_google_maps_html,
+    render_google_maps_iframe
 )
 
 from scada_map_builder import (
@@ -5750,19 +5753,31 @@ elif selected_menu == NAV_OPTIONS[9]:
 
                     # LỰA CHỌN CHẾ ĐỘ HIỂN THỊ BẢN ĐỒ / SƠ ĐỒ
                     map_view_mode = st.radio(
-                        "Chế độ hiển thị trực quan tuyến 110kV:",
+                        "Chế độ hiển thị bản đồ trực quan tuyến 110kV:",
                         [
-                            "🗺️ Bản Đồ Số Trắc Địa GIS 51 Cột Điện (Plotly Mapbox / OpenStreetMap GPS)",
-                            "📐 Sơ Đồ Nguyên Lý Khoảng Vượt Tuyến 110kV (Single Line Diagram)"
+                            "🛰️ Bản Đồ Google Maps Trực Tiếp (Vệ Tinh Hybrid & Giao Thông Tương Tác 51 Cột)",
+                            "🌐 Bản Đồ Số GIS Plotly (OpenStreetMap)",
+                            "📐 Sơ Đồ Nguyên Lý Khoảng Vượt (Single Line)",
+                            "🗺️ Khung Nhúng Google Maps Chính Thức (IFrame)"
                         ],
                         index=0,
                         horizontal=True,
                         key="radio_map_view_mode"
                     )
 
-                    if "Bản Đồ Số Trắc Địa GIS" in map_view_mode:
+                    if "Google Maps Trực Tiếp" in map_view_mode:
+                        gmap_html = render_google_maps_html(floc, height=520)
+                        components.html(gmap_html, height=540)
+                    elif "Bản Đồ Số GIS Plotly" in map_view_mode:
                         fig_gis = create_transmission_line_gis_map(floc)
                         st.plotly_chart(fig_gis, use_container_width=True)
+                    elif "Google Maps Chính Thức" in map_view_mode:
+                        col_g_type, _ = st.columns([2, 3])
+                        with col_g_type:
+                            g_embed_type = st.selectbox("Kiểu lớp bản đồ Google:", ["🛰️ Ảnh Vệ Tinh (Satellite)", "🗺️ Bản Đồ Đường (Roadmap)"], index=0, key="sel_g_embed_type")
+                        t_type_val = "k" if "Vệ Tinh" in g_embed_type else "m"
+                        g_iframe = render_google_maps_iframe(span_info['fault_lat'], span_info['fault_lon'], height=480, map_type=t_type_val)
+                        components.html(g_iframe, height=500)
                     else:
                         fig_floc = create_fault_location_diagram(floc)
                         st.plotly_chart(fig_floc, use_container_width=True)

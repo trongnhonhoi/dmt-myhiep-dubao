@@ -517,6 +517,246 @@ def create_transmission_line_gis_map(floc: Dict[str, Any]) -> go.Figure:
     return fig
 
 
+def render_google_maps_html(floc: Dict[str, Any], height: int = 520) -> str:
+    """
+    Tạo mã HTML/JS nhúng trực tiếp Google Maps (Vệ tinh Hybrid / Giao thông / Địa hình)
+    hiển thị trực tiếp trong Streamlit với 51 vị trí cột, 2 đầu trạm và điểm sự cố rơ le.
+    """
+    df = get_towers_dataframe()
+    f_km = floc.get("dist_km", 5.31)
+    span_info = find_fault_span_and_towers(f_km)
+    
+    towers_json = df.to_json(orient="records")
+    st_t = span_info["start_tower"]
+    en_t = span_info["end_tower"]
+    
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Google Maps - Tuyến 110kV Lộ 171 Mỹ Hiệp</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            html, body {{ margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0F172A; }}
+            #map {{ width: 100%; height: {height}px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+            .custom-popup .leaflet-popup-content-wrapper {{ background: #1E293B; color: #F8FAFC; border-radius: 8px; border: 1px solid #475569; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }}
+            .custom-popup .leaflet-popup-tip {{ background: #1E293B; }}
+            .pulse-icon {{
+                background: radial-gradient(circle, rgba(239, 68, 68, 1) 0%, rgba(239, 68, 68, 0.4) 60%, rgba(239, 68, 68, 0) 100%);
+                border-radius: 50%;
+                border: 2px solid #FFFFFF;
+                box-shadow: 0 0 15px #EF4444;
+                animation: pulse-ring 1.4s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+            }}
+            @keyframes pulse-ring {{
+                0% {{ transform: scale(0.85); opacity: 1; }}
+                70% {{ transform: scale(1.6); opacity: 0.1; }}
+                100% {{ transform: scale(0.85); opacity: 0; }}
+            }}
+            .map-ctrl-box {{
+                background: rgba(15, 23, 42, 0.85);
+                backdrop-filter: blur(8px);
+                border: 1px solid #334155;
+                padding: 6px 12px;
+                border-radius: 6px;
+                color: #F8FAFC;
+                font-size: 11.5px;
+                font-weight: 600;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            // 1. Google Maps & OSM Tile Layers
+            const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={{x}}&y={{y}}&z={{z}}', {{
+                maxZoom: 21,
+                attribution: '&copy; Google Maps Vệ Tinh (Hybrid)'
+            }});
+            const googleRoadmap = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={{x}}&y={{y}}&z={{z}}', {{
+                maxZoom: 21,
+                attribution: '&copy; Google Maps Giao Thông (Roadmap)'
+            }});
+            const googleTerrain = L.tileLayer('https://mt1.google.com/vt/lyrs=p&x={{x}}&y={{y}}&z={{z}}', {{
+                maxZoom: 21,
+                attribution: '&copy; Google Maps Địa Hình (Terrain)'
+            }});
+            const osm = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }});
+
+            const map = L.map('map', {{
+                center: [{span_info['fault_lat']}, {span_info['fault_lon']}],
+                zoom: 13,
+                layers: [googleHybrid]
+            }});
+
+            const baseLayers = {{
+                "🛰️ Google Maps Vệ Tinh (Hybrid)": googleHybrid,
+                "🗺️ Google Maps Giao Thông (Roadmap)": googleRoadmap,
+                "⛰️ Google Maps Địa Hình (Terrain)": googleTerrain,
+                "🌐 OpenStreetMap": osm
+            }};
+            L.control.layers(baseLayers, null, {{ position: 'topright' }}).addTo(map);
+
+            // Scale Bar
+            L.control.scale({{ metric: true, imperial: false, position: 'bottomleft' }}).addTo(map);
+
+            // 2. Plot Transmission Line 171 Polyline
+            const towers = {towers_json};
+            const lineCoords = towers.map(t => [t.lat, t.lon]);
+            
+            // Full line 171
+            L.polyline(lineCoords, {{
+                color: '#38BDF8',
+                weight: 4.5,
+                opacity: 0.95
+            }}).addTo(map);
+
+            // Highlight Fault Span
+            const faultSpanCoords = [];
+            towers.forEach(t => {{
+                if (t.tower_no >= {st_t} && t.tower_no <= {en_t}) {{
+                    faultSpanCoords.push([t.lat, t.lon]);
+                }}
+            }});
+            if (faultSpanCoords.length >= 2) {{
+                L.polyline(faultSpanCoords, {{
+                    color: '#EF4444',
+                    weight: 8,
+                    opacity: 0.95
+                }}).addTo(map);
+            }}
+
+            // 3. Plot Towers
+            towers.forEach(t => {{
+                const isTension = t.is_tension;
+                const markerColor = isTension ? '#F59E0B' : '#94A3B8';
+                const markerRadius = isTension ? 7.5 : 5;
+
+                const circleMarker = L.circleMarker([t.lat, t.lon], {{
+                    radius: markerRadius,
+                    fillColor: markerColor,
+                    color: '#FFFFFF',
+                    weight: 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.95
+                }}).addTo(map);
+
+                const popupHtml = `
+                    <div style="font-size:12.5px; line-height: 1.55;">
+                        <b style="color:${{isTension ? '#F59E0B' : '#38BDF8'}}; font-size:13.5px;">${{t.tower_name}} (${{t.tower_code}})</b><br>
+                        • <b>Kết cấu:</b> ${{t.tower_type}}<br>
+                        • <b>Lý trình:</b> <b>${{t.km_marker.toFixed(3)}} km</b><br>
+                        • <b>Khoảng vượt:</b> ${{t.span_m}} m<br>
+                        • <b>Tọa độ GPS:</b> <code>${{t.lat.toFixed(6)}}, ${{t.lon.toFixed(6)}}</code><br>
+                        • <b>Địa hình:</b> ${{t.terrain_note}}<br>
+                        <hr style="border: 0; border-top: 1px solid #475569; margin: 6px 0;">
+                        <a href="${{t.gmap_link}}" target="_blank" style="color: #38BDF8; font-weight: bold; text-decoration: none;">🗺️ Mở chỉ đường Google Maps ↗</a>
+                    </div>
+                `;
+                circleMarker.bindPopup(popupHtml, {{ className: 'custom-popup' }});
+                circleMarker.bindTooltip(`<b>${{t.tower_name}}</b> (${{t.km_marker.toFixed(2)}} km)`, {{ permanent: false, direction: 'top' }});
+            }});
+
+            // 4. Substations
+            const subMyHiep = L.circleMarker([{SUBSTATION_MY_HIEP["lat"]}, {SUBSTATION_MY_HIEP["lon"]}], {{
+                radius: 12,
+                fillColor: '#0284C7',
+                color: '#FFFFFF',
+                weight: 2.5,
+                fillOpacity: 1
+            }}).addTo(map);
+            subMyHiep.bindPopup("<b>🏢 TBA 110kV ĐMT MỸ HIỆP</b><br>Lộ 171 (Điểm đầu km 0.00)", {{ className: 'custom-popup' }});
+            subMyHiep.bindTooltip("🏢 TBA 110kV Mỹ Hiệp (km 0.0)", {{ permanent: true, direction: 'bottom' }});
+
+            const subPhuMy = L.circleMarker([{SUBSTATION_PHU_MY["lat"]}, {SUBSTATION_PHU_MY["lon"]}], {{
+                radius: 12,
+                fillColor: '#7C3AED',
+                color: '#FFFFFF',
+                weight: 2.5,
+                fillOpacity: 1
+            }}).addTo(map);
+            subPhuMy.bindPopup("<b>🏢 TBA 220kV PHÙ MỸ</b><br>Lộ 171/172 (Điểm cuối km 14.80)", {{ className: 'custom-popup' }});
+            subPhuMy.bindTooltip("🏢 TBA 220kV Phù Mỹ (km 14.8)", {{ permanent: true, direction: 'bottom' }});
+
+            // 5. Fault Location Marker (Pulsing Red)
+            const faultIcon = L.divIcon({{
+                className: 'pulse-icon',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            }});
+            const faultMarker = L.marker([{span_info['fault_lat']}, {span_info['fault_lon']}], {{ icon: faultIcon }}).addTo(map);
+            const faultPopup = `
+                <div style="font-size:13px; line-height: 1.5; min-width: 230px;">
+                    <b style="color: #EF4444; font-size: 14.5px;">⚡ ĐIỂM SỰ CỐ NGẮN MẠCH FLOC</b><br>
+                    • <b>Khoảng cách:</b> <b>{f_km:.2f} km</b> ({floc.get('dist_pct', 35.9)}% tuyến)<br>
+                    • <b>Khoảng cột:</b> <b>Cột #{st_t} - #{en_t}</b><br>
+                    • <b>Cách Cột #{st_t}:</b> ~{span_info['offset_from_start_m']:.0f} m<br>
+                    • <b>Cách Cột #{en_t}:</b> ~{span_info['offset_to_end_m']:.0f} m<br>
+                    • <b>Tọa độ GPS:</b> <code>{span_info['fault_lat']:.6f}, {span_info['fault_lon']:.6f}</code><br>
+                    <hr style="border: 0; border-top: 1px solid #475569; margin: 6px 0;">
+                    <a href="{span_info['fault_gmap_link']}" target="_blank" style="color: #EF4444; font-weight: bold; text-decoration: none;">🗺️ Dẫn đường trực tiếp trên Google Maps ↗</a>
+                </div>
+            `;
+            faultMarker.bindPopup(faultPopup, {{ className: 'custom-popup' }}).openPopup();
+            faultMarker.bindTooltip(`⚡ ĐIỂM SỰ CỐ: {f_km:.2f} km (Cột #{st_t}-#{en_t})`, {{ permanent: true, direction: 'top' }});
+
+            // 6. Click on map to get GPS coordinates
+            let clickMarker = null;
+            map.on('click', function(e) {{
+                const lat = e.latlng.lat.toFixed(6);
+                const lon = e.latlng.lng.toFixed(6);
+                if (clickMarker) {{
+                    map.removeLayer(clickMarker);
+                }}
+                clickMarker = L.circleMarker(e.latlng, {{
+                    radius: 8,
+                    fillColor: '#10B981',
+                    color: '#FFFFFF',
+                    weight: 2,
+                    fillOpacity: 1
+                }}).addTo(map);
+                clickMarker.bindPopup(`
+                    <div style="font-size:12.5px;">
+                        <b style="color:#10B981;">📍 Điểm Bạn Vừa Nhấp Chuột:</b><br>
+                        • Vĩ độ (Lat): <b>${{lat}}</b><br>
+                        • Kinh độ (Lon): <b>${{lon}}</b><br>
+                        <code>${{lat}}, ${{lon}}</code><br>
+                        <hr style="border: 0; border-top: 1px solid #475569; margin: 5px 0;">
+                        <small style="color:#94A3B8;">(Sao chép tọa độ trên dán vào ô Hiệu chỉnh vị trí cột bên dưới)</small>
+                    </div>
+                `, {{ className: 'custom-popup' }}).openPopup();
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    return html_code
+
+
+def render_google_maps_iframe(lat: float, lon: float, height: int = 480, map_type: str = "k") -> str:
+    """
+    Tạo iframe nhúng trực tiếp giao diện Google Maps chính thức từ Google Server
+    map_type: 'k' (Satellite/Vệ tinh), 'm' (Roadmap/Bản đồ thông thường)
+    """
+    return f"""
+    <iframe
+        width="100%"
+        height="{height}"
+        style="border:0; border-radius:12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);"
+        loading="lazy"
+        allowfullscreen
+        referrerpolicy="no-referrer-when-downgrade"
+        src="https://maps.google.com/maps?q={lat},{lon}&t={map_type}&z=15&output=embed">
+    </iframe>
+    """
+
+
 def export_patrol_order_to_excel(fault_data: Dict[str, Any], floc: Dict[str, Any]) -> bytes:
     """Xuất Phiếu Giao Việc Tuần Tra Tuyến Sự Cố O&M chi tiết ra file Excel"""
     output = io.BytesIO()
