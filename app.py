@@ -183,10 +183,10 @@ st.set_page_config(
 # GIAO DIỆN BOOTSTRAP 5 CHUYÊN NGHIỆP - NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP
 # =========================================================================
 st.markdown("""
-<!-- Nhúng thư viện Bootstrap 5.3.3 & Bootstrap Icons 1.11.3 -->
+<!-- Nhúng thư viện Bootstrap 5.3.3, Bootstrap Icons 1.11.3 & Google Fonts Chuyên Nghiệp -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <style>
     :root {
@@ -200,112 +200,173 @@ st.markdown("""
         --bs-danger-rgb: 239, 68, 68;
         --bs-dark: #0F172A;
         --bs-dark-rgb: 15, 23, 42;
-        --bs-body-font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --bs-body-font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --bs-mono-font-family: 'JetBrains Mono', Consolas, Monaco, "Courier New", monospace;
+    }
+
+    /* Custom Modern Scrollbars */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
     }
 
     html, body, [class*="css"] {
         font-family: var(--bs-body-font-family) !important;
         color: #1E293B;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    code, pre, .font-mono, .code-text {
+        font-family: var(--bs-mono-font-family) !important;
+        font-feature-settings: "liga" on, "calt" on;
     }
 
     .block-container {
-        padding-top: 1.25rem !important;
+        padding-top: 1.1rem !important;
         padding-bottom: 2.5rem !important;
         max-width: 98% !important;
     }
 
-    /* Bootstrap 5 Hero Card Header */
+    /* Professional Developer-Grade Hero Card Header */
     .bs-hero-banner {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0369A1 100%);
-        border-radius: 1rem;
-        padding: 1.5rem 1.75rem;
+        background: linear-gradient(135deg, #0B1329 0%, #1E293B 55%, #0369A1 100%);
+        border-radius: 12px;
+        padding: 1.4rem 1.65rem;
         color: #FFFFFF;
-        margin-bottom: 1.25rem;
-        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.35);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        margin-bottom: 1.15rem;
+        box-shadow: 0 12px 30px -6px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.12);
         position: relative;
         overflow: hidden;
     }
     .bs-hero-banner::after {
         content: "⚡";
         position: absolute;
-        right: 1.5rem;
-        top: 0.5rem;
-        font-size: 5.5rem;
-        opacity: 0.08;
+        right: 1.2rem;
+        top: 0.2rem;
+        font-size: 5.8rem;
+        opacity: 0.07;
         pointer-events: none;
     }
     .bs-plant-title {
-        font-size: 2.15rem;
+        font-size: 2.1rem;
         font-weight: 800;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.4px;
         text-transform: uppercase;
-        background: linear-gradient(90deg, #FDE047 0%, #F59E0B 35%, #38BDF8 80%, #7DD3FC 100%);
+        background: linear-gradient(90deg, #FDE047 0%, #F59E0B 30%, #38BDF8 75%, #7DD3FC 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        line-height: 1.2;
+        line-height: 1.15;
         margin-bottom: 0.25rem;
     }
     .bs-plant-subtitle {
-        font-size: 0.92rem;
+        font-size: 0.90rem;
         color: #CBD5E1;
         font-weight: 500;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.7rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
     }
 
-    /* Bootstrap 5 Badges */
+    /* Live Animated Status Indicator Pill */
+    .live-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #34D399;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .live-dot {
+        width: 7px;
+        height: 7px;
+        background-color: #10B981;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #10B981;
+        animation: pulse-green 1.8s infinite;
+    }
+    @keyframes pulse-green {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Micro Tech Badges */
     .bs-badge-pill {
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
-        padding: 0.35rem 0.8rem;
-        border-radius: 50rem;
-        font-size: 0.82rem;
+        padding: 0.32rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.80rem;
         font-weight: 600;
-        margin-right: 0.4rem;
+        margin-right: 0.35rem;
         margin-bottom: 0.35rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(4px);
+        transition: all 0.2s ease;
     }
     .bs-badge-pill:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 
-    /* Bootstrap 5 Nav Tabs & Nav Pills */
+    /* Modern Developer Nav Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-        background-color: #F8FAFC;
-        padding: 0.4rem 0.6rem;
-        border-radius: 0.75rem;
-        border: 1px solid #E2E8F0;
-        margin-bottom: 1.25rem;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+        gap: 0.45rem;
+        background-color: #0F172A;
+        padding: 0.35rem 0.5rem;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 1.2rem;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 0.5rem !important;
-        padding: 0.55rem 1.15rem !important;
+        border-radius: 7px !important;
+        padding: 0.5rem 1.1rem !important;
         font-weight: 600 !important;
-        font-size: 0.88rem !important;
-        color: #475569 !important;
+        font-size: 0.86rem !important;
+        color: #94A3B8 !important;
         background: transparent !important;
         border: none !important;
-        transition: all 0.2s ease-in-out !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #F8FAFC !important;
+        background: rgba(255, 255, 255, 0.06) !important;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important;
-        color: #0284C7 !important;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
-        font-weight: 750 !important;
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4) !important;
+        font-weight: 700 !important;
     }
 
-    /* Bootstrap 5 Vertical Navigation Menu in Sidebar */
+    /* Vertical Navigation Menu in Sidebar */
     .bs-sidebar-nav-header {
-        font-size: 0.80rem;
+        font-size: 0.78rem;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
+        letter-spacing: 0.9px;
         color: #0284C7;
-        margin-top: 0.75rem;
+        margin-top: 0.65rem;
         margin-bottom: 0.45rem;
         padding-left: 0.2rem;
         display: flex;
@@ -314,42 +375,42 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] div[role="radiogroup"] {
-        gap: 0.4rem !important;
+        gap: 0.35rem !important;
         display: flex !important;
         flex-direction: column !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label {
         background: #FFFFFF !important;
-        border: 1.5px solid #E2E8F0 !important;
-        border-radius: 0.65rem !important;
-        padding: 0.65rem 0.85rem !important;
-        margin-bottom: 0.15rem !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        padding: 0.6rem 0.8rem !important;
+        margin-bottom: 0.1rem !important;
         transition: all 0.2s ease-in-out !important;
         cursor: pointer !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
         display: flex !important;
         align-items: center !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
         background: #F0F9FF !important;
         border-color: #38BDF8 !important;
-        transform: translateX(4px) !important;
-        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
+        transform: translateX(3px) !important;
+        box-shadow: 0 3px 8px rgba(2, 132, 199, 0.1) !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
     [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
         background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
         border-color: #0284C7 !important;
-        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
-        transform: translateX(4px) !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
+        transform: translateX(3px) !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] p,
     [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {
         color: #FFFFFF !important;
-        font-weight: 750 !important;
+        font-weight: 700 !important;
     }
     [data-testid="stSidebar"] div[role="radiogroup"] > label p {
-        font-size: 0.86rem !important;
+        font-size: 0.84rem !important;
         font-weight: 600 !important;
         color: #334155 !important;
         margin: 0 !important;
@@ -362,46 +423,50 @@ st.markdown("""
         width: 100% !important;
     }
 
-    /* Bootstrap 5 Card Metrics */
+    /* Industrial Telemetry Metrics Card */
     [data-testid="stMetric"] {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-radius: 0.75rem;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-        border-top: 3.5px solid #0284C7 !important;
-        transition: all 0.2s ease-in-out;
+        border-radius: 10px;
+        padding: 0.9rem 1.15rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03);
+        border-left: 4px solid #0284C7 !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     [data-testid="stMetric"]:hover {
-        transform: translateY(-3px);
+        transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
         border-color: #CBD5E1;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.78rem !important;
+        font-size: 0.76rem !important;
         font-weight: 700 !important;
         color: #64748B !important;
         text-transform: uppercase !important;
-        letter-spacing: 0.4px !important;
+        letter-spacing: 0.5px !important;
     }
     [data-testid="stMetricValue"] {
-        font-size: 1.65rem !important;
-        font-weight: 800 !important;
+        font-family: var(--bs-mono-font-family) !important;
+        font-size: 1.6rem !important;
+        font-weight: 750 !important;
         color: #0F172A !important;
+        font-feature-settings: "tnum" 1;
+        letter-spacing: -0.5px;
         margin-top: 0.15rem !important;
         margin-bottom: 0.15rem !important;
     }
     [data-testid="stMetricDelta"] {
-        font-size: 0.80rem !important;
+        font-size: 0.78rem !important;
         font-weight: 600 !important;
+        font-family: var(--bs-mono-font-family) !important;
     }
 
-    /* Bootstrap 5 Buttons */
+    /* Interactive Buttons */
     .stButton > button {
-        border-radius: 0.5rem !important;
+        border-radius: 7px !important;
         font-weight: 650 !important;
-        font-size: 0.88rem !important;
-        padding: 0.5rem 1.25rem !important;
+        font-size: 0.86rem !important;
+        padding: 0.45rem 1.15rem !important;
         transition: all 0.2s ease !important;
         border: 1px solid transparent !important;
     }
@@ -410,10 +475,10 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
     }
     .stDownloadButton > button {
-        border-radius: 0.5rem !important;
+        border-radius: 7px !important;
         font-weight: 650 !important;
-        font-size: 0.88rem !important;
-        padding: 0.5rem 1.2rem !important;
+        font-size: 0.86rem !important;
+        padding: 0.45rem 1.15rem !important;
         transition: all 0.2s ease !important;
     }
     .stDownloadButton > button:hover {
@@ -421,54 +486,43 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
     }
 
-    /* Bootstrap 5 Form Controls & Inputs */
+    /* Form Controls & Inputs */
     .stTextInput input, .stNumberInput input, .stSelectbox select, .stDateInput input {
-        border-radius: 0.5rem !important;
+        border-radius: 7px !important;
         border: 1px solid #CBD5E1 !important;
-        font-size: 0.90rem !important;
-        padding: 0.45rem 0.75rem !important;
+        font-size: 0.88rem !important;
+        padding: 0.42rem 0.75rem !important;
     }
     .stTextInput input:focus, .stNumberInput input:focus, .stSelectbox select:focus, .stDateInput input:focus {
         border-color: #0284C7 !important;
-        box-shadow: 0 0 0 0.25rem rgba(2, 132, 199, 0.15) !important;
+        box-shadow: 0 0 0 0.2rem rgba(2, 132, 199, 0.15) !important;
     }
 
-    /* Bootstrap 5 Tables & DataFrames */
+    /* Clean Tables & DataFrames */
     [data-testid="stDataFrame"] {
-        border-radius: 0.75rem;
+        border-radius: 10px;
         overflow: hidden;
         border: 1px solid #E2E8F0;
         box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
 
-    /* Bootstrap 5 Alert Boxes */
+    /* Clean Alert Callouts */
     .stAlert {
-        border-radius: 0.75rem !important;
-        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        border-radius: 10px !important;
+        border: 1px solid rgba(0, 0, 0, 0.07) !important;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03) !important;
     }
 
-    /* Bootstrap 5 Expanders / Accordion */
+    /* Accordion / Expanders */
     .streamlit-expanderHeader {
         background-color: #F8FAFC !important;
-        border-radius: 0.5rem !important;
+        border-radius: 8px !important;
         font-weight: 650 !important;
         border: 1px solid #E2E8F0 !important;
-        padding: 0.75rem 1rem !important;
+        padding: 0.65rem 0.95rem !important;
     }
     .streamlit-expanderHeader:hover {
         background-color: #F1F5F9 !important;
-    }
-
-    /* SCADA Status Alert */
-    .bs-server-status {
-        background: #F0FDF4;
-        border: 1px solid #BBF7D0;
-        border-left: 4px solid #10B981;
-        border-radius: 0.5rem;
-        padding: 0.75rem 1.25rem;
-        font-size: 0.88rem;
-        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -576,21 +630,28 @@ calc_params = {
 # =========================================================================
 # BANNER TIÊU ĐỀ BOOTSTRAP 5 - NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP
 # =========================================================================
-logo_img_tag = f'<img src="data:image/png;base64,{logo_b64}" class="img-fluid rounded-3 p-1 bg-white shadow-sm border border-warning" style="width: 100px; height: 100px; object-fit: contain;" />' if logo_b64 else ''
+logo_img_tag = f'<img src="data:image/png;base64,{logo_b64}" class="img-fluid rounded-3 p-1 bg-white shadow-sm border border-warning" style="width: 95px; height: 95px; object-fit: contain;" />' if logo_b64 else ''
 
 banner_html = f"""
 <div class="bs-hero-banner">
     <div class="d-flex align-items-center gap-3 flex-wrap">
         {logo_img_tag}
         <div class="flex-grow-1">
-            <div class="bs-plant-title">NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP</div>
-            <div class="bs-plant-subtitle"><i class="bi bi-broadcast text-warning me-1"></i> HỆ THỐNG DỰ BÁO SẢN LƯỢNG ĐIỆN QUANG ĐIỆN CHU KỲ 15 PHÚT (EVN / A0 / A3)</div>
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">
+                <div class="bs-plant-title mb-0">NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP</div>
+                <div class="live-status-pill"><div class="live-dot"></div> TELEMETRY SCADA LIVE</div>
+            </div>
+            <div class="bs-plant-subtitle">
+                <span><i class="bi bi-cpu-fill text-warning"></i> HỆ THỐNG DỰ BÁO SẢN LƯỢNG QUANG ĐIỆN 15 PHÚT (EVN / A0 / A3)</span>
+                <span class="text-white-50">|</span>
+                <span class="font-mono text-info"><i class="bi bi-terminal-fill"></i> PROD-ENGINE</span>
+            </div>
             <div class="d-flex flex-wrap gap-2 mt-2">
                 <span class="bs-badge-pill bg-warning text-dark"><i class="bi bi-sun-fill"></i> DC: 50.00 MWp</span>
                 <span class="bs-badge-pill bg-info text-dark"><i class="bi bi-lightning-charge-fill"></i> AC Inverter: 40.075 MW</span>
-                <span class="bs-badge-pill bg-success text-white"><i class="bi bi-cpu-fill"></i> Tấm Pin: Sharp NU-440 (-0.347%/°C)</span>
-                <span class="bs-badge-pill bg-primary text-white"><i class="bi bi-diagram-3-fill"></i> Trạm Nâng Áp: 110kV / 22kV</span>
-                <span class="bs-badge-pill bg-dark text-white border border-secondary"><i class="bi bi-geo-alt-fill text-danger"></i> Thôn Vạn Phước, Xã Phù Mỹ Nam, T. Gia Lai</span>
+                <span class="bs-badge-pill bg-success text-white"><i class="bi bi-layers-fill"></i> Sharp NU-440 (-0.347%/°C)</span>
+                <span class="bs-badge-pill bg-primary text-white"><i class="bi bi-diagram-3-fill"></i> TBA 110kV Mỹ Hiệp ⇌ 220kV Phù Mỹ (Lộ 171)</span>
+                <span class="bs-badge-pill bg-dark text-white border border-secondary"><i class="bi bi-geo-alt-fill text-danger"></i> Phù Mỹ Nam, T. Gia Lai</span>
             </div>
         </div>
     </div>
