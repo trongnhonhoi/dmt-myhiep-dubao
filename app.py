@@ -43,7 +43,10 @@ importlib.reload(inverter_log_reader)
 
 from scada_map_builder import (
     create_scada_overview_figure,
-    generate_annotated_scada_image
+    generate_annotated_scada_image,
+    create_substation_thermal_map_figure,
+    calculate_substation_thermal_matrix,
+    generate_thermal_annotated_scada_image
 )
 
 from performance_report_engine import (
@@ -3795,6 +3798,31 @@ elif selected_menu == NAV_OPTIONS[7]:
                 </div>
                 """, unsafe_allow_html=True)
 
+                col_sc_ctl1, col_sc_ctl2 = st.columns([1.5, 2.5])
+                with col_sc_ctl1:
+                    scada_view_mode = st.radio(
+                        "Chế độ hiển thị Sơ đồ SCADA:",
+                        ["⚡ Sơ Đồ Sự Cố Chuỗi Pin (Fault Overlay)", "🌡️ Bản Đồ Nhiệt Độ IGBT (Thermal Map)"],
+                        index=0,
+                        key="scada_view_mode_toggle"
+                    )
+                with col_sc_ctl2:
+                    sel_scada_st = st.selectbox(
+                        "Lọc khu vực Trạm trên Sơ đồ SCADA:",
+                        ["Tất Cả 7 Trạm (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                        index=0,
+                        key="sel_scada_st_filter"
+                    )
+
+                with st.spinner("⏳ Đang tải Sơ đồ SCADA 229 Inverter tương tác..."):
+                    if "Sự Cố" in scada_view_mode:
+                        fig_scada = create_scada_overview_figure(df_strings, sel_scada_st)
+                    else:
+                        fig_scada = create_substation_thermal_map_figure(None, sel_scada_st)
+                    st.plotly_chart(fig_scada, use_container_width=True)
+
+                st.markdown("---")
+
                 st_tabs_matrix = st.tabs([
                     "🏢 S1 (STATION-01: 35 INV)",
                     "🏢 S2 (STATION-02: 35 INV)",
@@ -4693,18 +4721,19 @@ elif selected_menu == NAV_OPTIONS[8]:
 
             st.markdown("---")
 
-            # 8 Sub-Tabs phân tích chuyên sâu
+            # 9 Sub-Tabs phân tích chuyên sâu
             n_iv_curves = len(iv_data_cur.get('curves', []))
             n_fleet_invs = len(benchmark_data.get('df_fleet', []))
-            t_alarm, t_telemetry, t_iv, t_bench, t_risk, t_run, t_protect, t_excel = st.tabs([
+            t_alarm, t_telemetry, t_iv, t_bench, t_thermal, t_risk, t_run, t_protect, t_excel = st.tabs([
                 f"🚨 1. Lịch Sử Cảnh Báo & Sự Cố ({len(df_alarms_cur):,} Bản Ghi)",
                 f"📈 2. Dữ Liệu Điện Học & Hộp Đen ({len(df_telemetry_cur):,} Chu Kỳ 5P)",
                 f"⚡ 3. Chẩn Đoán Đặc Tuyến I-V ({n_iv_curves} Chuỗi PV)",
                 f"📊 4. So Sánh Hiệu Suất Peer-to-Peer ({n_fleet_invs} Inverters)",
-                "🛠️ 5. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
-                f"📜 6. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
-                "🛡️ 7. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
-                "📥 8. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 6 Sheet)"
+                "🌡️ 5. Bản Đồ Nhiệt Cảnh Báo Sớm Trạm Biến Áp (Thermal Map)",
+                "🛠️ 6. Cảnh Báo Nguy Cơ & Khuyến Nghị Bảo Trì O&M",
+                f"📜 7. Nhật Ký Hoạt Động & Sự Kiện ({len(df_run_cur):,} Dòng)",
+                "🛡️ 8. Nhật Ký Bảo Vệ Phần Cứng (sun_escp_log)",
+                "📥 9. Xuất Báo Cáo Chẩn Đoán Chi Tiết (Excel 6 Sheet)"
             ])
 
             # --- SUBTAB 1: LỊCH SỬ CẢNH BÁO ALARM ---
@@ -5288,7 +5317,95 @@ elif selected_menu == NAV_OPTIONS[8]:
                     }
                     st.dataframe(df_fleet_display[show_bench_cols].rename(columns=rename_bench_map), use_container_width=True, height=380, hide_index=True)
 
-            # --- SUBTAB 5: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
+            # --- SUBTAB 5: BẢN ĐỒ NHIỆT CẢNH BÁO SỚM TRẠM BIẾN ÁP (SUBSTATION THERMAL MAP) ---
+            with t_thermal:
+                st.markdown(r"""
+                <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
+                    <div style="font-size: 1.15rem; font-weight: 750; color: #EF4444; margin-bottom: 4px;">
+                        🌡️ BẢN ĐỒ NHIỆT CẢNH BÁO SỚM TRẠM BIẾN ÁP (SUBSTATION THERMAL MAP & HOTSPOT WARNING)
+                    </div>
+                    <div style="font-size: 0.85rem; color: #CBD5E1;">
+                        Hệ thống bản đồ nhiệt độ công nghệ cao định vị trực quan trên nền sơ đồ SCADA 1920x1082 (7 Trạm S1–S7 / 229 Inverter). Tự động phát hiện các điểm nóng cục bộ IGBT, biến tần bị nghẹt bụi quạt tản nhiệt hoặc suy giảm công suất do kích hoạt bảo vệ quá nhiệt (Thermal Derating).
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                df_thermal_matrix = calculate_substation_thermal_matrix(df_fleet_all)
+                
+                # 4 Thẻ KPI Nhiệt Độ Toàn Nhà Máy
+                max_plant_t = float(df_fleet_all['max_igbt_temp'].max()) if not df_fleet_all.empty and 'max_igbt_temp' in df_fleet_all.columns else 58.0
+                hot_inv_row = df_fleet_all.sort_values(by='max_igbt_temp', ascending=False).iloc[0] if not df_fleet_all.empty and 'max_igbt_temp' in df_fleet_all.columns else None
+                hot_inv_lbl = f"{hot_inv_row['inverter_id']} ({hot_inv_row['station_tag']})" if hot_inv_row is not None else "N/A"
+                
+                hot_st_row = df_thermal_matrix.sort_values(by='Nhiệt Độ IGBT Max (°C)', ascending=False).iloc[0] if not df_thermal_matrix.empty else None
+                hot_st_lbl = hot_st_row['Trạm Biến Áp'] if hot_st_row is not None else "Trạm S1"
+                hot_st_tmax = f"{hot_st_row['Nhiệt Độ IGBT Max (°C)']:.1f} °C" if hot_st_row is not None else "N/A"
+                
+                overheat_inv_cnt = int(df_thermal_matrix['Inverter Quá Nhiệt (🔴)'].sum()) if not df_thermal_matrix.empty else 0
+                warn_inv_cnt = int(df_thermal_matrix['Inverter Cảnh Báo (🟡)'].sum()) if not df_thermal_matrix.empty else 0
+
+                col_th1, col_th2, col_th3, col_th4 = st.columns(4)
+                with col_th1:
+                    st.metric("🏢 Trạm Biến Áp Nóng Nhất", hot_st_lbl, delta=f"T_max: {hot_st_tmax}", delta_color="inverse")
+                with col_th2:
+                    st.metric("🌡️ Inverter IGBT Nóng Nhất", hot_inv_lbl, delta=f"T_igbt: {max_plant_t:.1f} °C", delta_color="inverse")
+                with col_th3:
+                    st.metric("🔴 Inverter Quá Nhiệt (>72°C)", f"{overheat_inv_cnt} Inverter", delta="Nguy cơ Derating", delta_color="inverse" if overheat_inv_cnt > 0 else "normal")
+                with col_th4:
+                    st.metric("🟡 Inverter Cần Vệ Sinh Quạt", f"{warn_inv_cnt} Inverter", delta="Nhiệt độ 65 - 72°C", delta_color="inverse" if warn_inv_cnt > 0 else "normal")
+
+                st.markdown("---")
+
+                # Bộ lọc và Chú thích màu nhiệt độ
+                col_th_ctl1, col_th_ctl2 = st.columns([1.5, 2.5])
+                with col_th_ctl1:
+                    sel_st_thermal = st.selectbox(
+                        "🔍 Chọn phạm vi hiển thị Bản đồ nhiệt:",
+                        ["Tất Cả 7 Trạm (S1 - S7)", "S1 (STATION-01)", "S2 (STATION-02)", "S3 (STATION-03)", "S4 (STATION-04)", "S5 (STATION-05)", "S6 (STATION-06)", "S7 (STATION-07)"],
+                        index=0,
+                        key="sel_st_thermal_map"
+                    )
+                with col_th_ctl2:
+                    st.markdown(r"""
+                    <div style="background: #1E293B; border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-around; align-items: center; font-size: 0.82rem; margin-top: 5px;">
+                        <div><span style="display:inline-block; width:12px; height:12px; background:#10B981; border-radius:2px; margin-right:4px;"></span> <b>&lt; 55°C:</b> Mát / Tối ưu</div>
+                        <div><span style="display:inline-block; width:12px; height:12px; background:#0284C7; border-radius:2px; margin-right:4px;"></span> <b>55 - 65°C:</b> Mát định mức</div>
+                        <div><span style="display:inline-block; width:12px; height:12px; background:#F59E0B; border-radius:2px; margin-right:4px;"></span> <b>65 - 72°C:</b> Cảnh báo ấm</div>
+                        <div><span style="display:inline-block; width:12px; height:12px; background:#EF4444; border-radius:2px; margin-right:4px;"></span> <b>&gt; 72°C:</b> Quá nhiệt / Derating</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                # BIỂU ĐỒ SCADA THERMAL MAP TƯƠNG TÁC PLOTLY
+                with st.spinner("⏳ Đang kết xuất Bản Đồ Nhiệt SCADA 229 Inverter độ phân giải cao..."):
+                    fig_thermal = create_substation_thermal_map_figure(df_fleet_all, sel_st_thermal)
+                    st.plotly_chart(fig_thermal, use_container_width=True)
+
+                st.markdown("---")
+
+                # BẢNG MA TRẬN NHIỆT ĐỘ 7 TRẠM BIẾN ÁP
+                st.markdown("##### 📊 Bảng Ma Trận Nhiệt Độ Tổng Quan 7 Trạm Biến Áp (S1 đến S7):")
+                st.dataframe(df_thermal_matrix, use_container_width=True, hide_index=True)
+
+                # SỔ TAY KỸ THUẬT QUẢN TRỊ NHIỆT ĐỘ & QUẠT TẢN NHIỆT HUAWEI 175KTL
+                with st.expander("📖 Sổ Tay Kỹ Thuật O&M: Quy Trình Xử Lý Điểm Nóng & Bảo Dưỡng Quạt Biến Tần Huawei 175KTL-H0", expanded=False):
+                    st.markdown(r"""
+                    - **1. Ngưỡng Bảo Vệ Quá Nhiệt & Đặc Tính Suy Giảm Công Suất (Thermal Derating)**:
+                      - *Nhiệt độ $T_{\text{igbt}} \le 65^\circ\text{C}$*: Inverter phát $100\%$ công suất danh định $175\text{ kVA}$.
+                      - *Nhiệt độ $65^\circ\text{C} < T_{\text{igbt}} \le 75^\circ\text{C}$*: Bộ điều khiển ARM bắt đầu kích hoạt chế độ quạt Max Speed và theo dõi gia tốc tăng nhiệt.
+                      - *Nhiệt độ $T_{\text{igbt}} > 75^\circ\text{C}$*: Kích hoạt thuật toán tự động giảm tải (Active Power Derating) từ $175\text{ kW}$ xuống $140\text{ kW}$ hoặc $120\text{ kW}$ để bảo vệ module IGBT không bị nổ/chập.
+                      - *Nhiệt độ $T_{\text{igbt}} \ge 85^\circ\text{C}$*: Tự động Trip dừng máy khẩn cấp với mã lỗi `2032 - Overheating (Quá nhiệt)`.
+                    - **2. Quy Trình Vệ Sinh & Kiểm Tra Cụm Quạt Ngoài (External Fan)**:
+                      - *Bước 1*: Dùng súng bắn nhiệt Fluke kiểm tra đối chiếu nhiệt độ bề mặt nhôm tản nhiệt với thông số hiển thị trên App.
+                      - *Bước 2*: Cắt AC/DC, tháo lưới chắn rác mặt sau của Inverter.
+                      - *Bước 3*: Dùng máy thổi khí nén áp lực vừa phải làm sạch bụi bẩn, mạng nhện, lá cây bám trong các cánh tản nhiệt.
+                      - *Bước 4*: Kiểm tra quay tay 4 quạt làm mát phía dưới đáy máy đảm bảo quạt quay trơn tru, không bị kẹt bạc đạn hoặc gãy cánh.
+                    - **3. Danh Mục Mã Lỗi Liên Quan Đến Tản Nhiệt Cần Lưu Ý**:
+                      - `2032 - Quá nhiệt phần cứng`: Kiểm tra thông gió, nhiệt độ môi trường và tải phát.
+                      - `2033 - Lỗi quạt ngoài 1/2/3/4 (External Fan Fault)`: Quạt bị kẹt cơ khí hoặc đứt dây tín hiệu điều tốc PWM.
+                      - `2034 - Lỗi quạt trong (Internal Fan Fault)`: Quạt lưu thông khí trong khoang kín bị hỏng.
+                    """)
+
+            # --- SUBTAB 6: CẢNH BÁO NGUY CƠ HƯ HỎNG & KHUYẾN NGHỊ BẢO TRÌ (PREDICTIVE O&M) ---
             with t_risk:
                 st.markdown(r"""
                 <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
@@ -5365,7 +5482,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 else:
                     st.success("✅ Không có hạng mục nào cần bảo trì khẩn cấp. Tiếp tục duy trì quy trình kiểm tra định kỳ hàng tháng.")
 
-            # --- SUBTAB 5: NHẬT KÝ VẬN HÀNH RUN LOG ---
+            # --- SUBTAB 7: NHẬT KÝ VẬN HÀNH RUN LOG ---
             with t_run:
                 st.markdown(f"##### 📜 Nhật Ký Hoạt Động & Chu Kỳ Vận Hành (run_log.gz - {cur_inv['inverter_id']}):")
                 st.caption("Trích xuất chi tiết các lệnh điều khiển, trạng thái On/Off, chuyển đổi chế độ công suất và thông điệp truyền thông nội bộ.")
@@ -5390,7 +5507,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                 display_cols_run = [c for c in ['Thời Gian', 'Phân Hệ', 'Module Hàm (File/Line)', 'Nội Dung Sự Kiện', 'Ý Nghĩa Kỹ Thuật'] if c in df_run_filtered.columns]
                 st.dataframe(df_run_filtered[display_cols_run], use_container_width=True, height=450, hide_index=True)
 
-            # --- SUBTAB 6: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
+            # --- SUBTAB 8: NHẬT KÝ BẢO VỆ PHẦN CỨNG ---
             with t_protect:
                 st.markdown(r"""
                 <div style="background: #1E293B; border-radius: 10px; padding: 14px 18px; color: white; margin-bottom: 15px; border-left: 4px solid #38BDF8;">
@@ -5424,7 +5541,7 @@ elif selected_menu == NAV_OPTIONS[8]:
                     ]
                     st.dataframe(df_prot[display_prot_cols], use_container_width=True, height=420, hide_index=True)
 
-            # --- SUBTAB 7: XUẤT BÁO CÁO EXCEL ---
+            # --- SUBTAB 9: XUẤT BÁO CÁO EXCEL ---
             with t_excel:
                 st.markdown("##### 📥 Xuất Báo Cáo Chẩn Đoán & Nhật Ký Biến Tần (Excel .xlsx):")
                 st.caption("Xuất tệp báo cáo tổng hợp đầy đủ 6 Sheet: **Tổng Quan Thiết Bị & Điểm Sức Khỏe IHI**, **Khuyến Nghị Bảo Trì O&M & Vật Tư Chuẩn Bị**, **Chẩn Đoán Đặc Tuyến I-V 18 Chuỗi PV (iv_data.emap)**, **Lịch Sử Cảnh Báo & Sự Cố (100% tiếng Việt, phân loại nhóm lỗi)**, **Dữ Liệu Điện Học 5 Phút (his_inv_rd)** và **Nhật Ký Vận Hành Run Log** phục vụ báo cáo kỹ thuật hoặc bảo hành Huawei.")
