@@ -54,7 +54,8 @@ from relay_fault_analyzer import (
     create_relay_phasor_diagram,
     create_soe_timeline_figure,
     export_relay_fault_report_to_excel,
-    DEFAULT_RELAY_PATH
+    DEFAULT_RELAY_PATH,
+    RELAY_SIGNAL_DICTIONARY
 )
 
 from transmission_line_171 import (
