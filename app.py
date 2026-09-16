@@ -29,6 +29,7 @@ import string_diagnostic_engine
 import scada_map_builder
 import inverter_log_reader
 import relay_fault_analyzer
+import transmission_line_171
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -42,6 +43,7 @@ importlib.reload(string_diagnostic_engine)
 importlib.reload(scada_map_builder)
 importlib.reload(inverter_log_reader)
 importlib.reload(relay_fault_analyzer)
+importlib.reload(transmission_line_171)
 
 from relay_fault_analyzer import (
     RelayFaultAnalyzer,
@@ -51,6 +53,13 @@ from relay_fault_analyzer import (
     create_soe_timeline_figure,
     export_relay_fault_report_to_excel,
     DEFAULT_RELAY_PATH
+)
+
+from transmission_line_171 import (
+    get_towers_dataframe,
+    find_fault_span_and_towers,
+    create_transmission_line_gis_map,
+    export_patrol_order_to_excel
 )
 
 from scada_map_builder import (
@@ -5699,13 +5708,25 @@ elif selected_menu == NAV_OPTIONS[9]:
 
                 # --- SUBTAB 1: ĐỊNH VỊ ĐIỂM SỰ CỐ & SƠ ĐỒ TUYẾN (FAULT LOCATION) ---
                 with t_floc:
+                    f_km_val = floc.get('dist_km', 5.31)
+                    span_info = find_fault_span_and_towers(f_km_val, radius_km=1.5)
+
                     st.markdown(f"""
                     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
-                        <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
-                            📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
-                        </div>
-                        <div style="font-size: 0.85rem; color: #CBD5E1;">
-                            Nguồn định vị: <b>{floc.get('dist_source')}</b>. Tuyến đường dây 110kV Lộ 171 ĐMT Mỹ Hiệp - Phù Mỹ: dài <b>14.8 km</b> với <b>51 vị trí cột</b>.
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                            <div>
+                                <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
+                                    📍 ĐỊNH VỊ ĐIỂM SỰ CỐ & BẢN ĐỒ TRẮC ĐỊA 51 CỘT ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
+                                </div>
+                                <div style="font-size: 0.85rem; color: #CBD5E1;">
+                                    Tuyến 110kV Lộ 171 Mỹ Hiệp - 220kV Phù Mỹ (<b>14.8 km - 51 Vị Trí Cột</b>). Nguồn định vị: <b>{floc.get('dist_source')}</b>.
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px;">
+                                <a href="{span_info['fault_gmap_link']}" target="_blank" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; background: #EF4444; color: white; padding: 7px 16px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
+                                    🗺️ Mở Tọa Độ Điểm Sự Cố Trên Google Maps ↗
+                                </a>
+                            </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -5715,18 +5736,123 @@ elif selected_menu == NAV_OPTIONS[9]:
                     with kpi_f1:
                         st.metric("📍 Khoảng Cách Sự Cố", f"{floc.get('dist_km')} km", delta=f"{floc.get('dist_pct')}% chiều dài tuyến (14.8 km)")
                     with kpi_f2:
-                        st.metric("🗼 Vị Trí Cột Sự Cố", f"Cột #{floc.get('start_tower')} - #{floc.get('end_tower')}", delta="Xuất tuyến 171 (Tổng 51 cột)")
+                        st.metric("🗼 Khoảng Cột Sự Cố", f"Cột #{span_info['start_tower']} - #{span_info['end_tower']}", delta=f"Cách Cột #{span_info['start_tower']} ~{span_info['offset_from_start_m']:.0f}m")
                     with kpi_f3:
                         st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_loop_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
                     with kpi_f4:
-                        st.metric("🔥 Điện Trở Hồ Quang Rf", f"~{floc.get('r_arc_ohm')} Ω", delta="Chạm đất có điện trở trung bình")
+                        st.metric("🌐 Tọa Độ GPS Điểm Sự Cố", f"{span_info['fault_lat']:.4f}°N", delta=f"{span_info['fault_lon']:.4f}°E")
 
-                    # SƠ ĐỒ TRỰC QUAN HOÁ ĐƯỜNG DÂY 110kV & VỊ TRÍ ĐIỂM SỰ CỐ
-                    fig_floc = create_fault_location_diagram(floc)
-                    st.plotly_chart(fig_floc, use_container_width=True)
+                    # LỰA CHỌN CHẾ ĐỘ HIỂN THỊ BẢN ĐỒ / SƠ ĐỒ
+                    map_view_mode = st.radio(
+                        "Chế độ hiển thị trực quan tuyến 110kV:",
+                        [
+                            "🗺️ Bản Đồ Số Trắc Địa GIS 51 Cột Điện (Plotly Mapbox / OpenStreetMap GPS)",
+                            "📐 Sơ Đồ Nguyên Lý Khoảng Vượt Tuyến 110kV (Single Line Diagram)"
+                        ],
+                        index=0,
+                        horizontal=True,
+                        key="radio_map_view_mode"
+                    )
+
+                    if "Bản Đồ Số Trắc Địa GIS" in map_view_mode:
+                        fig_gis = create_transmission_line_gis_map(floc)
+                        st.plotly_chart(fig_gis, use_container_width=True)
+                    else:
+                        fig_floc = create_fault_location_diagram(floc)
+                        st.plotly_chart(fig_floc, use_container_width=True)
+
+                    # KHUYẾN NGHỊ VÀ HƯỚNG DẪN ĐỘI TUẦN TRA HIỆN TRƯỜNG O&M
+                    col_patrol_box1, col_patrol_box2 = st.columns([3, 2])
+                    with col_patrol_box1:
+                        st.markdown(f"""
+                        <div style="background: #1E293B; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155; margin-bottom: 15px;">
+                            <div style="font-weight: 750; color: #F59E0B; font-size: 0.95rem; margin-bottom: 6px;">
+                                🎯 CHỈ ĐẠO TUẦN TRA HIỆN TRƯỜNG O&M ĐƯỜNG DÂY 110kV LỘ 171:
+                            </div>
+                            <div style="font-size: 0.85rem; color: #E2E8F0; line-height: 1.6;">
+                                • <b>Khoảng cột trọng điểm:</b> Khoảng cột <b>#{span_info['start_tower']} - #{span_info['end_tower']}</b> (từ km {span_info['start_tower_km']:.2f} đến km {span_info['end_tower_km']:.2f}).<br>
+                                • <b>Vị trí tương đối:</b> Cách chân Cột #{span_info['start_tower']} khoảng <b>~{span_info['offset_from_start_m']:.0f} m</b>; cách chân Cột #{span_info['end_tower']} khoảng <b>~{span_info['offset_to_end_m']:.0f} m</b>.<br>
+                                • <b>Tọa độ định vị GPS:</b> <code>{span_info['fault_lat']:.6f}, {span_info['fault_lon']:.6f}</code> (Hệ tọa độ WGS84).<br>
+                                • <b>Nội dung kiểm tra bắt buộc:</b> Kiểm tra phóng điện chuỗi sứ đỡ/néo pha sự cố ({flt_info.get('fault_phase')}), vết cháy nám hồ quang trên dây ACSR 240/32, đứt sợi dây chống sét OPGW và vi phạm khoảng cách an toàn cây rừng keo.
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    with col_patrol_box2:
+                        excel_patrol_bytes = export_patrol_order_to_excel(fault_data, floc)
+                        st.markdown(f"""
+                        <div style="background: #0F172A; border-radius: 10px; padding: 14px 18px; border: 1px solid #334155; margin-bottom: 12px;">
+                            <div style="font-weight: 700; color: #38BDF8; font-size: 0.9rem; margin-bottom: 6px;">
+                                📋 XUẤT PHIẾU GIAO VIỆC O&M:
+                            </div>
+                            <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 10px;">
+                                Tạo tự động Phiếu công tác hiện trường 3 Sheet (Phiếu giao việc + Danh sách cột kiểm tra trọng điểm + Toàn bộ 51 cột có tọa độ GPS).
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.download_button(
+                            label="📥 Tải Phiếu Giao Việc Tuần Tra O&M (Excel 3 Sheet)",
+                            data=excel_patrol_bytes,
+                            file_name=f"Phieu_Giao_Viec_Tuan_Tra_Su_Co_171_{floc.get('dist_km')}km_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="btn_dl_patrol_order_excel",
+                            type="secondary",
+                            use_container_width=True
+                        )
+
+                    # BẢNG DỮ LIỆU TRẮC ĐỊA 51 VỊ TRÍ CỘT TUYẾN 171
+                    st.markdown("##### 🗼 Bảng Dữ Liệu Trắc Địa Tuyến 110kV Lộ 171 (14.8 km - 51 Vị Trí Cột):")
+                    col_filt1, col_filt2 = st.columns([3, 2])
+                    with col_filt1:
+                        tower_view_filter = st.radio(
+                            "Phạm vi xem danh sách cột:",
+                            [
+                                f"🎯 Cột trọng tâm bán kính ±1.5 km quanh điểm sự cố ({len(span_info['df_patrol_towers'])} Cột)",
+                                "🗼 Toàn bộ 51 vị trí cột (Tuyến 14.8 km)",
+                                "⚡ Chỉ xem 10 cột néo góc (Tension Towers)"
+                            ],
+                            index=0,
+                            horizontal=True,
+                            key="radio_tower_view_filter"
+                        )
+
+                    df_all_towers = get_towers_dataframe()
+                    if "trọng tâm bán kính" in tower_view_filter:
+                        df_show_towers = span_info["df_patrol_towers"].copy()
+                    elif "Toàn bộ" in tower_view_filter:
+                        df_show_towers = df_all_towers.copy()
+                    else:
+                        df_show_towers = df_all_towers[df_all_towers["is_tension"]].copy()
+
+                    # Format bảng hiển thị
+                    disp_t_df = df_show_towers.copy()
+                    disp_t_df["Loại Cột"] = disp_t_df.apply(lambda r: f"⚡ NÉO GÓC ({r['tower_code']})" if r["is_tension"] else f"ĐỠ THẲNG ({r['tower_code']})", axis=1)
+                    disp_t_df["Tọa Độ GPS (WGS84)"] = disp_t_df.apply(lambda r: f"{r['lat']:.5f}, {r['lon']:.5f}", axis=1)
+                    disp_t_df["Lý Trình"] = disp_t_df["km_marker"].apply(lambda k: f"{k:.3f} km")
+                    disp_t_df["Khoảng Vượt"] = disp_t_df["span_m"].apply(lambda s: f"{s} m" if s > 0 else "--")
+                    
+                    show_cols = ["tower_no", "tower_name", "Loại Cột", "Lý Trình", "Khoảng Vượt", "Tọa Độ GPS (WGS84)", "terrain_note", "gmap_link"]
+                    disp_t_df = disp_t_df[show_cols]
+                    disp_t_df.columns = ["Số Cột", "Tên Cột", "Loại Cột", "Lý Trình", "Khoảng Vượt", "Tọa Độ GPS", "Ghi Chú Địa Hình / Giao Chéo", "Link Chỉ Đường Google Maps"]
+
+                    st.dataframe(
+                        disp_t_df,
+                        use_container_width=True,
+                        height=280,
+                        hide_index=True,
+                        column_config={
+                            "Link Chỉ Đường Google Maps": st.column_config.LinkColumn(
+                                "Google Maps",
+                                help="Bấm để mở vị trí cột trên Google Maps",
+                                validate="^https://",
+                                max_chars=100,
+                                display_text="📍 Xem Bản Đồ"
+                            )
+                        }
+                    )
 
                     # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
-                    with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=True):
+                    with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=False):
                         st.markdown(f"""
                         <div style="background: #1E293B; border-radius: 8px; padding: 16px 20px; border-left: 4px solid #F59E0B; margin-bottom: 12px;">
                             <div style="font-weight: 700; color: #F59E0B; font-size: 0.95rem; margin-bottom: 8px;">
