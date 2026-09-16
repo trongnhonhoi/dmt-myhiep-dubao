@@ -5637,6 +5637,9 @@ elif selected_menu == NAV_OPTIONS[9]:
                 dev_info = fault_data.get("device_info", {})
                 flt_info = fault_data.get("fault_info", {})
                 df_u = fault_data.get("df_voltages", pd.DataFrame())
+                df_i = fault_data.get("df_currents", pd.DataFrame())
+                df_soe = fault_data.get("df_soe", pd.DataFrame())
+                page_imgs = fault_data.get("page_images", [])
                 floc = calculate_fault_location(fault_data)
 
                 # 5 Thẻ KPI Tổng Quan Sự Cố
