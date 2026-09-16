@@ -111,12 +111,212 @@ def _generate_51_towers() -> List[Dict[str, Any]]:
 
     return towers
 
-TOWERS_171_DATA = _generate_51_towers()
+
+import json
+import os
+import re
+
+CUSTOM_JSON_PATH = os.path.join(os.path.dirname(__file__), "towers_171_custom.json")
+ALT_JSON_PATH = r"D:\PT_RL\towers_171_custom.json"
+
+def load_custom_towers() -> List[Dict[str, Any]]:
+    """Tải danh sách 51 vị trí cột từ file tùy chỉnh hoặc sinh mặc định"""
+    for p in [ALT_JSON_PATH, CUSTOM_JSON_PATH]:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) >= 2:
+                        return data
+            except Exception:
+                pass
+    return _generate_51_towers()
+
+
+def save_custom_towers(towers: List[Dict[str, Any]]) -> bool:
+    """Lưu danh sách 51 cột vào file JSON tùy chỉnh và tính lại lý trình tích lũy"""
+    if not towers or len(towers) < 2:
+        return False
+        
+    cum_km = 0.0
+    for idx, t in enumerate(towers):
+        t_no = idx + 1
+        t["tower_no"] = t_no
+        t["tower_name"] = f"Cột {t_no:02d}"
+        if idx == 0:
+            cum_km = 0.0
+        else:
+            prev_span = float(towers[idx-1].get("span_m", 296))
+            cum_km += prev_span / 1000.0
+        t["km_marker"] = round(cum_km, 3)
+        lat = float(t.get("lat", 14.15))
+        lon = float(t.get("lon", 109.04))
+        t["lat"] = round(lat, 6)
+        t["lon"] = round(lon, 6)
+        t["gmap_link"] = f"https://www.google.com/maps/search/?api=1&query={lat:.6f},{lon:.6f}"
+        if "is_tension" not in t:
+            t["is_tension"] = "NÉO" in str(t.get("tower_type", "")).upper() or "N11" in str(t.get("tower_code", "")).upper()
+
+    saved = False
+    for p in [CUSTOM_JSON_PATH, ALT_JSON_PATH]:
+        try:
+            p_dir = os.path.dirname(p)
+            if p_dir and os.path.exists(p_dir):
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(towers, f, ensure_ascii=False, indent=2)
+                saved = True
+        except Exception:
+            pass
+    return saved
+
+
+def reset_custom_towers() -> bool:
+    """Xóa file tùy chỉnh để khôi phục bảng tọa độ thiết kế mặc định"""
+    for p in [CUSTOM_JSON_PATH, ALT_JSON_PATH]:
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+    return True
+
+
+def update_single_tower(
+    tower_no: int,
+    lat: float,
+    lon: float,
+    span_m: Optional[float] = None,
+    is_tension: Optional[bool] = None,
+    tower_code: Optional[str] = None,
+    terrain_note: Optional[str] = None
+) -> bool:
+    """Cập nhật tọa độ và thông số của một cột đơn lẻ"""
+    towers = load_custom_towers()
+    target_idx = None
+    for idx, t in enumerate(towers):
+        if int(t.get("tower_no", 0)) == int(tower_no):
+            target_idx = idx
+            break
+    
+    if target_idx is None:
+        return False
+
+    t = towers[target_idx]
+    t["lat"] = round(float(lat), 6)
+    t["lon"] = round(float(lon), 6)
+    if span_m is not None:
+        t["span_m"] = int(span_m)
+    if is_tension is not None:
+        t["is_tension"] = bool(is_tension)
+        t["tower_type"] = "Cột Néo Góc / Hãm" if is_tension else "Cột Đỡ Thẳng (Đỡ trung gian)"
+    if tower_code is not None:
+        t["tower_code"] = str(tower_code).strip()
+    if terrain_note is not None:
+        t["terrain_note"] = str(terrain_note).strip()
+
+    return save_custom_towers(towers)
+
+
+def parse_coords_string(text: str) -> Optional[Tuple[float, float]]:
+    """Phân tích chuỗi tọa độ hoặc link Google Maps thành cặp (lat, lon)"""
+    if not text:
+        return None
+    # Match lat, lon in link like @14.15320,109.04180 or query=14.15320,109.04180 or direct "14.15320, 109.04180"
+    m = re.search(r'([1-9]\d?\.\d+)\s*[,;\s]\s*(10[8-9]\.\d+|11[0-9]\.\d+)', text)
+    if m:
+        try:
+            return (float(m.group(1)), float(m.group(2)))
+        except ValueError:
+            pass
+    return None
+
+
+def export_towers_template_excel() -> bytes:
+    """Xuất file Excel mẫu danh sách 51 vị trí cột để kỹ sư nhập tọa độ hoàn công"""
+    output = io.BytesIO()
+    df = get_towers_dataframe().copy()
+    export_df = pd.DataFrame({
+        "Số Cột": df["tower_no"],
+        "Tên Cột": df["tower_name"],
+        "Mã Cột": df["tower_code"],
+        "Loại Cột (Đỡ/Néo)": df["tower_type"],
+        "Cột Néo Góc (True/False)": df["is_tension"],
+        "Khoảng Vượt (m)": df["span_m"],
+        "Vĩ Độ (Latitude WGS84)": df["lat"],
+        "Kinh Độ (Longitude WGS84)": df["lon"],
+        "Ghi Chú Địa Hình / Giao Chéo": df["terrain_note"]
+    })
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        export_df.to_excel(writer, sheet_name="51_Cot_Tuyen_171", index=False)
+    return output.getvalue()
+
+
+def import_towers_from_excel(file_bytes: bytes) -> Tuple[bool, str]:
+    """Nhập danh sách 51 vị trí cột từ file Excel hoàn công"""
+    try:
+        df_in = pd.read_excel(io.BytesIO(file_bytes))
+        if len(df_in) < 2:
+            return False, "File Excel phải chứa ít nhất từ 2 vị trí cột trở lên."
+        
+        # Normalize column names
+        col_map = {}
+        for c in df_in.columns:
+            cl = str(c).lower().strip()
+            if "số" in cl or "stt" in cl or "no" in cl:
+                col_map[c] = "tower_no"
+            elif "tên" in cl or "name" in cl:
+                col_map[c] = "tower_name"
+            elif "mã" in cl or "code" in cl:
+                col_map[c] = "tower_code"
+            elif "loại" in cl or "type" in cl:
+                col_map[c] = "tower_type"
+            elif "néo" in cl or "tension" in cl:
+                col_map[c] = "is_tension"
+            elif "khoảng vượt" in cl or "span" in cl:
+                col_map[c] = "span_m"
+            elif "vĩ độ" in cl or "lat" in cl:
+                col_map[c] = "lat"
+            elif "kinh độ" in cl or "lon" in cl:
+                col_map[c] = "lon"
+            elif "ghi chú" in cl or "địa hình" in cl or "note" in cl:
+                col_map[c] = "terrain_note"
+
+        df_in = df_in.rename(columns=col_map)
+        if "lat" not in df_in.columns or "lon" not in df_in.columns:
+            return False, "Không tìm thấy cột 'Vĩ Độ (lat)' hoặc 'Kinh Độ (lon)' trong file Excel."
+
+        towers = []
+        for idx, row in df_in.iterrows():
+            t_no = int(row.get("tower_no", idx + 1))
+            lat = float(row["lat"])
+            lon = float(row["lon"])
+            span_m = int(row.get("span_m", 296))
+            is_tens = bool(row.get("is_tension", False)) or ("NÉO" in str(row.get("tower_type", "")).upper())
+            t_code = str(row.get("tower_code", f"Đ{t_no:02d}"))
+            t_type = "Cột Néo Góc / Hãm" if is_tens else "Cột Đỡ Thẳng (Đỡ trung gian)"
+            terrain = str(row.get("terrain_note", f"Đoạn km cột {t_no}"))
+
+            towers.append({
+                "tower_no": t_no,
+                "tower_name": f"Cột {t_no:02d}",
+                "tower_code": t_code,
+                "tower_type": t_type,
+                "is_tension": is_tens,
+                "span_m": span_m,
+                "lat": lat,
+                "lon": lon,
+                "terrain_note": terrain
+            })
+
+        save_custom_towers(towers)
+        return True, f"Đã nạp thành công {len(towers)} vị trí cột từ file Excel!"
+    except Exception as e:
+        return False, f"Lỗi xử lý file Excel: {str(e)}"
 
 
 def get_towers_dataframe() -> pd.DataFrame:
-    """Trả về DataFrame danh sách 51 cột điện 110kV"""
-    return pd.DataFrame(TOWERS_171_DATA)
+    """Trả về DataFrame danh sách 51 cột điện 110kV (đã nạp dữ liệu tùy chỉnh nếu có)"""
+    return pd.DataFrame(load_custom_towers())
 
 
 def find_fault_span_and_towers(dist_km: float, radius_km: float = 1.5) -> Dict[str, Any]:

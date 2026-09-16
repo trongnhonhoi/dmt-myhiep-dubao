@@ -59,7 +59,13 @@ from transmission_line_171 import (
     get_towers_dataframe,
     find_fault_span_and_towers,
     create_transmission_line_gis_map,
-    export_patrol_order_to_excel
+    export_patrol_order_to_excel,
+    update_single_tower,
+    save_custom_towers,
+    reset_custom_towers,
+    export_towers_template_excel,
+    import_towers_from_excel,
+    parse_coords_string
 )
 
 from scada_map_builder import (
@@ -5838,7 +5844,7 @@ elif selected_menu == NAV_OPTIONS[9]:
                     st.dataframe(
                         disp_t_df,
                         use_container_width=True,
-                        height=280,
+                        height=260,
                         hide_index=True,
                         column_config={
                             "Link Chỉ Đường Google Maps": st.column_config.LinkColumn(
@@ -5850,6 +5856,145 @@ elif selected_menu == NAV_OPTIONS[9]:
                             )
                         }
                     )
+
+                    # --- KHU VỰC HIỆU CHỈNH & LƯU TỌA ĐỘ TRỰC TIẾP TRÊN BẢN ĐỒ ---
+                    with st.expander("🛠️ HIỆU CHỈNH & LƯU TỌA ĐỘ 51 VỊ TRÍ CỘT TRỰC TIẾP (CẬP NHẬT HOÀN CÔNG)", expanded=False):
+                        st.markdown("""
+                        <div style="background: #1E293B; border-radius: 8px; padding: 12px 18px; border-left: 4px solid #38BDF8; margin-bottom: 14px; font-size: 0.85rem; color: #CBD5E1;">
+                            💡 <b>Hướng dẫn hiệu chỉnh</b>: Bạn có thể chọn từng cột để chỉnh sửa tọa độ GPS chính xác (hoặc dán link Google Maps), sửa trực tiếp trên bảng tính Excel-like, hoặc tải lên file Excel trắc địa hoàn công. Toàn bộ thay đổi sẽ được lưu vĩnh viễn vào hệ thống và tự động cập nhật lại bản đồ GIS.
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        tab_ed_single, tab_ed_grid, tab_ed_excel = st.tabs([
+                            "🎯 1. Chọn & Sửa Từng Cột Đơn Lẻ",
+                            "📊 2. Sửa Trực Tiếp Toàn Tuyến 51 Cột (Bảng Tính)",
+                            "📁 3. Nhập / Xuất File Excel Tọa Độ"
+                        ])
+
+                        # TAB 1: CHỈNH SỬA TỪNG CỘT ĐƠN LẺ
+                        with tab_ed_single:
+                            t_options = {f"Cột {r['tower_no']:02d} ({'Néo' if r['is_tension'] else 'Đỡ'} {r['tower_code']} - km {r['km_marker']:.2f})": int(r['tower_no']) for _, r in df_all_towers.iterrows()}
+                            sel_t_lbl = st.selectbox("Chọn cột điện cần hiệu chỉnh vị trí:", list(t_options.keys()), index=0, key="sel_edit_single_tower")
+                            sel_t_no = t_options[sel_t_lbl]
+                            cur_t_row = df_all_towers[df_all_towers["tower_no"] == sel_t_no].iloc[0]
+
+                            col_paste, col_gmap_btn = st.columns([3.5, 1.5])
+                            with col_paste:
+                                quick_paste_coords = st.text_input(
+                                    f"Dán nhanh Tọa độ GPS hoặc Link Google Maps cho Cột #{sel_t_no:02d}:",
+                                    placeholder="Ví dụ: 14.15546, 109.04269 hoặc https://maps.google.com/?q=14.15546,109.04269",
+                                    key="txt_quick_paste_coords"
+                                )
+                            with col_gmap_btn:
+                                st.write("")
+                                st.markdown(f"""
+                                <a href="{cur_t_row['gmap_link']}" target="_blank" style="display: block; text-align: center; background: #0284C7; color: white; padding: 7px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.82rem; margin-top: 5px;">
+                                    📍 Xem Vị Trí Cũ Trên Maps ↗
+                                </a>
+                                """, unsafe_allow_html=True)
+
+                            parsed_coords = parse_coords_string(quick_paste_coords)
+                            init_lat = parsed_coords[0] if parsed_coords else float(cur_t_row["lat"])
+                            init_lon = parsed_coords[1] if parsed_coords else float(cur_t_row["lon"])
+
+                            col_inp1, col_inp2, col_inp3, col_inp4 = st.columns(4)
+                            with col_inp1:
+                                edit_lat = st.number_input("Vĩ độ (Latitude WGS84):", value=init_lat, format="%.6f", step=0.00001, key=f"num_lat_{sel_t_no}")
+                            with col_inp2:
+                                edit_lon = st.number_input("Kinh độ (Longitude WGS84):", value=init_lon, format="%.6f", step=0.00001, key=f"num_lon_{sel_t_no}")
+                            with col_inp3:
+                                edit_span = st.number_input("Khoảng vượt tới cột sau (m):", value=int(cur_t_row.get("span_m", 296)), min_value=0, max_value=1500, step=10, key=f"num_span_{sel_t_no}")
+                            with col_inp4:
+                                edit_is_tension = st.selectbox("Phân loại kết cấu cột:", ["Cột Đỡ Thẳng", "Cột Néo Góc / Néo Hãm"], index=1 if cur_t_row.get("is_tension") else 0, key=f"sel_tens_{sel_t_no}") == "Cột Néo Góc / Néo Hãm"
+
+                            col_inp5, col_inp6 = st.columns([1.5, 3.5])
+                            with col_inp5:
+                                edit_code = st.text_input("Mã hiệu cột (Tower Code):", value=str(cur_t_row.get("tower_code", "Đ111")), key=f"txt_code_{sel_t_no}")
+                            with col_inp6:
+                                edit_note = st.text_input("Ghi chú địa hình / giao chéo:", value=str(cur_t_row.get("terrain_note", "")), key=f"txt_note_{sel_t_no}")
+
+                            col_btn_sv1, col_btn_sv2 = st.columns([2, 3])
+                            with col_btn_sv1:
+                                if st.button(f"💾 Lưu Cập Nhật Cột #{sel_t_no:02d} Vào Hệ Thống", type="primary", use_container_width=True, key=f"btn_save_t_{sel_t_no}"):
+                                    success = update_single_tower(
+                                        tower_no=sel_t_no,
+                                        lat=edit_lat,
+                                        lon=edit_lon,
+                                        span_m=edit_span,
+                                        is_tension=edit_is_tension,
+                                        tower_code=edit_code,
+                                        terrain_note=edit_note
+                                    )
+                                    if success:
+                                        st.success(f"✅ Đã lưu thành công tọa độ Cột #{sel_t_no:02d} ({edit_lat:.6f}, {edit_lon:.6f})! Bản đồ đang được làm mới...")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Không thể lưu dữ liệu. Vui lòng kiểm tra lại quyền ghi tệp.")
+
+                        # TAB 2: CHỈNH SỬA DẠNG BẢNG TÍNH TOÀN BỘ 51 CỘT (DATA EDITOR)
+                        with tab_ed_grid:
+                            st.caption("Chỉnh sửa trực tiếp trên bảng bên dưới (sửa ô bất kỳ) sau đó nhấn nút 'Lưu Toàn Bộ 51 Vị Trí Cột'.")
+                            edit_df_source = df_all_towers[["tower_no", "tower_name", "tower_code", "is_tension", "span_m", "lat", "lon", "terrain_note"]].copy()
+                            edited_df = st.data_editor(
+                                edit_df_source,
+                                use_container_width=True,
+                                height=360,
+                                hide_index=True,
+                                column_config={
+                                    "tower_no": st.column_config.NumberColumn("Số Cột", disabled=True),
+                                    "tower_name": st.column_config.TextColumn("Tên Cột", disabled=True),
+                                    "tower_code": st.column_config.TextColumn("Mã Cột"),
+                                    "is_tension": st.column_config.CheckboxColumn("Cột Néo?"),
+                                    "span_m": st.column_config.NumberColumn("Khoảng Vượt (m)", min_value=0, max_value=1500),
+                                    "lat": st.column_config.NumberColumn("Vĩ Độ (Lat)", format="%.6f", min_value=10.0, max_value=25.0),
+                                    "lon": st.column_config.NumberColumn("Kinh Độ (Lon)", format="%.6f", min_value=100.0, max_value=115.0),
+                                    "terrain_note": st.column_config.TextColumn("Ghi Chú Địa Hình / Giao Chéo", width="large")
+                                },
+                                key="data_editor_51_towers"
+                            )
+
+                            if st.button("💾 Lưu Toàn Bộ Bảng Tọa Độ 51 Cột Đã Chỉnh Sửa", type="primary", use_container_width=True, key="btn_save_all_towers_grid"):
+                                recs = edited_df.to_dict(orient="records")
+                                if save_custom_towers(recs):
+                                    st.success("✅ Đã lưu thành công toàn bộ 51 vị trí cột vào cơ sở dữ liệu! Bản đồ đang được cập nhật...")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Lỗi khi lưu dữ liệu bảng.")
+
+                        # TAB 3: NHẬP / XUẤT FILE EXCEL HOÀN CÔNG
+                        with tab_ed_excel:
+                            col_ex_dl, col_ex_up = st.columns(2)
+                            with col_ex_dl:
+                                st.markdown("###### 📥 1. Tải File Excel Mẫu:")
+                                st.caption("Tải file Excel mẫu gồm đầy đủ 51 cột để nhập tọa độ đo đạc thực tế từ hồ sơ hoàn công.")
+                                t_excel_bytes = export_towers_template_excel()
+                                st.download_button(
+                                    label="📥 Tải File Mẫu Excel Tọa Độ Tuyến 171 (.xlsx)",
+                                    data=t_excel_bytes,
+                                    file_name="Bang_Toa_Do_51_Cot_Tuyen_110kV_171_MyHiep.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True,
+                                    key="btn_dl_tower_template_excel"
+                                )
+
+                            with col_ex_up:
+                                st.markdown("###### 📤 2. Tải Lên File Excel Hoàn Công:")
+                                st.caption("Tải lên file Excel hoàn công (đã điền Vĩ độ, Kinh độ, Khoảng vượt) để cập nhật toàn tuyến.")
+                                up_t_excel = st.file_uploader("Chọn file Excel hoàn công (.xlsx, .xls):", type=["xlsx", "xls"], key="up_tower_excel_file")
+                                if up_t_excel:
+                                    if st.button("✅ Xác Nhận Nạp File Excel Này Vào Hệ Thống", type="primary", use_container_width=True, key="btn_confirm_import_excel"):
+                                        ok_imp, msg_imp = import_towers_from_excel(up_t_excel.getvalue())
+                                        if ok_imp:
+                                            st.success(f"✅ {msg_imp}")
+                                            st.rerun()
+                                        else:
+                                            st.error(f"❌ {msg_imp}")
+
+                            st.markdown("---")
+                            if st.button("🔄 Khôi Phục Tọa Độ Thiết Kế Mặc Định (Reset To Default)", help="Xóa dữ liệu tùy chỉnh và đặt lại tọa độ mẫu ban đầu", key="btn_reset_default_towers"):
+                                reset_custom_towers()
+                                st.success("✅ Đã khôi phục bảng tọa độ thiết kế mặc định ban đầu!")
+                                st.rerun()
 
                     # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
                     with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=False):
