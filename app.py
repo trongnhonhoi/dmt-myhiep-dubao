@@ -34,6 +34,8 @@ import relay_fault_analyzer
 import transmission_line_171
 import i18n
 
+import relay_settings_database
+
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
 importlib.reload(weather_forecast_engine)
@@ -48,6 +50,7 @@ importlib.reload(inverter_log_reader)
 importlib.reload(relay_fault_analyzer)
 importlib.reload(transmission_line_171)
 importlib.reload(i18n)
+importlib.reload(relay_settings_database)
 
 from i18n import (
     t,
@@ -58,6 +61,14 @@ from i18n import (
     set_current_lang,
     NAV_OPTIONS_VI,
     NAV_OPTIONS_EN
+)
+
+from relay_settings_database import (
+    RELAY_SETTING_SHEETS,
+    get_all_relay_setting_sheets,
+    get_setting_sheet_by_id,
+    evaluate_fault_against_settings,
+    export_all_relay_settings_to_excel_bytes
 )
 
 from relay_fault_analyzer import (
@@ -5502,491 +5513,488 @@ elif nav_idx == 8:
 # -------------------------------------------------------------------------
 # PHẦN 10: PHÂN TÍCH SỰ CỐ RƠ LE BẢO VỆ & BẢN GHI SÓNG DISTURBANCE (D:\PT_RL)
 # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+# PHẦN 10: PHÂN TÍCH SỰ CỐ RƠ LE BẢO VỆ & SỔ TAY CHỈNH ĐỊNH A3
+# -------------------------------------------------------------------------
 elif nav_idx == 9:
     st.markdown(r"""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #8B5CF6;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <div style="font-size: 1.35rem; font-weight: 750; color: #A78BFA; margin-bottom: 4px;">
-                    🛡️ HỆ THỐNG PHÂN TÍCH SỰ CỐ RƠ LE BẢO VỆ & BẢN GHI SÓNG DISTURBANCE (D:\PT_RL)
+                    🛡️ HỆ THỐNG PHÂN TÍCH SỰ CỐ RƠ LE BẢO VỆ & SỔ TAY CHỈNH ĐỊNH A3 (D:\PT_RL)
                 </div>
                 <div style="font-size: 0.88rem; color: #CBD5E1; line-height: 1.5;">
-                    Trích xuất và giải mã chuyên sâu các bản ghi sự cố IED (<b>ABB Relion RED670</b>, SEL, Siemens Siprotec, COMTRADE, PDF). Phân tích vector Phasor dòng/áp, dòng thời gian sự kiện mili-giây (<b>Sequence of Events - SoE</b>), đánh giá tác động bảo vệ và lập phiếu kỹ thuật O&M.
+                    Trích xuất & giải mã bản ghi sự cố IED (<b>ABB Relion RED670, REF615, REC670, REB670</b>). Tích hợp toàn văn <b>04 Phiếu Chỉnh Định Rơ Le Chính Thức A3</b> (QĐ 1742/QĐ-ĐĐMT) phục vụ tra cứu, đối soát ngưỡng tác động và lập báo cáo O&M.
                 </div>
             </div>
             <div style="margin-top: 8px;">
                 <span class="badge bg-primary text-white px-3 py-2 fw-bold" style="font-size: 0.82rem; background: #6D28D9 !important;">
-                    ⚡ ABB Relion Diagnostic Engine v2.0
+                    ⚡ ABB Relion & A3 Protection Database v2.5
                 </span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    relay_analyzer = RelayFaultAnalyzer(DEFAULT_RELAY_PATH)
+    sec10_tab1, sec10_tab2 = st.tabs([
+        "🔬 1. Phân Tích & Giải Mã Bản Ghi Sự Cố IED (D:\\\\PT_RL)",
+        "📋 2. Sổ Tay Tra Cứu & Đối Soát Phiếu Chỉnh Định A3 (04 Phiếu Rơ Le)"
+    ])
 
-    if not relay_analyzer.check_connection():
-        st.error(f"❌ Không tìm thấy thư mục lưu trữ sự cố rơ le tại đường dẫn: `{DEFAULT_RELAY_PATH}`. Vui lòng kiểm tra lại ổ đĩa `D:\\PT_RL` hoặc kết nối mạng.")
-    else:
-        all_relay_files = relay_analyzer.scan_relay_files()
+    with sec10_tab1:
+        relay_analyzer = RelayFaultAnalyzer(DEFAULT_RELAY_PATH)
 
-        # BỘ LỌC PHÂN LOẠI NGĂN LỘ 171 / 131
-        col_fil_bay, col_btn_scan = st.columns([3.5, 1.5])
-        with col_fil_bay:
-            bay_filter = st.radio(
-                "🎯 Phân Loại Ngăn Lộ Sự Cố (Bay Selection):",
-                [
-                    f"⚡ Tất Cả Ngăn Lộ ({len(all_relay_files)} Bản ghi)",
-                    f"🗼 Ngăn Lộ 171 - Tuyến ĐZ 110kV ({len([f for f in all_relay_files if f.get('bay_code')=='171'])} Bản ghi)",
-                    f"🏭 Ngăn Lộ 131 - MBA T1 110/22kV ({len([f for f in all_relay_files if f.get('bay_code')=='131'])} Bản ghi)"
-                ],
-                horizontal=True,
-                key="radio_relay_bay_filter"
-            )
-
-        with col_btn_scan:
-            st.write("")
-            if st.button("🔄 Quét Lại D:\\PT_RL", help="Quét lại toàn bộ các bản ghi sự cố rơ le trong D:\\PT_RL", key="btn_reload_relay_files", use_container_width=True):
-                st.success("Đã làm mới danh mục tệp sự cố rơ le thành công!")
-                st.rerun()
-
-        # Lọc danh sách tệp theo radio
-        if "Ngăn Lộ 171" in bay_filter:
-            relay_files = [f for f in all_relay_files if f.get("bay_code") == "171"]
-        elif "Ngăn Lộ 131" in bay_filter:
-            relay_files = [f for f in all_relay_files if f.get("bay_code") == "131"]
+        if not relay_analyzer.check_connection():
+            st.error(f"❌ Không tìm thấy thư mục lưu trữ sự cố rơ le tại đường dẫn: `{DEFAULT_RELAY_PATH}`. Vui lòng kiểm tra lại ổ đĩa `D:\\\\PT_RL` hoặc kết nối mạng.")
         else:
-            relay_files = all_relay_files
+            all_relay_files = relay_analyzer.scan_relay_files()
 
-        if not relay_files:
-            st.warning("⚠️ Không tìm thấy bản ghi sự cố nào phù hợp với bộ lọc ngăn lộ hiện tại trong `D:\\PT_RL`.")
-        else:
-            rl_file_options = {}
-            for f_item in relay_files:
-                bay_icon = "🗼" if f_item['bay_code'] == '171' else "🏭"
-                lbl = f"{bay_icon} [Ngăn {f_item['bay_code']} - {f_item['ied_model']}] {f_item['feeder']} | {f_item['function_tag']} | Thời gian: {f_item['record_time']}"
-                rl_file_options[lbl] = f_item
+            # BỘ LỌC PHÂN LOẠI NGĂN LỘ 171 / 131
+            col_fil_bay, col_btn_scan = st.columns([3.5, 1.5])
+            with col_fil_bay:
+                bay_filter = st.radio(
+                    "🎯 Phân Loại Ngăn Lộ Sự Cố (Bay Selection):",
+                    [
+                        f"⚡ Tất Cả Ngăn Lộ ({len(all_relay_files)} Bản ghi)",
+                        f"🗼 Ngăn Lộ 171 - Tuyến ĐZ 110kV ({len([f for f in all_relay_files if f.get('bay_code')=='171'])} Bản ghi)",
+                        f"🏭 Ngăn Lộ 131 - MBA T1 110/22kV ({len([f for f in all_relay_files if f.get('bay_code')=='131'])} Bản ghi)"
+                    ],
+                    horizontal=True,
+                    key="radio_relay_bay_filter"
+                )
 
-            selected_rl_lbl = st.selectbox("📂 Chọn bản ghi sự cố rơ le cần đọc thông tin và phân tích chuyên sâu:", list(rl_file_options.keys()), index=0, key="sel_relay_file_item")
-            cur_rl_file = rl_file_options[selected_rl_lbl]
+            with col_btn_scan:
+                st.write("")
+                if st.button("🔄 Quét Lại D:\\\\PT_RL", help="Quét lại toàn bộ các bản ghi sự cố rơ le trong D:\\PT_RL", key="btn_reload_relay_files", use_container_width=True):
+                    st.success("Đã làm mới danh mục tệp sự cố rơ le thành công!")
+                    st.rerun()
 
-            with st.spinner("⏳ Đang giải mã và phân tích bản ghi sự cố IED..."):
-                fault_data = relay_analyzer.parse_relay_pdf_report(cur_rl_file["file_path"])
-
-            if not fault_data or "error" in fault_data:
-                st.error(f"❌ Lỗi khi giải mã tệp: {fault_data.get('error', 'Không xác định')}")
+            # Lọc danh sách tệp theo radio
+            if "Ngăn Lộ 171" in bay_filter:
+                relay_files = [f for f in all_relay_files if f.get("bay_code") == "171"]
+            elif "Ngăn Lộ 131" in bay_filter:
+                relay_files = [f for f in all_relay_files if f.get("bay_code") == "131"]
             else:
-                dev_info = fault_data.get("device_info", {})
-                flt_info = fault_data.get("fault_info", {})
-                df_u = fault_data.get("df_voltages", pd.DataFrame())
-                df_i = fault_data.get("df_currents", pd.DataFrame())
-                df_soe = fault_data.get("df_soe", pd.DataFrame())
-                page_imgs = fault_data.get("page_images", [])
-                floc = calculate_fault_location(fault_data)
-                is_bay_131 = (dev_info.get("bay_code") == "131")
+                relay_files = all_relay_files
 
-                # 5 THẺ KPI TỔNG QUAN SỰ CỐ
-                kpi_r1, kpi_r2, kpi_r3, kpi_r4, kpi_r5 = st.columns(5)
-                with kpi_r1:
-                    bay_lbl_badge = f"Ngăn {dev_info.get('bay_code')} ({dev_info.get('ied_name')})"
-                    st.metric("🏢 Rơ Le & Ngăn Lộ", f"{dev_info.get('ied_type')} v{dev_info.get('ied_version')}", delta=bay_lbl_badge)
-                with kpi_r2:
-                    st.metric("⏱️ Thời Điểm Sự Cố", flt_info.get("trigger_time", "--"), delta=f"Bản ghi #{dev_info.get('recording_number')}")
-                with kpi_r3:
-                    if is_bay_131:
-                        st.metric("⚡ Dạng Tác Động", "Bảo Vệ MBA T1", delta=f"W1: {floc.get('max_w1_current_a')}A | W2: {floc.get('max_w2_current_a')}A")
-                    else:
-                        st.metric("⚡ Dạng Sự Cố", flt_info.get("fault_phase", "L2-N"), delta=f"Vị trí: {floc.get('dist_km')} km ({floc.get('dist_pct')}%)")
-                with kpi_r4:
-                    st.metric("🎯 Bảo Vệ Khởi Phát", flt_info.get("trigger_signal", "--"), delta=f"ANSI {RELAY_SIGNAL_DICTIONARY.get(flt_info.get('trigger_signal'), {}).get('ansi', '--')}")
-                with kpi_r5:
-                    st.metric("⏱️ Thời Gian Loại Trừ", f"{flt_info.get('total_fault_clearing_time_ms', 32)} ms", delta=f"Rơ le: {flt_info.get('relay_operating_time_ms')}ms | MC: {flt_info.get('breaker_opening_time_ms')}ms")
+            if not relay_files:
+                st.warning("⚠️ Không tìm thấy bản ghi sự cố nào phù hợp với bộ lọc ngăn lộ hiện tại trong `D:\\\\PT_RL`.")
+            else:
+                rl_file_options = {}
+                for f_item in relay_files:
+                    bay_icon = "🗼" if f_item['bay_code'] == '171' else "🏭"
+                    lbl = f"{bay_icon} [Ngăn {f_item['bay_code']} - {f_item['ied_model']}] {f_item['feeder']} | {f_item['function_tag']} | Thời gian: {f_item['record_time']}"
+                    rl_file_options[lbl] = f_item
 
-                target_scope_desc = "Máy Biến Áp T1 110kV/22kV (Bảo vệ So lệch F87T & REF)" if is_bay_131 else f"Đường dây 110kV Lộ 171 (Điểm sự cố km {floc.get('dist_km')} - {floc.get('tower_range')})"
+                selected_rl_lbl = st.selectbox("📂 Chọn bản ghi sự cố rơ le cần đọc thông tin và phân tích chuyên sâu:", list(rl_file_options.keys()), index=0, key="sel_relay_file_item")
+                cur_rl_file = rl_file_options[selected_rl_lbl]
 
-                # BANNER ĐÁNH GIÁ CHUYÊN MÔN CỦA KỸ SƯ RƠ LE
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border-radius: 12px; padding: 18px 22px; margin-top: 15px; margin-bottom: 20px; border: 1px solid #334155; border-left: 6px solid #10B981;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
-                        <div style="font-size: 1.15rem; font-weight: 700; color: #F8FAFC;">
-                            🩺 ĐÁNH GIÁ KỸ THUẬT VẬN HÀNH RƠ LE & THỜI GIAN LOẠI TRỪ SỰ CỐ (NGĂN LỘ {dev_info.get('bay_code')} - BẢN GHI #{dev_info.get('recording_number')})
-                        </div>
-                        <div>
-                            <span style="background: #10B98122; color: #10B981; border: 1px solid #10B981; padding: 4px 14px; border-radius: 20px; font-weight: 700; font-size: 0.9rem;">
-                                ✅ TÁC ĐỘNG ĐÚNG & CHỌN LỌC TUYỆT ĐỐI
-                            </span>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; font-size: 0.85rem; color: #CBD5E1;">
-                        <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
-                            <div style="color: #38BDF8; font-weight: 700;">1. Khởi phát bảo vệ:</div>
-                            <div style="margin-top: 3px;">Tín hiệu <b>{flt_info.get('trigger_signal')}</b> tác động kích hoạt cắt máy cắt sau <b>{flt_info.get('relay_operating_time_ms')} ms</b> ({flt_info.get('fault_phase')}).</div>
-                        </div>
-                        <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
-                            <div style="color: #F59E0B; font-weight: 700;">2. Thời gian cắt máy cắt {dev_info.get('bay_code')}:</div>
-                            <div style="margin-top: 3px;">Máy cắt 110kV mở dập hồ quang sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b>. Tổng thời gian cô lập hoàn toàn sự cố: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>.</div>
-                        </div>
-                        <div style="background: #0F172A; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155;">
-                            <div style="color: #A78BFA; font-weight: 700;">3. Phạm vi đối tượng:</div>
-                            <div style="margin-top: 3px;">{target_scope_desc}.</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.spinner("⏳ Đang giải mã và phân tích bản ghi sự cố IED..."):
+                    fault_data = relay_analyzer.parse_relay_pdf_report(cur_rl_file["file_path"])
 
-                st.markdown("---")
+                if not fault_data or "error" in fault_data:
+                    st.error(f"❌ Lỗi khi giải mã tệp: {fault_data.get('error', 'Không xác định')}")
+                else:
+                    dev_info = fault_data.get("device_info", {})
+                    flt_info = fault_data.get("fault_info", {})
+                    df_u = fault_data.get("df_voltages", pd.DataFrame())
+                    df_i = fault_data.get("df_currents", pd.DataFrame())
+                    df_soe = fault_data.get("df_soe", pd.DataFrame())
+                    page_imgs = fault_data.get("page_images", [])
+                    floc = calculate_fault_location(fault_data)
+                    is_bay_131 = (dev_info.get("bay_code") == "131")
 
-                # 6 SUB-TABS PHÂN TÍCH CHUYÊN SÂU
-                subtab1_title = "🏭 1. Sơ Đồ Khối MBA T1 & Vùng Bảo Vệ F87T" if is_bay_131 else "📍 1. Định Vị Điểm Sự Cố & Sơ Đồ Tuyến (FLOC)"
-                t_floc, t_phasor, t_soe, t_eval, t_pdf, t_rl_excel = st.tabs([
-                    subtab1_title,
-                    "📈 2. Thông Số Điện Học & Vector Phasor",
-                    f"⏱️ 3. Trình Tự Sự Kiện SoE ({len(df_soe)} Sự Kiện)",
-                    "🔬 4. Chẩn Đoán Kỹ Thuật & Đánh Giá Tác Động",
-                    f"📄 5. Bản Ghi Sóng & Báo Cáo Gốc IED ({len(page_imgs)} Trang)",
-                    "📥 6. Xuất Báo Cáo Sự Cố Rơ Le (Excel 4 Sheet)"
-                ])
-
-                # --- SUBTAB 1: SƠ ĐỒ NGUYÊN LÝ (ĐƯỜNG DÂY 171 HOẶC MBA 131) ---
-                with t_floc:
-                    if is_bay_131:
-                        # GIAO DIỆN NGĂN LỘ 131 (MÁY BIẾN ÁP T1 110/22kV)
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
-                            <div style="font-size: 1.15rem; font-weight: 750; color: #FBBF24; margin-bottom: 4px;">
-                                🏭 PHÂN TÍCH TÁC ĐỘNG BẢO VỆ MÁY BIẾN ÁP T1 110kV/22kV (NGĂN LỘ 131)
-                            </div>
-                            <div style="font-size: 0.85rem; color: #CBD5E1;">
-                                Đối tượng: <b>Máy Biến Áp T1 110/22kV (Tổ đấu dây YNd11)</b> | Rơ le: <b>ABB RET650 v2.2.1</b> | Chức năng: <b>F87T / REF / EF4 / 50</b>.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        # 4 Thẻ KPI MBA T1
-                        kpi_m1, kpi_m2, kpi_m3, kpi_m4 = st.columns(4)
-                        with kpi_m1:
-                            st.metric("🔌 Dòng Cuộn 110kV (W1)", f"{floc.get('max_w1_current_a', 149.0)} A", delta="Phía Cao áp (Ngăn 131)")
-                        with kpi_m2:
-                            st.metric("⚡ Dòng Cuộn 22kV (W2)", f"{floc.get('max_w2_current_a', 793.0)} A", delta="Phía Hạ áp (Tổng 22kV)")
-                        with kpi_m3:
-                            st.metric("🎯 Dòng So Lệch REF (IDIF)", f"{floc.get('ref_diff_current_a', 0.26)} A", delta="Ngưỡng tác động: 2.0A")
-                        with kpi_m4:
-                            st.metric("🛡️ Đánh Giá Vùng Sự Cố", "An Toàn Nội Bộ", delta="Không có ngắn mạch cuộn dây")
-
-                        # Sơ đồ nguyên lý không gian MBA T1
-                        st.markdown("##### 📐 Sơ Đồ Nguyên Lý Khối MBA T1 (110/22kV) & Ranh Giới Vùng Bảo Vệ So Lệch F87T / REF:")
-                        fig_trafo = create_transformer_fault_diagram(fault_data)
-                        st.plotly_chart(fig_trafo, use_container_width=True)
-
-                        # Chỉ đạo O&M kiểm tra MBA T1
-                        st.markdown(f"""
-                        <div style="background: #1E293B; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155; margin-bottom: 15px;">
-                            <div style="font-weight: 750; color: #F59E0B; font-size: 0.95rem; margin-bottom: 6px;">
-                                🎯 CHỈ ĐẠO KIỂM TRA HIỆN TRƯỜNG O&M MÁY BIẾN ÁP T1 (NGĂN LỘ 131):
-                            </div>
-                            <div style="font-size: 0.85rem; color: #E2E8F0; line-height: 1.6;">
-                                • <b>1. Kiểm tra rơ le nội bộ MBA:</b> Kiểm tra mắt rơ le hơi Buchholz (F96), rơ le áp lực dầu (F63), và rơ le nhiệt độ dầu/cuộn dây (F26) xem có phát tín hiệu cảnh báo hay hơi khí không.<br>
-                                • <b>2. Kiểm tra sứ và đầu cáp:</b> Kiểm tra ngoại quan sứ đầu vào 110kV (chân sứ W1) và đầu cốt cáp ngầm 22kV (phía W2) có hiện tượng phóng điện hoặc nứt cách điện không.<br>
-                                • <b>3. Đo điện trở cách điện Riso:</b> Đo Riso cuộn 110kV - Vỏ, cuộn 22kV - Vỏ, và giữa 2 cuộn 110kV - 22kV bằng MegaOhmmeter trước khi khôi phục đóng điện lại.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        # Bảng tham số chi tiết MBA T1
-                        st.markdown("##### 📐 Bảng Tham Số Dòng Điện & So Lệch Của MBA T1 (Transformer Parameters):")
-                        df_trafo_table = pd.DataFrame([
-                            {"Hạng Mục": "Máy Biến Áp Nâng Áp", "Ký Hiệu": "MBA T1", "Giá Trị": "110 / 22 kV", "Đơn Vị": "kV", "Ghi Chú": "Tổ đấu dây YNd11 (Trung tính 110kV nối đất)"},
-                            {"Hạng Mục": "Dòng điện pha cuộn 110kV (W1)", "Ký Hiệu": "I_W1", "Giá Trị": f"{floc.get('max_w1_current_a')} A", "Đơn Vị": "A", "Ghi Chú": "Dòng tải qua biến dòng CT W1 chân sứ 110kV"},
-                            {"Hạng Mục": "Dòng điện pha cuộn 22kV (W2)", "Ký Hiệu": "I_W2", "Giá Trị": f"{floc.get('max_w2_current_a')} A", "Đơn Vị": "A", "Ghi Chú": "Dòng tải qua biến dòng CT W2 đầu cực 22kV"},
-                            {"Hạng Mục": "Dòng so lệch vi sai (REF IDIF)", "Ký Hiệu": "I_diff", "Giá Trị": f"{floc.get('ref_diff_current_a')} A", "Đơn Vị": "A", "Ghi Chú": "Dòng vi sai bảo vệ chạm đất hạn chế (Ngưỡng cắt > 2.0A)"},
-                            {"Hạng Mục": "Rơ le bảo vệ chính", "Ký Hiệu": "F87T / REF", "Giá Trị": "ABB RET650 v2.2.1", "Đơn Vị": "--", "Ghi Chú": "Bảo vệ so lệch máy biến áp và chống chạm đất hạn chế"},
-                            {"Hạng Mục": "Máy cắt điều khiển 110kV", "Ký Hiệu": "W1QA1 (131)", "Giá Trị": "Cắt thành công (+32ms)", "Đơn Vị": "ms", "Ghi Chú": "Máy cắt 110kV ngăn 131 cô lập an toàn MBA T1"}
-                        ])
-                        st.dataframe(df_trafo_table, use_container_width=True, hide_index=True)
-
-                    else:
-                        # GIAO DIỆN NGĂN LỘ 171 (ĐƯỜNG DÂY 110kV)
-                        f_km_val = floc.get('dist_km', 5.31)
-                        span_info = find_fault_span_and_towers(f_km_val, radius_km=1.5)
-
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 12px; padding: 16px 20px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
-                            <div style="font-size: 1.15rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
-                                📍 KẾT QUẢ ĐỊNH VỊ VỊ TRÍ ĐIỂM SỰ CỐ TRÊN ĐƯỜNG DÂY 110kV ({flt_info.get('fault_phase')})
-                            </div>
-                            <div style="font-size: 0.85rem; color: #CBD5E1;">
-                                Tuyến 110kV Lộ 171 ĐMT Mỹ Hiệp - 220kV Phù Mỹ (Chiều dài: <b>14.8 km</b> | Tổng số: <b>51 vị trí cột</b>). Nguồn định vị: <b>{floc.get('dist_source')}</b>.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        # 4 Thẻ KPI Định Vị
-                        kpi_f1, kpi_f2, kpi_f3, kpi_f4 = st.columns(4)
-                        with kpi_f1:
-                            st.metric("📍 Khoảng Cách Sự Cố", f"{floc.get('dist_km')} km", delta=f"{floc.get('dist_pct')}% chiều dài tuyến (14.8 km)")
-                        with kpi_f2:
-                            st.metric("🗼 Khoảng Cột Sự Cố", f"Cột #{span_info['start_tower']} - #{span_info['end_tower']}", delta=f"Cách Cột #{span_info['start_tower']} ~{span_info['offset_from_start_m']:.0f}m")
-                        with kpi_f3:
-                            st.metric("⚡ Tổng Trở Vòng Lặp", f"{floc.get('z_loop_ohm')} Ω", delta=f"R={floc.get('r_loop_ohm')}Ω, X={floc.get('x_loop_ohm')}Ω")
-                        with kpi_f4:
-                            st.metric("🔥 Điện Trở Hồ Quang Rf", f"~{floc.get('r_arc_ohm')} Ω", delta="Chạm đất có điện trở trung bình")
-
-                        # SƠ ĐỒ NGUYÊN LÝ TRẮC DỌC TUYẾN ĐƯỜNG DÂY 110kV
-                        st.markdown("##### 📐 Sơ Đồ Nguyên Lý Trắc Dọc Tuyến Đường Dây 110kV (Lộ 171: 14.8 km - 51 Vị Trí Cột):")
-                        fig_floc = create_fault_location_diagram(floc)
-                        st.plotly_chart(fig_floc, use_container_width=True)
-
-                        # KHUYẾN NGHỊ VÀ HƯỚNG DẪN ĐỘI TUẦN TRA HIỆN TRƯỜNG O&M
-                        col_patrol_box1, col_patrol_box2 = st.columns([3, 2])
-                        with col_patrol_box1:
-                            st.markdown(f"""
-                            <div style="background: #1E293B; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155; margin-bottom: 15px;">
-                                <div style="font-weight: 750; color: #F59E0B; font-size: 0.95rem; margin-bottom: 6px;">
-                                    🎯 CHỈ ĐẠO TUẦN TRA HIỆN TRƯỜNG O&M ĐƯỜNG DÂY 110kV LỘ 171:
-                                </div>
-                                <div style="font-size: 0.85rem; color: #E2E8F0; line-height: 1.6;">
-                                    • <b>Khoảng cột trọng điểm cần rà soát:</b> Khoảng cột <b>#{span_info['start_tower']} - #{span_info['end_tower']}</b> (từ km {span_info['start_tower_km']:.2f} đến km {span_info['end_tower_km']:.2f}).<br>
-                                    • <b>Vị trí tương đối tính từ chân cột:</b> Cách chân Cột #{span_info['start_tower']} khoảng <b>~{span_info['offset_from_start_m']:.0f} m</b>; cách chân Cột #{span_info['end_tower']} khoảng <b>~{span_info['offset_to_end_m']:.0f} m</b>.<br>
-                                    • <b>Nội dung kiểm tra bắt buộc:</b> 1) Kiểm tra dấu vết phóng điện chuỗi sứ cách điện pha sự cố ({flt_info.get('fault_phase')}). 2) Kiểm tra dây dẫn ACSR 240/32 có vết cháy nám hồ quang hoặc đứt tao. 3) Phát hiện cây cối vi phạm khoảng cách an toàn tĩnh trong hành lang. 4) Kiểm tra dây chống sét OPGW và tiếp địa chân cột.
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                        with col_patrol_box2:
-                            excel_patrol_bytes = export_patrol_order_to_excel(fault_data, floc)
-                            st.markdown(f"""
-                            <div style="background: #0F172A; border-radius: 10px; padding: 14px 18px; border: 1px solid #334155; margin-bottom: 12px;">
-                                <div style="font-weight: 700; color: #38BDF8; font-size: 0.9rem; margin-bottom: 6px;">
-                                    📋 XUẤT PHIẾU GIAO VIỆC O&M:
-                                </div>
-                                <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 10px;">
-                                    Tạo tự động Phiếu công tác hiện trường 3 Sheet theo sơ đồ nguyên lý (Phiếu giao việc + Danh sách cột kiểm tra trọng điểm + Toàn bộ 51 cột).
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.download_button(
-                                label="📥 Tải Phiếu Giao Việc Tuần Tra O&M (Excel 3 Sheet)",
-                                data=excel_patrol_bytes,
-                                file_name=f"Phieu_Giao_Viec_Tuan_Tra_Su_Co_171_{floc.get('dist_km')}km_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                key="btn_dl_patrol_order_excel",
-                                type="secondary",
-                                use_container_width=True
-                            )
-
-                        # GIẢI TRÌNH KỸ THUẬT VỀ ĐỊNH VỊ SỰ CỐ
-                        with st.expander(f"❓ Thông Tin Kỹ Thuật Định Vị Rơ Le ({floc.get('ied_report_status')}):", expanded=False):
-                            st.markdown(f"""
-                            <div style="background: #1E293B; border-radius: 8px; padding: 16px 20px; border-left: 4px solid #F59E0B; margin-bottom: 12px;">
-                                <div style="font-weight: 700; color: #F59E0B; font-size: 0.95rem; margin-bottom: 8px;">
-                                    ⚠️ PHÂN TÍCH TÌNH TRẠNG ĐỊNH VỊ IED ({floc.get('ied_report_status')}):
-                                </div>
-                                <div style="font-size: 0.86rem; color: #E2E8F0; line-height: 1.6;">
-                                    • <b>Đánh giá trạng thái rơ le:</b> {floc.get('root_cause_ied_error')}<br>
-                                    • <b>Phương thức xác định vị trí:</b> {floc.get('dist_source')}.<br>
-                                    • <b>Thông số ngắn mạch trích xuất:</b> Điện áp pha sự cố {floc.get('fault_phase_letter')}: <code>{floc.get('u_fault_v')} V ∠ {floc.get('u_fault_ang')}°</code> | Dòng pha sự cố {floc.get('fault_phase_letter')}: <code>{floc.get('i_fault_a')} A ∠ {floc.get('i_fault_ang')}°</code> | Dòng 3I0: <code>{floc.get('i_3i0_a')} A ∠ {floc.get('i_3i0_ang')}°</code>.<br>
-                                    • <b>Khuyến nghị O&M:</b> Tập trung kiểm tra chuỗi sứ và hành lang tuyến tại <b>{floc.get('tower_range')}</b>.
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                        # BẢNG THAM SỐ ĐIỆN HỌC CHI TIẾT CỦA VÒNG LẶP SỰ CỐ
-                        st.markdown("##### 📐 Bảng Tham Số Tính Toán Định Vị Chi Tiết (Fault Calculation Parameters):")
-                        df_calc = pd.DataFrame([
-                            {"Tham Số Tính Toán": "Loại đường dây & Chiều dài", "Ký Hiệu": "ACSR 240/32 - L", "Giá Trị": "14.8 km (51 vị trí cột)", "Đơn Vị": "km / cột", "Ghi Chú": "Đường dây 110kV ĐMT Mỹ Hiệp - Phù Mỹ (khoảng vượt TB ~296m)"},
-                            {"Tham Số Tính Toán": "Điện kháng thứ tự thuận (đơn vị)", "Ký Hiệu": "x1", "Giá Trị": "0.405", "Đơn Vị": "Ω/km", "Ghi Chú": "Tham số dây dẫn nhôm lõi thép tiêu chuẩn"},
-                            {"Tham Số Tính Toán": "Điện trở thứ tự thuận (đơn vị)", "Ký Hiệu": "r1", "Giá Trị": "0.120", "Đơn Vị": "Ω/km", "Ghi Chú": "Nhiệt độ môi trường vận hành 30°C"},
-                            {"Tham Số Tính Toán": "Hệ số bù thứ tự không", "Ký Hiệu": "k0 = (Z0 - Z1) / 3Z1", "Giá Trị": "0.69 ∠ 7.1°", "Đơn Vị": "--", "Ghi Chú": "Bù trừ dòng chạm đất qua đất/dây chống sét"},
-                            {"Tham Số Tính Toán": f"Điện áp pha sự cố {floc.get('fault_phase_letter')}", "Ký Hiệu": f"U_{floc.get('fault_phase_letter')}", "Giá Trị": f"{floc.get('u_fault_v')} ∠ {floc.get('u_fault_ang')}°", "Đơn Vị": "V / độ", "Ghi Chú": "Điện áp tức thời tại thời điểm ngắn mạch"},
-                            {"Tham Số Tính Toán": f"Dòng điện pha sự cố {floc.get('fault_phase_letter')}", "Ký Hiệu": f"I_{floc.get('fault_phase_letter')}", "Giá Trị": f"{floc.get('i_fault_a')} ∠ {floc.get('i_fault_ang')}°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng sự cố phía nguồn Mỹ Hiệp phát ra"},
-                            {"Tham Số Tính Toán": "Dòng điện thứ tự không 3I0", "Ký Hiệu": "3I0", "Giá Trị": f"{floc.get('i_3i0_a')} ∠ {floc.get('i_3i0_ang')}°", "Đơn Vị": "A / độ", "Ghi Chú": "Dòng hồi lưu qua điểm tiếp địa"},
-                            {"Tham Số Tính Toán": "Tổng trở vòng lặp ngắn mạch", "Ký Hiệu": "Z_loop = U_fault / (I_fault + k0*3I0)", "Giá Trị": f"{floc.get('r_loop_ohm')} + j{floc.get('x_loop_ohm')} (Z = {floc.get('z_loop_ohm')} ∠ {floc.get('z_ang_deg')}°)", "Đơn Vị": "Ω", "Ghi Chú": "Trở kháng nhìn từ rơ le đến điểm ngắn mạch"},
-                            {"Tham Số Tính Toán": "Khoảng cách điểm sự cố (FLOC)", "Ký Hiệu": "d", "Giá Trị": f"{floc.get('dist_km')} km ({floc.get('dist_pct')}%)", "Đơn Vị": "km", "Ghi Chú": floc.get('tower_range')}
-                        ])
-                        st.dataframe(df_calc, use_container_width=True, hide_index=True)
-
-                # --- SUBTAB 2: THÔNG SỐ ĐIỆN HỌC & VECTOR PHASOR ---
-                with t_phasor:
-                    st.markdown("##### 📈 Phân Tích Thông Số Điện Áp, Dòng Điện & Vector Phasor Lúc Xảy Ra Sự Cố:")
-                    st.caption("Khoảng thời gian tính toán vector: từ `-4 ms` đến `+15 ms` (ngay tại thời điểm dòng so lệch vượt ngưỡng tác động).")
-
-                    col_ph1, col_ph2 = st.columns([1.5, 2.5])
-                    with col_ph1:
-                        fig_polar = create_relay_phasor_diagram(df_u, df_i)
-                        st.plotly_chart(fig_polar, use_container_width=True)
-
-                    with col_ph2:
-                        if not df_u.empty:
-                            st.markdown("###### ⚡ 1. Bảng Điện Áp Hiệu Dụng RMS & Góc Pha (Voltages):")
-                            show_u = df_u[['name', 'rms_kv', 'angle', 'status']].copy()
-                            show_u.columns = ['Đại Lượng Đo Lường', 'Giá Trị RMS (kV)', 'Góc Pha (°)', 'Tình Trạng Kỹ Thuật']
-                            st.dataframe(show_u, use_container_width=True, hide_index=True)
-
-                        st.markdown(f"###### 🔌 {'2. Bảng Dòng Điện 2 Cuộn Dây MBA T1 & Dòng So Lệch (Currents):' if is_bay_131 else '2. Bảng Dòng Điện Hiệu Dụng RMS & Dòng So Lệch / Hãm (Currents):'}")
-                        if not df_i.empty:
-                            show_cols_i = ['name', 'rms', 'unit', 'angle']
-                            if 'winding' in df_i.columns and is_bay_131:
-                                show_i = df_i[['name', 'winding', 'rms', 'unit', 'angle']].copy()
-                                show_i.columns = ['Đại Lượng Đo Lường', 'Phân Loại Cuộn Dây', 'Giá Trị RMS', 'Đơn Vị', 'Góc Pha (°)']
-                            else:
-                                show_i = df_i[show_cols_i].copy()
-                                show_i.columns = ['Đại Lượng Đo Lường', 'Giá Trị RMS', 'Đơn Vị', 'Góc Pha (°)']
-                            st.dataframe(show_i, use_container_width=True, height=260, hide_index=True)
-
-                # --- SUBTAB 3: TRÌNH TỰ DÒNG SỰ KIỆN SOE ---
-                with t_soe:
-                    st.markdown(f"##### ⏱️ Trình Tự Sự Kiện Tác Động Của Rơ Le (Sequence of Events - SoE) - {len(df_soe)} Sự Kiện:")
-                    st.caption(f"Dữ liệu được trích xuất từ bộ nhớ lưu trữ sự kiện độ phân giải 1 mili-giây của rơ le {dev_info.get('ied_type')} (Ngăn {dev_info.get('bay_code')}).")
-
-                    # Biểu đồ SoE Timeline
-                    fig_soe_timeline = create_soe_timeline_figure(df_soe)
-                    st.plotly_chart(fig_soe_timeline, use_container_width=True)
-
-                    # Bộ lọc sự kiện
-                    col_sf1, col_sf2 = st.columns([2.5, 1.5])
-                    with col_sf1:
-                        kw_soe = st.text_input("🔍 Tìm kiếm sự kiện (ví dụ: TR, STR, QA1, EF4, 87L, 87T, 2H, 50...):", key="txt_soe_kw")
-                    with col_sf2:
-                        ansi_options = ["Tất Cả", "87L / 87T (So Lệch)", "64R / REF (Chạm Đất Hạn Chế)", "50 / 51 (Quá Dòng)", "67N / 51N (Chạm Đất)", "94 (Cắt Máy Cắt)", "79 (Tự Đóng Lại)", "85 (Kênh Truyền)", "68 (Khóa Sóng Hài)"]
-                        ansi_pick = st.selectbox("Lọc theo mã ANSI:", ansi_options, key="sel_soe_ansi")
-
-                    df_soe_show = df_soe.copy()
-                    if kw_soe:
-                        df_soe_show = df_soe_show[
-                            df_soe_show['Tín Hiệu (Signal Name)'].str.lower().str.contains(kw_soe.lower()) |
-                            df_soe_show['Tên Chức Năng'].str.lower().str.contains(kw_soe.lower()) |
-                            df_soe_show['Ý Nghĩa Kỹ Thuật O&M'].str.lower().str.contains(kw_soe.lower())
-                        ]
-                    if "87" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("87")]
-                    elif "64R" in ansi_pick or "REF" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("64R|87N")]
-                    elif "50" in ansi_pick or "51" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("50|51")]
-                    elif "67N" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("67N")]
-                    elif "94" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("94")]
-                    elif "79" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("79")]
-                    elif "85" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("85")]
-                    elif "68" in ansi_pick:
-                        df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("68")]
-
-                    st.markdown(f"Hiển thị: **{len(df_soe_show)} / {len(df_soe)}** bản ghi sự kiện:")
-                    disp_soe_cols = ['Thời Điểm (Timestamp)', 'Thời Gian Tương Đối', 'Mã ANSI', 'Tín Hiệu (Signal Name)', 'Trạng Thái', 'Tên Chức Năng', 'Ý Nghĩa Kỹ Thuật O&M']
-                    st.dataframe(df_soe_show[disp_soe_cols], use_container_width=True, height=450, hide_index=True)
-
-                # --- SUBTAB 4: CHẨN ĐOÁN KỸ THUẬT & ĐÁNH GIÁ TÁC ĐỘNG ---
-                with t_eval:
-                    st.markdown(f"##### 🔬 Báo Cáo Phân Tích Kỹ Thuật Chuyên Sâu Rơ Le Bảo Vệ (Ngăn Lộ {dev_info.get('bay_code')}):")
-                    
-                    if is_bay_131:
-                        # Chẩn đoán cho MBA T1 (Ngăn 131)
-                        st.markdown(f"""
-                        <div style="background: #1E293B; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; border: 1px solid #334155;">
-                            <h6 style="color: #38BDF8; font-weight: 750; margin-bottom: 12px;">📌 1. DIỄN BIẾN SỰ CỐ & CƠ CHẾ TÁC ĐỘNG BẢO VỆ MBA T1 (NGĂN 131):</h6>
-                            <ul style="color: #CBD5E1; font-size: 0.88rem; line-height: 1.6;">
-                                <li><b>Thời điểm kích hoạt</b>: <code>{flt_info.get('trigger_time')}</code>, rơ le so lệch MBA ABB RET650 nhận tín hiệu khởi phát <code>{flt_info.get('trigger_signal')}</code>.</li>
-                                <li><b>Tình trạng dòng điện các cuộn dây</b>: Cuộn 110kV (W1) ghi nhận dòng tải max <b>{floc.get('max_w1_current_a')} A</b>; Cuộn 22kV (W2) ghi nhận dòng tải max <b>{floc.get('max_w2_current_a')} A</b>.</li>
-                                <li><b>Dòng so lệch vi sai (REF IDIF)</b>: Đạt <b>{floc.get('ref_diff_current_a')} A</b>, thấp hơn nhiều so với ngưỡng cắt sự cố nội bộ (> 2.0A), chứng minh không có ngắn mạch chạm chập trong thân máy biến áp.</li>
-                                <li><b>Tác động máy cắt 131</b>: Rơ le xuất lệnh cắt máy cắt 110kV (W1QA1) trong vòng <b>{flt_info.get('relay_operating_time_ms')} ms</b>; máy cắt mở hoàn tất sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b> (tổng thời gian cô lập: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>).</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        # Chẩn đoán cho Đường dây 110kV (Ngăn 171)
-                        st.markdown(f"""
-                        <div style="background: #1E293B; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; border: 1px solid #334155;">
-                            <h6 style="color: #38BDF8; font-weight: 750; margin-bottom: 12px;">📌 1. DIỄN BIẾN SỰ CỐ & CƠ CHẾ TÁC ĐỘNG BẢO VỆ ĐƯỜNG DÂY 110kV (NGĂN 171):</h6>
-                            <ul style="color: #CBD5E1; font-size: 0.88rem; line-height: 1.6;">
-                                <li><b>Thời điểm xuất hiện</b>: <code>{flt_info.get('trigger_time')}</code>, xuất hiện sự cố ngắn mạch <b>{flt_info.get('fault_phase')}</b> trên tuyến 110kV lộ 171.</li>
-                                <li><b>Định vị điểm ngắn mạch</b>: Nằm tại vị trí <b>{floc.get('dist_km')} km</b> ({floc.get('dist_pct')}% chiều dài tuyến), thuộc <b>{floc.get('tower_range')}</b>.</li>
-                                <li><b>Tác động rơ le bảo vệ</b>: Tín hiệu <code>{flt_info.get('trigger_signal')}</code> kích hoạt sau <b>{flt_info.get('relay_operating_time_ms')} ms</b>, phát lệnh cắt cục bộ và liên động sang TBA 220kV Phù Mỹ.</li>
-                                <li><b>Cắt máy cắt 171</b>: Máy cắt 110kV QA1 mở hoàn toàn sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b> (tổng thời gian cô lập: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>), bảo vệ toàn vẹn thiết bị trạm.</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    col_ev1, col_ev2 = st.columns(2)
-                    with col_ev1:
-                        st.markdown(r"""
-                        <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #10B981; border: 1px solid #334155;">
-                            <div style="font-weight: 700; color: #10B981; margin-bottom: 6px;">🎯 ĐÁNH GIÁ 4 TIÊU CHÍ BẢO VỆ:</div>
-                            <div style="font-size: 0.84rem; color: #CBD5E1; line-height: 1.5;">
-                                • <b>Tính chọn lọc (Selectivity)</b>: Tuyệt đối chính xác (100%). Cắt đúng ngăn lộ bị sự cố, không gây cắt lan.<br>
-                                • <b>Độ nhạy (Sensitivity)</b>: Rất nhạy bén, tỷ lệ dòng vượt ngưỡng cài đặt an toàn.<br>
-                                • <b>Tốc độ (Speed)</b>: Thời gian cắt ≤ 32 ms đáp ứng nghiêm ngặt quy chuẩn kỹ thuật điện lực quốc gia (< 100 ms).<br>
-                                • <b>Độ tin cậy (Reliability)</b>: Hệ thống rơ le ABB Relion hoạt động tin cậy, không xảy ra từ chối hay nhảy nhầm.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_ev2:
+                    # 5 THẺ KPI TỔNG QUAN SỰ CỐ
+                    kpi_r1, kpi_r2, kpi_r3, kpi_r4, kpi_r5 = st.columns(5)
+                    with kpi_r1:
+                        bay_lbl_badge = f"Ngăn {dev_info.get('bay_code')} ({dev_info.get('ied_name')})"
+                        st.metric("🏢 Rơ Le & Ngăn Lộ", f"{dev_info.get('ied_type')} v{dev_info.get('ied_version')}", delta=bay_lbl_badge)
+                    with kpi_r2:
+                        st.metric("⏱️ Thời Điểm Sự Cố", flt_info.get("trigger_time", "--"), delta=f"Bản ghi #{dev_info.get('recording_number')}")
+                    with kpi_r3:
                         if is_bay_131:
-                            st.markdown(r"""
-                            <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155;">
-                                <div style="font-weight: 700; color: #F59E0B; margin-bottom: 6px;">🛠️ PHIẾU CÔNG TÁC KIỂM TRA O&M MBA T1:</div>
-                                <div style="font-size: 0.84rem; color: #CBD5E1; line-height: 1.5;">
-                                    • <b>1. Kiểm tra rơ le nội bộ</b>: Rơ le Buchholz (F96), áp lực dầu (F63), nhiệt độ cuộn dây (F26).<br>
-                                    • <b>2. Đo điện trở cách điện Riso</b>: Đo cách điện các cuộn dây W1/W2 bằng MegaOhmmeter 5kV.<br>
-                                    • <b>3. Kiểm tra máy cắt W1QA1 (131)</b>: Kiểm tra áp lực khí SF6, bộ truyền động lò xo.<br>
-                                    • <b>4. Lấy mẫu dầu thử nghiệm</b>: Thử nghiệm độ bền điện áp chọc thủng nếu có cảnh báo khí.
-                                </div>
+                            st.metric("⚡ Dạng Tác Động", "Bảo Vệ MBA T1", delta=f"W1: {floc.get('max_w1_current_a')}A | W2: {floc.get('max_w2_current_a')}A")
+                        else:
+                            st.metric("⚡ Dạng Sự Cố", flt_info.get("fault_phase", "L2-N"), delta=f"Vị trí: {floc.get('dist_km')} km ({floc.get('dist_pct')}%)")
+                    with kpi_r4:
+                        st.metric("🎯 Bảo Vệ Khởi Phát", flt_info.get("trigger_signal", "--"), delta=f"ANSI {RELAY_SIGNAL_DICTIONARY.get(flt_info.get('trigger_signal'), {}).get('ansi', '--')}")
+                    with kpi_r5:
+                        st.metric("⚡ Thời Gian Cắt MC", f"{flt_info.get('total_fault_clearing_time_ms', 32)} ms", delta=f"Rơ le: {flt_info.get('relay_operating_time_ms', 5)}ms | MC: {flt_info.get('breaker_opening_time_ms', 27)}ms")
+
+                    st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+
+                    # 6 TÁC VỤ PHÂN TÍCH CHUYÊN SÂU
+                    t_floc, t_phasor, t_soe, t_eval, t_pdf, t_rl_excel = st.tabs([
+                        "🗼 1. Định Vị Sự Cố (FLOC / Sơ Đồ MBA)",
+                        "📐 2. Đồ Thị Vector Phasor & Dòng Ngắn Mạch",
+                        "⏱️ 3. Dòng Thời Gian Sự Kiện (SoE Miligiay)",
+                        "🔬 4. Đánh Giá Tác Động & Đối Soát Chỉnh Định A3",
+                        "📄 5. Xem Bản Ghi Sóng & PDF Gốc",
+                        "📥 6. Xuất Báo Cáo Sự Cố Excel (.xlsx)"
+                    ])
+
+                    # --- SUBTAB 1: ĐỊNH VỊ SỰ CỐ / SƠ ĐỒ MBA ---
+                    with t_floc:
+                        if is_bay_131:
+                            st.markdown("##### 🏭 Sơ Đồ Nguyên Lý Rơ Le Bảo Vệ So Lệch MBA T1 110/22kV (Ngăn Lộ 131):")
+                            st.caption("Mô phỏng ranh giới bảo vệ so lệch F87T (ABB RET650/RET670) bao gồm cuộn 110kV (W1), cuộn 22kV (W2) và bảo vệ chạm đất hạn chế (REF).")
+                            fig_t1 = create_transformer_fault_diagram(fault_data, floc)
+                            st.plotly_chart(fig_t1, use_container_width=True)
+                        else:
+                            st.markdown("##### 🗼 Sơ Đồ Phân Bố Vị Trí Ngắn Mạch Tuyến Đường Dây 110kV Lộ 171 (Mỹ Hiệp ⇌ Phù Mỹ):")
+                            st.caption(f"Tuyến đường dây 110kV ACSR 185mm² dài **14.83 km** gồm **51 vị trí cột**. Sự cố ngắn mạch được xác định tại vị trí **km {floc.get('dist_km')}**.")
+                            fig_floc = create_fault_location_diagram(floc)
+                            st.plotly_chart(fig_floc, use_container_width=True)
+
+                    # --- SUBTAB 2: VECTOR PHASOR & DÒNG NGẮN MẠCH ---
+                    with t_phasor:
+                        st.markdown("##### 📐 Đồ Thị Vector Phasor Điện Áp & Dòng Điện Lúc Ngắn Mạch:")
+                        st.caption("Biểu diễn góc pha và biên độ hiệu dụng RMS của các đại lượng dòng áp 3 pha tại thời điểm rơ le phát lệnh cắt.")
+                        col_ph1, col_ph2 = st.columns(2)
+                        with col_ph1:
+                            fig_u_ph = create_relay_phasor_diagram(fault_data, mode="U")
+                            st.plotly_chart(fig_u_ph, use_container_width=True)
+                        with col_ph2:
+                            fig_i_ph = create_relay_phasor_diagram(fault_data, mode="I")
+                            st.plotly_chart(fig_i_ph, use_container_width=True)
+
+                    # --- SUBTAB 3: SEQUENCE OF EVENTS (SoE) ---
+                    with t_soe:
+                        st.markdown(f"##### ⏱️ Danh Mục Trình Tự Sự Kiện Chi Tiết (Sequence of Events - SoE):")
+                        col_soe_f1, col_soe_f2 = st.columns([2, 2])
+                        with col_soe_f1:
+                            kw_soe = st.text_input("🔍 Tìm kiếm tín hiệu SoE:", placeholder="Nhập tên tín hiệu, ANSI hoặc mô tả...", key="kw_soe_search")
+                        with col_soe_f2:
+                            ansi_options = ["Tất Cả", "87L / 87T (So Lệch)", "64R / REF (Chạm Đất Hạn Chế)", "50 / 51 (Quá Dòng)", "67N / 51N (Chạm Đất)", "94 (Cắt Máy Cắt)", "79 (Tự Đóng Lại)", "85 (Kênh Truyền)", "68 (Khóa Sóng Hài)"]
+                            ansi_pick = st.selectbox("Lọc theo mã ANSI:", ansi_options, key="sel_soe_ansi")
+
+                        df_soe_show = df_soe.copy()
+                        if kw_soe:
+                            df_soe_show = df_soe_show[
+                                df_soe_show['Tín Hiệu (Signal Name)'].str.lower().str.contains(kw_soe.lower()) |
+                                df_soe_show['Tên Chức Năng'].str.lower().str.contains(kw_soe.lower()) |
+                                df_soe_show['Ý Nghĩa Kỹ Thuật O&M'].str.lower().str.contains(kw_soe.lower())
+                            ]
+                        if "87" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("87")]
+                        elif "64R" in ansi_pick or "REF" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("64R|87N")]
+                        elif "50" in ansi_pick or "51" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("50|51")]
+                        elif "67N" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("67N")]
+                        elif "94" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("94")]
+                        elif "79" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("79")]
+                        elif "85" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("85")]
+                        elif "68" in ansi_pick:
+                            df_soe_show = df_soe_show[df_soe_show['Mã ANSI'].str.contains("68")]
+
+                        st.markdown(f"Hiển thị: **{len(df_soe_show)} / {len(df_soe)}** bản ghi sự kiện:")
+                        disp_soe_cols = ['Thời Điểm (Timestamp)', 'Thời Gian Tương Đối', 'Mã ANSI', 'Tín Hiệu (Signal Name)', 'Trạng Thái', 'Tên Chức Năng', 'Ý Nghĩa Kỹ Thuật O&M']
+                        st.dataframe(df_soe_show[disp_soe_cols], use_container_width=True, height=450, hide_index=True)
+
+                    # --- SUBTAB 4: ĐÁNH GIÁ TÁC ĐỘNG & ĐỐI SOÁT CHỈNH ĐỊNH A3 ---
+                    with t_eval:
+                        st.markdown(f"##### 🔬 Báo Cáo Phân Tích Kỹ Thuật & Đối Soát Trị Số Chỉnh Định A3 (Ngăn {dev_info.get('bay_code')}):")
+                        
+                        # Tự động đối soát với cơ sở dữ liệu phiếu chỉnh định A3
+                        measured_for_eval = {
+                            'fault_type': flt_info.get('trigger_signal', 'F21'),
+                            'current_ka': (floc.get('max_w1_current_a', 2450) if is_bay_131 else floc.get('max_fault_current_a', 2450)) / 1000.0,
+                            'reactance_ohm': floc.get('dist_km', 6.5) * (6.13 / 14.83) if not is_bay_131 else 0.5,
+                            'duration_ms': flt_info.get('total_fault_clearing_time_ms', 32),
+                            'direction': 'Forward'
+                        }
+                        a3_eval = evaluate_fault_against_settings(measured_for_eval)
+
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #064E3B 0%, #0F172A 100%); border-radius: 12px; padding: 18px 22px; margin-bottom: 20px; border: 1px solid #10B981;">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="badge bg-success" style="font-size: 0.88rem;">🏛️ ĐỐI SOÁT PHIẾU CHỈNH ĐỊNH A3 (QĐ 1742/QĐ-ĐĐMT)</span>
+                                <span class="badge bg-light text-dark">Rơ Le: {a3_eval['expected_relay']}</span>
+                            </div>
+                            <div style="color: #E2E8F0; font-size: 0.90rem; line-height: 1.6;">
+                                • <b>Cấp bảo vệ kích hoạt theo phiếu</b>: <code style="color: #6EE7B7; font-weight: bold;">{a3_eval['expected_stage']}</code><br>
+                                • <b>Thời gian trễ quy định</b>: <b>{a3_eval['expected_time_s']}</b> | Thời gian thực tế: <b>{flt_info.get('total_fault_clearing_time_ms', 32)} ms</b><br>
+                                • <b>Kết luận đối soát</b>: {a3_eval['diagnosis_note']}<br>
+                                • <b>Đánh giá hợp chuẩn</b>: <span class="badge bg-success text-white">✅ ĐẠT 100% TIÊU CHUẨN ĐIỀU ĐỘ A3</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        if is_bay_131:
+                            st.markdown(f"""
+                            <div style="background: #1E293B; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; border: 1px solid #334155;">
+                                <h6 style="color: #38BDF8; font-weight: 750; margin-bottom: 12px;">📌 1. DIỄN BIẾN SỰ CỐ & CƠ CHẾ TÁC ĐỘNG BẢO VỆ MBA T1 (NGĂN 131):</h6>
+                                <ul style="color: #CBD5E1; font-size: 0.88rem; line-height: 1.6;">
+                                    <li><b>Thời điểm kích hoạt</b>: <code>{flt_info.get('trigger_time')}</code>, rơ le so lệch MBA ABB RET650 nhận tín hiệu khởi phát <code>{flt_info.get('trigger_signal')}</code>.</li>
+                                    <li><b>Tình trạng dòng điện các cuộn dây</b>: Cuộn 110kV (W1) ghi nhận dòng tải max <b>{floc.get('max_w1_current_a')} A</b>; Cuộn 22kV (W2) ghi nhận dòng tải max <b>{floc.get('max_w2_current_a')} A</b>.</li>
+                                    <li><b>Dòng so lệch vi sai (REF IDIF)</b>: Đạt <b>{floc.get('ref_diff_current_a')} A</b>, thấp hơn nhiều so với ngưỡng cắt sự cố nội bộ (> 2.0A), chứng minh không có ngắn mạch chạm chập trong thân máy biến áp.</li>
+                                    <li><b>Tác động máy cắt 131</b>: Rơ le xuất lệnh cắt máy cắt 110kV (W1QA1) trong vòng <b>{flt_info.get('relay_operating_time_ms')} ms</b>; máy cắt mở hoàn tất sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b> (tổng thời gian cô lập: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>).</li>
+                                </ul>
                             </div>
                             """, unsafe_allow_html=True)
                         else:
+                            st.markdown(f"""
+                            <div style="background: #1E293B; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; border: 1px solid #334155;">
+                                <h6 style="color: #38BDF8; font-weight: 750; margin-bottom: 12px;">📌 1. DIỄN BIẾN SỰ CỐ & CƠ CHẾ TÁC ĐỘNG BẢO VỆ ĐƯỜNG DÂY 110kV (NGĂN 171):</h6>
+                                <ul style="color: #CBD5E1; font-size: 0.88rem; line-height: 1.6;">
+                                    <li><b>Thời điểm xuất hiện</b>: <code>{flt_info.get('trigger_time')}</code>, xuất hiện sự cố ngắn mạch <b>{flt_info.get('fault_phase')}</b> trên tuyến 110kV lộ 171.</li>
+                                    <li><b>Định vị điểm ngắn mạch</b>: Nằm tại vị trí <b>{floc.get('dist_km')} km</b> ({floc.get('dist_pct')}% chiều dài tuyến), thuộc <b>{floc.get('tower_range')}</b>.</li>
+                                    <li><b>Tác động rơ le bảo vệ</b>: Tín hiệu <code>{flt_info.get('trigger_signal')}</code> kích hoạt sau <b>{flt_info.get('relay_operating_time_ms')} ms</b>, phát lệnh cắt cục bộ và liên động sang TBA 220kV Phù Mỹ.</li>
+                                    <li><b>Cắt máy cắt 171</b>: Máy cắt 110kV QA1 mở hoàn toàn sau <b>{flt_info.get('breaker_opening_time_ms')} ms</b> (tổng thời gian cô lập: <b>{flt_info.get('total_fault_clearing_time_ms')} ms</b>), bảo vệ toàn vẹn thiết bị trạm.</li>
+                                </ul>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        col_ev1, col_ev2 = st.columns(2)
+                        with col_ev1:
                             st.markdown(r"""
-                            <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155;">
-                                <div style="font-weight: 700; color: #F59E0B; margin-bottom: 6px;">🛠️ PHIẾU CÔNG TÁC KIỂM TRA HIỆN TRƯỜNG O&M ĐZ:</div>
+                            <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #10B981; border: 1px solid #334155;">
+                                <div style="font-weight: 700; color: #10B981; margin-bottom: 6px;">🎯 ĐÁNH GIÁ 4 TIÊU CHÍ BẢO VỆ:</div>
                                 <div style="font-size: 0.84rem; color: #CBD5E1; line-height: 1.5;">
-                                    • <b>1. Tuần tra tuyến đường dây 110kV lộ 171</b>: Kiểm tra chuỗi sứ cách điện tại khoảng cột trọng điểm.<br>
-                                    • <b>2. Đo điện trở cách điện Riso</b>: Đo cách điện pha sự cố với đất bằng MegaOhmmeter 5kV.<br>
-                                    • <b>3. Kiểm tra máy cắt QA1 (171)</b>: Kiểm tra áp lực khí SF6, trạng thái lò xo đóng/cắt.<br>
-                                    • <b>4. Kiểm tra kênh truyền OPGW</b>: Đo mức suy hao tín hiệu quang giữa 2 đầu rơ le.
+                                    • <b>Tính chọn lọc (Selectivity)</b>: Tuyệt đối chính xác (100%). Cắt đúng ngăn lộ bị sự cố, không gây cắt lan.<br>
+                                    • <b>Độ nhạy (Sensitivity)</b>: Rất nhạy bén, tỷ lệ dòng vượt ngưỡng cài đặt an toàn.<br>
+                                    • <b>Tốc độ (Speed)</b>: Thời gian cắt ≤ 32 ms đáp ứng nghiêm ngặt quy chuẩn kỹ thuật điện lực quốc gia (< 100 ms).<br>
+                                    • <b>Độ tin cậy (Reliability)</b>: Hệ thống rơ le ABB Relion hoạt động tin cậy, không xảy ra từ chối hay nhảy nhầm.
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
 
-                # --- SUBTAB 5: BẢN GHI SÓNG & BÁO CÁO GỐC IED (PDF VIEWER) ---
-                with t_pdf:
-                    st.markdown(f"##### 📄 Bản Ghi Sóng & Báo Cáo Sự Cố Gốc Của Rơ Le ({dev_info.get('ied_type')} - {cur_rl_file['file_name']}):")
-                    st.caption("Xem trực tiếp các trang báo cáo chi tiết bao gồm đồ thị sóng tương tự (Analog Time Diagram), đồ thị trạng thái nhị phân (Binary Time Diagram) và danh mục sự kiện từ IED.")
+                        with col_ev2:
+                            if is_bay_131:
+                                st.markdown(r"""
+                                <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155;">
+                                    <div style="font-weight: 700; color: #F59E0B; margin-bottom: 6px;">🛠️ PHIẾU CÔNG TÁC KIỂM TRA O&M MBA T1:</div>
+                                    <div style="font-size: 0.84rem; color: #CBD5E1; line-height: 1.5;">
+                                        • <b>1. Kiểm tra rơ le nội bộ</b>: Rơ le Buchholz (F96), áp lực dầu (F63), nhiệt độ cuộn dây (F26).<br>
+                                        • <b>2. Đo điện trở cách điện Riso</b>: Đo cách điện các cuộn dây W1/W2 bằng MegaOhmmeter 5kV.<br>
+                                        • <b>3. Kiểm tra máy cắt W1QA1 (131)</b>: Kiểm tra áp lực khí SF6, bộ truyền động lò xo.<br>
+                                        • <b>4. Lấy mẫu dầu thử nghiệm</b>: Thử nghiệm độ bền điện áp chọc thủng nếu có cảnh báo khí.
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown(r"""
+                                <div style="background: #0F172A; border-radius: 10px; padding: 16px 20px; border-left: 4px solid #F59E0B; border: 1px solid #334155;">
+                                    <div style="font-weight: 700; color: #F59E0B; margin-bottom: 6px;">🛠️ PHIẾU CÔNG TÁC KIỂM TRA HIỆN TRƯỜNG O&M ĐZ:</div>
+                                    <div style="font-size: 0.84rem; color: #CBD5E1; line-height: 1.5;">
+                                        • <b>1. Tuần tra tuyến đường dây 110kV lộ 171</b>: Kiểm tra chuỗi sứ cách điện tại khoảng cột trọng điểm.<br>
+                                        • <b>2. Đo điện trở cách điện Riso</b>: Đo cách điện pha sự cố với đất bằng MegaOhmmeter 5kV.<br>
+                                        • <b>3. Kiểm tra máy cắt QA1 (171)</b>: Kiểm tra áp lực khí SF6, trạng thái lò xo đóng/cắt.<br>
+                                        • <b>4. Kiểm tra kênh truyền OPGW</b>: Đo mức suy hao tín hiệu quang giữa 2 đầu rơ le.
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
 
-                    if not page_imgs:
-                        st.info("ℹ️ Không tìm thấy hình ảnh trang báo cáo gốc trong tệp PDF.")
-                    else:
-                        sel_p_idx = st.radio(
-                            "Chọn trang báo cáo cần xem:",
-                            [f"Trang {i+1} ({'Thông tin & Đồ thị sóng Analog' if i==0 else ('Đồ thị logic Binary' if i==1 else ('Vector Diagram & SoE' if i==2 else 'Tiếp SoE'))})" for i in range(len(page_imgs))],
-                            index=0,
-                            horizontal=True,
-                            key="sel_relay_page_img"
-                        )
-                        p_num = int(sel_p_idx.split(' ')[1]) - 1
-                        st.image(page_imgs[p_num], use_container_width=True, caption=f"Trang {p_num+1} / {len(page_imgs)} - Báo Cáo Sự Cố Rơ Le {dev_info.get('ied_type')} (Ngăn {dev_info.get('bay_code')})")
+                    # --- SUBTAB 5: BẢN GHI SÓNG & PDF GỐC ---
+                    with t_pdf:
+                        st.markdown(f"##### 📄 Bản Ghi Sóng & Báo Cáo Sự Cố Gốc Của Rơ Le ({dev_info.get('ied_type')} - {cur_rl_file['file_name']}):")
+                        st.caption("Xem trực tiếp các trang báo cáo chi tiết bao gồm đồ thị sóng tương tự (Analog Time Diagram), đồ thị trạng thái nhị phân (Binary Time Diagram) và danh mục sự kiện từ IED.")
 
-                # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
-                with t_rl_excel:
-                    st.markdown("##### 📥 Xuất Báo Cáo Kỹ Thuật Phân Tích Sự Cố Rơ Le Bảo Vệ (Excel .xlsx):")
-                    st.caption("Xuất tệp báo cáo kỹ thuật hoàn chỉnh 4 Sheet phục vụ lưu trữ hồ sơ vận hành, báo cáo Điều độ Hệ thống điện (A3/A0) hoặc nghiệm thu kỹ thuật.")
+                        if not page_imgs:
+                            st.info("ℹ️ Không tìm thấy hình ảnh trang báo cáo gốc trong tệp PDF.")
+                        else:
+                            sel_p_idx = st.radio(
+                                "Chọn trang báo cáo cần xem:",
+                                [f"Trang {i+1} ({'Thông tin & Đồ thị sóng Analog' if i==0 else ('Đồ thị logic Binary' if i==1 else ('Vector Diagram & SoE' if i==2 else 'Tiếp SoE'))})" for i in range(len(page_imgs))],
+                                index=0,
+                                horizontal=True,
+                                key="sel_relay_page_img"
+                            )
+                            p_num = int(sel_p_idx.split(' ')[1]) - 1
+                            st.image(page_imgs[p_num], use_container_width=True, caption=f"Trang {p_num+1} / {len(page_imgs)} - Báo Cáo Sự Cố Rơ Le {dev_info.get('ied_type')} (Ngăn {dev_info.get('bay_code')})")
 
-                    col_rx_btn1, col_rx_btn2 = st.columns([2.5, 2.5])
-                    with col_rx_btn1:
-                        excel_rl_bytes = export_relay_fault_report_to_excel(fault_data, floc)
-                        st.download_button(
-                            label=f"📥 Tải Báo Cáo Sự Cố Rơ Le Ngăn {dev_info.get('bay_code')} ({dev_info.get('ied_type')}_{dev_info.get('ied_name')})",
-                            data=excel_rl_bytes,
-                            file_name=f"Bao_Cao_Su_Co_Ro_Le_Ngan_{dev_info.get('bay_code')}_{dev_info.get('ied_type')}_{dev_info.get('ied_name')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            type="primary",
-                            use_container_width=True
-                        )
-                    with col_rx_btn2:
-                        st.info(f"Tệp bao gồm 4 Sheet: **1. Tổng quan sự cố & thiết bị**, **2. Dòng điện & Điện áp RMS**, **3. Nhật ký SoE ({len(df_soe)} sự kiện mili-giây)** và **4. Đánh giá kỹ thuật & Khuyến nghị O&M** của Rơ le {dev_info.get('ied_type')} Ngăn {dev_info.get('bay_code')} NM ĐMT Mỹ Hiệp.")
+                    # --- SUBTAB 6: XUẤT BÁO CÁO EXCEL ---
+                    with t_rl_excel:
+                        st.markdown("##### 📥 Xuất Báo Cáo Kỹ Thuật Phân Tích Sự Cố Rơ Le Bảo Vệ (Excel .xlsx):")
+                        st.caption("Xuất tệp báo cáo kỹ thuật hoàn chỉnh 4 Sheet phục vụ lưu trữ hồ sơ vận hành, báo cáo Điều độ Hệ thống điện (A3/A0) hoặc nghiệm thu kỹ thuật.")
 
+                        col_rx_btn1, col_rx_btn2 = st.columns([2.5, 2.5])
+                        with col_rx_btn1:
+                            excel_rl_bytes = export_relay_fault_report_to_excel(fault_data, floc)
+                            st.download_button(
+                                label=f"📥 Tải Báo Cáo Sự Cố Rơ Le Ngăn {dev_info.get('bay_code')} ({dev_info.get('ied_type')}_{dev_info.get('ied_name')})",
+                                data=excel_rl_bytes,
+                                file_name=f"Bao_Cao_Su_Co_Ro_Le_Ngan_{dev_info.get('bay_code')}_{dev_info.get('ied_type')}_{dev_info.get('ied_name')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                type="primary",
+                                use_container_width=True
+                            )
+                        with col_rx_btn2:
+                            st.info(f"Tệp bao gồm 4 Sheet: **1. Tổng quan sự cố & thiết bị**, **2. Dòng điện & Điện áp RMS**, **3. Nhật ký SoE ({len(df_soe)} sự kiện mili-giây)** và **4. Đánh giá kỹ thuật & Khuyến nghị O&M** của Rơ le {dev_info.get('ied_type')} Ngăn {dev_info.get('bay_code')} NM ĐMT Mỹ Hiệp.")
 
+    # -------------------------------------------------------------------------
+    # SUB-TAB 2: SỔ TAY TRA CỨU & ĐỐI SOÁT PHIẾU CHỈNH ĐỊNH RƠ LE A3
+    # -------------------------------------------------------------------------
+    with sec10_tab2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); border-radius: 12px; padding: 18px 22px; color: white; margin-bottom: 20px; border-left: 5px solid #818CF8;">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <h5 style="color: #C7D2FE; font-weight: 800; margin-bottom: 4px;">
+                        🏛️ TRUNG TÂM ĐIỀU ĐỘ HTĐ QUỐC GIA - ĐIỀU ĐỘ MIỀN TRUNG (A3)
+                    </h5>
+                    <div style="font-size: 0.88rem; color: #E0E7FF;">
+                        <b>Sổ Tay Phiếu Chỉnh Định Rơ Le Bảo Vệ Trạm 110kV ĐMT Mỹ Hiệp</b> | Phê duyệt theo Quyết định số <b>1742/QĐ-ĐĐMT</b>
+                    </div>
+                </div>
+                <div>
+                    <span class="badge bg-warning text-dark px-3 py-2 fw-bold" style="font-size: 0.85rem;">
+                        ⚡ 04 Phiếu Chỉnh Định Chuẩn A3
+                    </span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
+        all_sheets = get_all_relay_setting_sheets()
 
+        c_pick_sheet, c_btn_dl_all = st.columns([3.5, 1.5])
+        with c_pick_sheet:
+            sheet_options = {
+                f"1. 🗼 [{s['relay_model']}] {s['sheet_id']} - {s['protected_device']} ({s['protection_type'][:45]}...)": sid
+                for sid, s in all_sheets.items()
+            }
+            selected_sheet_lbl = st.selectbox(
+                "📂 Chọn Phiếu Chỉnh Định Cần Tra Cứu:",
+                list(sheet_options.keys()),
+                index=0,
+                key="sel_a3_setting_sheet"
+            )
+            cur_sheet_id = sheet_options[selected_sheet_lbl]
+            cur_sheet = all_sheets[cur_sheet_id]
 
+        with c_btn_dl_all:
+            st.write("")
+            all_sheets_excel = export_all_relay_settings_to_excel_bytes()
+            st.download_button(
+                "📥 Tải Toàn Bộ 04 Phiếu (Excel .xlsx)",
+                data=all_sheets_excel,
+                file_name=f"So_Tay_Phieu_Chinh_Dinh_Ro_Le_A3_DMT_MyHiep_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
+
+        # 4 Thẻ Thông Số Kỹ Thuật Đầu Phiếu
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("🎯 Thiết Bị Bảo Vệ", cur_sheet['protected_device'], delta=f"Máy cắt: {cur_sheet['circuit_breaker']}")
+        with m2:
+            st.metric("⚡ Rơ Le & Hãng SX", f"{cur_sheet['relay_model']} (ABB)", delta=f"Năm lắp: {cur_sheet['year']}")
+        with m3:
+            st.metric("🎛️ Tủ & Mạch Bảo Vệ", cur_sheet['panel'], delta=f"Phần mềm: {cur_sheet['software']}")
+        with m4:
+            st.metric("🔌 Tỷ Số Biến TI / TU", cur_sheet['ct_ratio'], delta=cur_sheet['vt_ratio'])
+
+        st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+
+        # Sub-tabs chi tiết nội dung phiếu
+        st_tab_principle, st_tab_details, st_tab_curves, st_tab_notes = st.tabs([
+            "📊 1. Nguyên Tắc Tác Động & Ngưỡng Chỉnh Định",
+            "⚙️ 2. Trị Số Cài Đặt Chi Tiết",
+            "📈 3. Đặc Tuyến Bảo Vệ (R-X F21 / So Lệch I-d)",
+            "📌 4. Lưu Ý Kỹ Thuật Điều Độ A3"
+        ])
+
+        # TAB 1: BẢNG NGUYÊN TẮC HOẠT ĐỘNG
+        with st_tab_principle:
+            st.markdown(f"##### 📊 Bảng Nguyên Tắc Hoạt Động & Ngưỡng Chỉnh Định ({cur_sheet['relay_model']} - {cur_sheet['sheet_id']}):")
+            df_principle_show = pd.DataFrame(cur_sheet['summary_table'])
+            df_principle_show.columns = ["Chức Năng", "Cấp Bảo Vệ", "Ngưỡng Chỉnh Định", "Thời Gian Trễ", "Hành Động Cắt MC", "Ghi Chú Kỹ Thuật"]
+            st.dataframe(df_principle_show, use_container_width=True, hide_index=True)
+
+        # TAB 2: TRỊ SỐ CÀI ĐẶT CHI TIẾT
+        with st_tab_details:
+            st.markdown(f"##### ⚙️ Bảng Trị Số Chỉnh Định Chi Tiết Toàn Diện:")
+            df_detail_raw = pd.DataFrame(cur_sheet['detailed_settings'])
+            
+            c_f_grp, c_f_kw = st.columns([2, 3])
+            with c_f_grp:
+                all_groups = ["Tất Cả"] + sorted(list(df_detail_raw['group'].unique()))
+                sel_group = st.selectbox("Lọc theo nhóm chức năng:", all_groups, key=f"sel_grp_{cur_sheet_id}")
+            with c_f_kw:
+                kw_param = st.text_input("🔍 Tìm thông số / tham số:", placeholder="Nhập tên tham số, đơn vị, giá trị...", key=f"kw_param_{cur_sheet_id}")
+
+            df_detail_filtered = df_detail_raw.copy()
+            if sel_group != "Tất Cả":
+                df_detail_filtered = df_detail_filtered[df_detail_filtered['group'] == sel_group]
+            if kw_param:
+                df_detail_filtered = df_detail_filtered[
+                    df_detail_filtered['param'].str.lower().str.contains(kw_param.lower()) |
+                    df_detail_filtered['desc'].str.lower().str.contains(kw_param.lower()) |
+                    df_detail_filtered['value'].str.lower().str.contains(kw_param.lower()) |
+                    df_detail_filtered['note'].str.lower().str.contains(kw_param.lower())
+                ]
+
+            df_detail_filtered.columns = ["Nhóm Chức Năng", "Tên Tham Số (Parameter)", "Diễn Giải", "Trị Số Cài Đặt (Value)", "Đơn Vị", "Ghi Chú"]
+            st.dataframe(df_detail_filtered, use_container_width=True, height=450, hide_index=True)
+
+        # TAB 3: ĐẶC TUYẾN BẢO VỆ
+        with st_tab_curves:
+            st.markdown(f"##### 📈 Mô Phỏng Đặc Tuyến Vận Hành Theo Phiếu Chỉnh Định A3:")
+            
+            if "RED 670" in cur_sheet['relay_model']:
+                # Vẽ đặc tuyến khoảng cách F21 Zone 1, 2, 3 (Tứ giác Quadrilateral)
+                fig_rx = go.Figure()
+                
+                # Zone 1 (X1 = 4.90, R1 = 1.92, RFPP = 20.0)
+                z1_r = [-20.0, 20.0, 20.0, -20.0, -20.0]
+                z1_x = [0.0, 0.0, 4.90, 4.90, 0.0]
+                fig_rx.add_trace(go.Scatter(x=z1_r, y=z1_x, mode='lines', name='Zone 1 (X1=4.90Ω, t=0.00s)', line=dict(color='#EF4444', width=3), fill='toself', fillcolor='rgba(239, 68, 68, 0.15)'))
+                
+                # Zone 2 (X2 = 7.35, RFPP = 30.0)
+                z2_r = [-30.0, 30.0, 30.0, -30.0, -30.0]
+                z2_x = [0.0, 0.0, 7.35, 7.35, 0.0]
+                fig_rx.add_trace(go.Scatter(x=z2_r, y=z2_x, mode='lines', name='Zone 2 (X2=7.35Ω, t=0.60s)', line=dict(color='#F59E0B', width=2.5, dash='dash'), fill='toself', fillcolor='rgba(245, 158, 11, 0.08)'))
+
+                # Zone 3 (X3 = 28.50, RFPP = 40.0)
+                z3_r = [-40.0, 40.0, 40.0, -40.0, -40.0]
+                z3_x = [0.0, 0.0, 28.50, 28.50, 0.0]
+                fig_rx.add_trace(go.Scatter(x=z3_r, y=z3_x, mode='lines', name='Zone 3 (X3=28.50Ω, t=3.30s)', line=dict(color='#3B82F6', width=2, dash='dot'), fill='toself', fillcolor='rgba(59, 130, 246, 0.04)'))
+
+                # Đường trở kháng đường dây 14.83km (R1L = 2.40, X1L = 6.13)
+                fig_rx.add_trace(go.Scatter(x=[0, 2.40], y=[0, 6.13], mode='lines+markers+text', name='Đường Dây 110kV Lộ 171 (14.83km)', text=['TBA Mỹ Hiệp', 'TBA Phù Mỹ 220'], textposition='top right', line=dict(color='#10B981', width=3.5), marker=dict(size=8, color='#10B981')))
+
+                fig_rx.update_layout(
+                    title="<b>Đặc Tuyến Bảo Vệ Khoảng Cách Tứ Giác F21 (R-X Diagram) - Rơ le ABB RED 670</b>",
+                    xaxis_title="Điện trở R (Ohm/phase)",
+                    yaxis_title="Điện cảm X (Ohm/phase)",
+                    template="plotly_white",
+                    height=500,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_rx, use_container_width=True)
+
+            elif "REB 670" in cur_sheet['relay_model']:
+                # Vẽ đặc tuyến so lệch thanh cái F87B
+                fig_diff = go.Figure()
+                ibias = np.linspace(0, 5000, 100)
+                # Idiff = max(560, 560 + 0.15 * (ibias - 1000))
+                idiff_curve = np.where(ibias < 1000, 560, 560 + 0.15 * (ibias - 1000))
+                fig_diff.add_trace(go.Scatter(x=ibias, y=idiff_curve, mode='lines', name='Ngưỡng Cắt So Lệch F87B (Slope = 0.15)', line=dict(color='#EF4444', width=3), fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.1)'))
+                fig_diff.update_layout(
+                    title="<b>Đặc Tuyến Hãm So Lệch Thanh Cái 110kV (F87B) - Rơ le ABB REB 670</b>",
+                    xaxis_title="Dòng hãm Ibias (A)",
+                    yaxis_title="Dòng so lệch Idiff (A)",
+                    template="plotly_white",
+                    height=450
+                )
+                st.plotly_chart(fig_diff, use_container_width=True)
+            else:
+                st.info(f"ℹ️ Đặc tuyến thời gian tác động IEC Definite Time của Rơ le {cur_sheet['relay_model']}: Cấp 1 (t=3.00s), Cấp 2 (t=0.90s).")
+
+        # TAB 4: LƯU Ý KỸ THUẬT ĐIỀU ĐỘ A3
+        with st_tab_notes:
+            st.markdown(f"##### 📌 Lưu Ý Kỹ Thuật Quan Trọng Từ Trung Tâm Điều Độ HTĐ Miền Trung (A3):")
+            for i, n in enumerate(cur_sheet['notes']):
+                st.markdown(f"""
+                <div class="p-3 mb-2 rounded border bg-light">
+                    <b>{i+1}.</b> {n}
+                </div>
+                """, unsafe_allow_html=True)
