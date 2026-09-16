@@ -32,6 +32,7 @@ import scada_map_builder
 import inverter_log_reader
 import relay_fault_analyzer
 import transmission_line_171
+import i18n
 
 importlib.reload(solar_engine)
 importlib.reload(data_harvester)
@@ -46,6 +47,18 @@ importlib.reload(scada_map_builder)
 importlib.reload(inverter_log_reader)
 importlib.reload(relay_fault_analyzer)
 importlib.reload(transmission_line_171)
+importlib.reload(i18n)
+
+from i18n import (
+    t,
+    get_nav_options,
+    get_nav_index,
+    LANG_OPTIONS,
+    get_current_lang,
+    set_current_lang,
+    NAV_OPTIONS_VI,
+    NAV_OPTIONS_EN
+)
 
 from relay_fault_analyzer import (
     RelayFaultAnalyzer,
@@ -575,24 +588,40 @@ with st.sidebar:
     else:
         st.markdown("<h4 class='text-primary fw-bold'><i class='bi bi-lightning-charge-fill text-warning'></i> ELECTRIC BIRD</h4>", unsafe_allow_html=True)
     
-    st.markdown("""
+    # Bộ chuyển đổi ngôn ngữ (Vietnamese / English)
+    current_lang = get_current_lang()
+    lang_choice = st.radio(
+        t("lang_select_label"),
+        options=list(LANG_OPTIONS.keys()),
+        format_func=lambda x: LANG_OPTIONS[x],
+        index=0 if current_lang == "vi" else 1,
+        horizontal=True,
+        key="app_language_selector"
+    )
+    if lang_choice != current_lang:
+        set_current_lang(lang_choice)
+        st.rerun()
+
+    st.markdown(f"""
     <div class="bs-sidebar-nav-header">
-        <i class="bi bi-compass-fill text-primary"></i> DANH MỤC ĐIỀU HÀNH HỆ THỐNG
+        <i class="bi bi-compass-fill text-primary"></i> {t("sidebar_nav_header")}
     </div>
     """, unsafe_allow_html=True)
     
+    NAV_OPTIONS = get_nav_options()
     selected_menu = st.radio(
-        "Menu Điều Hành Hệ Thống:",
+        "Menu:",
         NAV_OPTIONS,
         index=0,
         label_visibility="collapsed",
         key="app_vertical_navigation"
     )
+    nav_idx = get_nav_index(selected_menu)
     
     st.markdown("<hr style='margin: 0.8rem 0; opacity: 0.15;'>", unsafe_allow_html=True)
 
     # Khung chọn ngày SCADA tích hợp gọn gàng trong Sidebar
-    with st.expander("📂 Chọn Ngày Dữ Liệu SCADA", expanded=False):
+    with st.expander(t("sidebar_scada_date"), expanded=False):
         if available_dates:
             date_options = {d['date_str']: d for d in reversed(available_dates)}
             current_sel_idx = 0
@@ -602,15 +631,15 @@ with st.sidebar:
                     current_sel_idx = list(date_options.keys()).index(active_str)
             
             selected_date_str = st.selectbox(
-                "Ngày SCADA:",
+                t("scada_date_select"),
                 list(date_options.keys()),
                 index=current_sel_idx,
                 key="sb_scada_date_select"
             )
-            if st.button("🔄 Nạp Dữ Liệu Ngày Này", type="primary", use_container_width=True, key="btn_load_date_sb"):
+            if st.button(t("btn_load_date"), type="primary", use_container_width=True, key="btn_load_date_sb"):
                 st.session_state.active_date_entry = date_options[selected_date_str]
                 st.rerun()
-        if st.button("⚡ Quét Lại Server", use_container_width=True, key="btn_rescan_sb"):
+        if st.button(t("btn_rescan_server"), use_container_width=True, key="btn_rescan_sb"):
             harvester.scan_available_dates(force_rescan=True)
             st.rerun()
 
@@ -624,45 +653,45 @@ with st.sidebar:
         except Exception:
             pass
 
-    with st.expander("🤖 Tự Động Đồng Bộ (08:00 Sáng)", expanded=False):
-        st.markdown("""
+    with st.expander(t("auto_sync_expander"), expanded=False):
+        st.markdown(f"""
         <div class="p-2 mb-2 rounded border bg-light">
             <div class="d-flex align-items-center justify-content-between mb-1">
-                <span class="badge bg-success"><i class="bi bi-clock-history"></i> Lịch: 08:00 Sáng</span>
+                <span class="badge bg-success"><i class="bi bi-clock-history"></i> {t("auto_sync_schedule_badge")}</span>
                 <span class="badge bg-primary">Windows Task Scheduler</span>
             </div>
-            <div class="small text-muted">Hệ thống tự động đồng bộ SCADA, NWP, String, Meter kể cả khi phần mềm tắt.</div>
+            <div class="small text-muted">{t("auto_sync_desc")}</div>
         </div>
         """, unsafe_allow_html=True)
         
-        last_sync_ts = sync_meta.get("timestamp", "Chưa thực hiện")
+        last_sync_ts = sync_meta.get("timestamp", "Chưa thực hiện" if current_lang == "vi" else "Not yet run")
         sync_st = sync_meta.get("status", "READY")
-        st.caption(f"⏱️ **Lần đồng bộ gần nhất:** `{last_sync_ts}`")
+        st.caption(f"⏱️ **{t('last_sync_time')}** `{last_sync_ts}`")
         if sync_st == "SUCCESS":
-            st.success("✅ Trạng thái: Hoàn tất trọn vẹn")
+            st.success(t("sync_status_success"))
         elif sync_st == "ERROR":
-            st.error("⚠️ Trạng thái: Có lỗi xảy ra")
+            st.error(t("sync_status_error"))
         else:
-            st.info(f"ℹ️ Trạng thái: {sync_st}")
+            st.info(f"ℹ️ Status: {sync_st}")
             
         if sync_meta.get("duration_seconds"):
-            st.caption(f"⚡ Thời gian xử lý: `{sync_meta.get('duration_seconds')}s`")
+            st.caption(f"⚡ {t('sync_duration')} `{sync_meta.get('duration_seconds')}s`")
             
-        if st.button("🚀 Kích Hoạt Đồng Bộ Ngay", type="secondary", use_container_width=True, key="btn_manual_sync_now"):
-            with st.spinner("Đang chạy đồng bộ toàn diện SCADA, NWP, Inverter, Meter, Relay..."):
+        if st.button(t("btn_sync_now"), type="secondary", use_container_width=True, key="btn_manual_sync_now"):
+            with st.spinner(t("sync_running_msg")):
                 try:
                     import daily_sync_worker
                     sync_res = daily_sync_worker.run_daily_harvest()
-                    st.success(f"Đã hoàn thành đồng bộ trong {sync_res.get('duration_seconds', 0)}s!")
+                    st.success(t("sync_success_msg").format(s=sync_res.get('duration_seconds', 0)))
                     st.rerun()
                 except Exception as ex:
-                    st.error(f"Lỗi khi đồng bộ: {ex}")
+                    st.error(f"Error: {ex}")
 
-    with st.expander("⚙️ Cấu Hình Thông Số Kỹ Thuật (50MWp / 40.075MW)", expanded=False):
-        st.caption("🏢 **Nhà Máy ĐMT Mỹ Hiệp - Phù Mỹ**")
+    with st.expander(t("sidebar_tech_config"), expanded=False):
+        st.caption(f"🏢 **{t('plant_subtitle_sb')}**")
         
         dc_capacity = st.number_input(
-            "⚡ Công suất DC tấm pin (MWp)", 
+            t("dc_capacity_label"), 
             min_value=1.0, max_value=200.0, 
             value=float(MyHiepSolarPlantConfig.DC_CAPACITY_MWP), 
             step=1.0,
@@ -670,7 +699,7 @@ with st.sidebar:
         )
 
         ac_capacity = st.number_input(
-            "🔌 Giới hạn Inverter AC (MW)", 
+            t("ac_capacity_label"), 
             min_value=1.0, max_value=200.0, 
             value=float(MyHiepSolarPlantConfig.AC_CAPACITY_MW), 
             step=0.025,
@@ -678,11 +707,11 @@ with st.sidebar:
             help="Tổng công suất định mức xoay chiều AC của hệ thống Inverter."
         )
 
-        st.markdown(f"<div class='p-2 bg-light rounded border text-muted small my-2'><b>Tỉ số DC/AC:</b> <code>{dc_capacity / ac_capacity:.3f}</code> <span class='badge bg-warning text-dark'>Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='p-2 bg-light rounded border text-muted small my-2'><b>{t('dc_ac_ratio')}</b> <code>{dc_capacity / ac_capacity:.3f}</code> <span class='badge bg-warning text-dark'>Over-paneling: {(dc_capacity/ac_capacity - 1)*100:.1f}%</span></div>", unsafe_allow_html=True)
 
         st.markdown("<b>Tấm Pin Sharp NU-440:</b>", unsafe_allow_html=True)
         temp_coeff_pct = st.number_input(
-            "Hệ số nhiệt độ Pmp (%/°C)", 
+            t("temp_coeff_label"), 
             value=-0.347, 
             step=0.01, 
             format="%.3f",
@@ -691,18 +720,18 @@ with st.sidebar:
         temp_coeff = temp_coeff_pct / 100.0
         
         noct_val = st.number_input(
-            "Nhiệt độ danh định cell NOCT (°C)", 
+            t("noct_label"), 
             value=float(MyHiepSolarPlantConfig.NOCT_C), 
             step=1.0
         )
 
-        st.markdown("<b>Hệ số tổn thất (%):</b>", unsafe_allow_html=True)
-        soiling_pct = st.slider("Tổn thất bụi bẩn (Soiling %)", 0.0, 10.0, MyHiepSolarPlantConfig.DEFAULT_SOILING_LOSS * 100.0, 0.1)
-        dc_cable_pct = st.slider("Tổn thất cáp DC (%)", 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_DC_CABLE_LOSS * 100.0, 0.1)
-        mismatch_pct = st.slider("Tổn thất Mismatch & LID (%)", 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_MISMATCH_LID_LOSS * 100.0, 0.1)
-        inv_eff_pct = st.slider("Hiệu suất Inverter (%)", 90.0, 99.5, MyHiepSolarPlantConfig.DEFAULT_INVERTER_EFF * 100.0, 0.1)
-        trafo_loss_pct = st.slider("Tổn thất MBA & Cáp AC (%)", 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_AC_TRAFO_LOSS * 100.0, 0.1)
-        aux_loss_pct = st.slider("Tự dùng trạm (%)", 0.0, 2.0, MyHiepSolarPlantConfig.DEFAULT_AUX_LOSS * 100.0, 0.1)
+        st.markdown(f"<b>{t('loss_factors')}</b>", unsafe_allow_html=True)
+        soiling_pct = st.slider(t("soiling_loss"), 0.0, 10.0, MyHiepSolarPlantConfig.DEFAULT_SOILING_LOSS * 100.0, 0.1)
+        dc_cable_pct = st.slider(t("dc_cable_loss"), 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_DC_CABLE_LOSS * 100.0, 0.1)
+        mismatch_pct = st.slider(t("mismatch_loss"), 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_MISMATCH_LID_LOSS * 100.0, 0.1)
+        inv_eff_pct = st.slider(t("inv_eff_loss"), 90.0, 99.5, MyHiepSolarPlantConfig.DEFAULT_INVERTER_EFF * 100.0, 0.1)
+        trafo_loss_pct = st.slider(t("trafo_loss"), 0.0, 5.0, MyHiepSolarPlantConfig.DEFAULT_AC_TRAFO_LOSS * 100.0, 0.1)
+        aux_loss_pct = st.slider(t("aux_loss"), 0.0, 2.0, MyHiepSolarPlantConfig.DEFAULT_AUX_LOSS * 100.0, 0.1)
 
 calc_params = {
     'dc_capacity_mwp': dc_capacity,
@@ -729,20 +758,20 @@ banner_html = f"""
         {logo_img_tag}
         <div class="flex-grow-1">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">
-                <div class="bs-plant-title mb-0">NHÀ MÁY ĐIỆN MẶT TRỜI MỸ HIỆP</div>
-                <div class="live-status-pill"><div class="live-dot"></div> TELEMETRY SCADA LIVE</div>
+                <div class="bs-plant-title mb-0">{t('plant_title')}</div>
+                <div class="live-status-pill"><div class="live-dot"></div> {t('telemetry_live')}</div>
             </div>
             <div class="bs-plant-subtitle">
-                <span><i class="bi bi-cpu-fill text-warning"></i> HỆ THỐNG DỰ BÁO SẢN LƯỢNG QUANG ĐIỆN 15 PHÚT (EVN / A0 / A3)</span>
+                <span><i class="bi bi-cpu-fill text-warning"></i> {t('plant_subtitle')}</span>
                 <span class="text-white-50">|</span>
                 <span class="font-mono text-info"><i class="bi bi-terminal-fill"></i> PROD-ENGINE</span>
             </div>
             <div class="d-flex flex-wrap gap-2 mt-2">
-                <span class="bs-badge-pill bg-warning text-dark"><i class="bi bi-sun-fill"></i> DC: 50.00 MWp</span>
-                <span class="bs-badge-pill bg-info text-dark"><i class="bi bi-lightning-charge-fill"></i> AC Inverter: 40.075 MW</span>
-                <span class="bs-badge-pill bg-success text-white"><i class="bi bi-layers-fill"></i> Sharp NU-440 (-0.347%/°C)</span>
-                <span class="bs-badge-pill bg-primary text-white"><i class="bi bi-diagram-3-fill"></i> TBA 110kV Mỹ Hiệp ⇌ 220kV Phù Mỹ (Lộ 171)</span>
-                <span class="bs-badge-pill bg-dark text-white border border-secondary"><i class="bi bi-geo-alt-fill text-danger"></i> Phù Mỹ Nam, T. Gia Lai</span>
+                <span class="bs-badge-pill bg-warning text-dark"><i class="bi bi-sun-fill"></i> {t('badge_dc')}</span>
+                <span class="bs-badge-pill bg-info text-dark"><i class="bi bi-lightning-charge-fill"></i> {t('badge_ac')}</span>
+                <span class="bs-badge-pill bg-success text-white"><i class="bi bi-layers-fill"></i> {t('badge_panel')}</span>
+                <span class="bs-badge-pill bg-primary text-white"><i class="bi bi-diagram-3-fill"></i> {t('badge_grid')}</span>
+                <span class="bs-badge-pill bg-dark text-white border border-secondary"><i class="bi bi-geo-alt-fill text-danger"></i> {t('badge_location')}</span>
             </div>
         </div>
     </div>
@@ -779,7 +808,7 @@ if current_day_data is None or current_day_data.get('forecast_15min') is None:
 # -------------------------------------------------------------------------
 # PHẦN 1: DỰ BÁO 96 CHU KỲ NGÀY & CẬP NHẬT DỮ LIỆU P / W TÙY BIẾN
 # -------------------------------------------------------------------------
-if selected_menu == NAV_OPTIONS[0]:
+if nav_idx == 0:
     # 1. Xác định dữ liệu 96 chu kỳ đang kích hoạt (Gốc hoặc Tùy chỉnh P & W)
     is_custom_pw = st.session_state.get('custom_pw_15min') is not None
     if is_custom_pw:
@@ -1060,7 +1089,7 @@ if selected_menu == NAV_OPTIONS[0]:
 # -------------------------------------------------------------------------
 # PHẦN 2: DỰ BÁO 18 CHU KỲ CUỐN CHIẾU THEO THỜI GIAN THỰC (TÍCH HỢP AI & UPDATE W/P)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[1]:
+elif nav_idx == 1:
     st.subheader("⚡ Dự Báo 18 Chu Kỳ Tiếp Theo Thời Gian Thực (Ultra-Short-Term Rolling Forecast)")
     st.caption("Dự báo cuốn chiếu 18 chu kỳ 15 phút (4.5 giờ tới) tích hợp AI tự động học sai số từ dữ liệu đo đếm W (Bức xạ) & P (Công suất) thực tế phục vụ đăng ký biểu đồ điều độ tức thời A0 / A3.")
     
@@ -1325,7 +1354,7 @@ elif selected_menu == NAV_OPTIONS[1]:
 # -------------------------------------------------------------------------
 # PHẦN 3: SO SÁNH & ĐÁNH GIÁ SAI SỐ (THỰC TẾ VS DỰ BÁO)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[2]:
+elif nav_idx == 2:
     comp_df = current_day_data.get('comparison_df')
     comp_kpi = current_day_data.get('comparison_kpis')
     
@@ -1361,7 +1390,7 @@ elif selected_menu == NAV_OPTIONS[2]:
 # -------------------------------------------------------------------------
 # PHẦN 4: DỰ BÁO ĐA CHU KỲ & THUYẾT MINH THỜI TIẾT (PHÙ MỸ NAM)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[3]:
+elif nav_idx == 3:
     st.subheader("🔮 Hệ Thống Dự Báo Đa Khung Thời Gian & Khí Tượng Số (Phù Mỹ Nam)")
     st.caption("Mô hình AI kết hợp 3 yếu tố cốt lõi: Lịch sử sản lượng công tơ 171C (2.069 ngày) + Dự báo Thời tiết khu vực nhà máy (Phù Mỹ Nam) + Thuật toán AI Physics-Informed ML.")
 
@@ -2186,7 +2215,7 @@ elif selected_menu == NAV_OPTIONS[3]:
 # -------------------------------------------------------------------------
 # PHẦN 5: PHÂN TÍCH & ĐỐI SOÁT LỊCH SỬ 4 CÔNG TƠ (2020 - 2026)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[4]:
+elif nav_idx == 4:
     st.subheader("📈 Phân Tích & Đối Soát Cơ Sở Dữ Liệu Lịch Sử 4 Công Tơ (2020 - 2026)")
 
     df_hist = get_historical_meter_data(auto_sync=True)
@@ -2811,7 +2840,7 @@ elif selected_menu == NAV_OPTIONS[4]:
 # -------------------------------------------------------------------------
 # PHẦN 6: BÁO CÁO VẬN HÀNH & CHỈ SỐ HIỆU SUẤT PR (IEC 61724 - 19 CỘT)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[5]:
+elif nav_idx == 5:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #10B981;">
         <div style="font-size: 1.35rem; font-weight: 750; color: #34D399; margin-bottom: 4px;">
@@ -3000,7 +3029,7 @@ elif selected_menu == NAV_OPTIONS[5]:
 # -------------------------------------------------------------------------
 # PHẦN 7: CHẨN ĐOÁN CÔNG SUẤT BẤT THƯỜNG INVERTER (S1 - S7 SCADA)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[6]:
+elif nav_idx == 6:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #EF4444;">
         <div style="font-size: 1.35rem; font-weight: 750; color: #F87171; margin-bottom: 4px;">
@@ -3772,7 +3801,7 @@ elif selected_menu == NAV_OPTIONS[6]:
 # -------------------------------------------------------------------------
 # PHẦN 8: GIÁM SÁT, TỔNG HỢP & CHẨN ĐOÁN 4.104 CHUỖI STRING DC (D:\STRING_INV)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[7]:
+elif nav_idx == 7:
     st.markdown(r"""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #F59E0B;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -4452,7 +4481,7 @@ elif selected_menu == NAV_OPTIONS[7]:
 # -------------------------------------------------------------------------
 # PHẦN 9: ĐỌC & GIẢI MÃ NHẬT KÝ BIẾN TẦN HUAWEI (D:\LOG)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[8]:
+elif nav_idx == 8:
     st.markdown(r"""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #38BDF8;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
@@ -5473,7 +5502,7 @@ elif selected_menu == NAV_OPTIONS[8]:
 # -------------------------------------------------------------------------
 # PHẦN 10: PHÂN TÍCH SỰ CỐ RƠ LE BẢO VỆ & BẢN GHI SÓNG DISTURBANCE (D:\PT_RL)
 # -------------------------------------------------------------------------
-elif selected_menu == NAV_OPTIONS[9]:
+elif nav_idx == 9:
     st.markdown(r"""
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-radius: 14px; padding: 18px 24px; color: white; margin-bottom: 20px; border-left: 5px solid #8B5CF6;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
